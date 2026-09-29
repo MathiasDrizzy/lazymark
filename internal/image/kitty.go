@@ -6,6 +6,8 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+
+	"github.com/MathiasDrizzy/lazymark/internal/i18n"
 )
 
 // Client gestiona la emisión de comandos gráficos Kitty
@@ -41,7 +43,7 @@ func New() *Client {
 // a=T: transmitir y presentar de inmediato
 func (c *Client) RenderCommand(imagePath string, cols, rows int) string {
 	if !c.Supported {
-		return fmt.Sprintf("[🖼️ Imagen: %s (Terminal sin soporte gráfico Kitty)]", filepath.Base(imagePath))
+		return fmt.Sprintf("[🖼️ %s: %s (%s)]", i18n.T("Imagen", "Image"), filepath.Base(imagePath), i18n.T("Terminal sin soporte gráfico Kitty", "Terminal without Kitty Graphics support"))
 	}
 
 	absPath, err := filepath.Abs(imagePath)

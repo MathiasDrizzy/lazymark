@@ -2,8 +2,10 @@ package views
 
 import (
 	"fmt"
+	"path/filepath"
 	"strings"
 
+	"github.com/MathiasDrizzy/lazymark/internal/i18n"
 	"github.com/MathiasDrizzy/lazymark/internal/image"
 	"github.com/MathiasDrizzy/lazymark/internal/storage"
 	"github.com/MathiasDrizzy/lazymark/internal/ui/theme"
@@ -23,7 +25,7 @@ func RenderPreview(note *storage.Note, width, height int, active bool, kittyClie
 	}
 
 	if note == nil {
-		empty := theme.NormalItem.Copy().Italic(true).Render("Selecciona una nota para ver el contenido...")
+		empty := theme.NormalItem.Copy().Italic(true).Render(i18n.T("Selecciona una nota para ver el contenido...", "Select a note to view content..."))
 		return borderStyle.Width(width).Height(height).Render(empty)
 	}
 
@@ -49,7 +51,11 @@ func RenderPreview(note *storage.Note, width, height int, active bool, kittyClie
 	if len(note.Images) > 0 && kittyClient != nil && kittyClient.Supported {
 		var imgOutputs []string
 		for _, imgPath := range note.Images {
-			imgOutputs = append(imgOutputs, kittyClient.RenderCommand(imgPath, contentWidth, 12))
+			resolvedImg := imgPath
+			if !filepath.IsAbs(resolvedImg) {
+				resolvedImg = filepath.Join(filepath.Dir(note.Path), resolvedImg)
+			}
+			imgOutputs = append(imgOutputs, kittyClient.RenderCommand(resolvedImg, contentWidth, 12))
 		}
 		renderedContent = fmt.Sprintf("%s\n\n%s", renderedContent, strings.Join(imgOutputs, "\n"))
 	}

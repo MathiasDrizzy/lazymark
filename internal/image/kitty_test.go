@@ -20,7 +20,7 @@ func TestKittyClient(t *testing.T) {
 
 	unsupportedClient := &Client{Supported: false}
 	fallback := unsupportedClient.RenderCommand("/path/to/test.png", 40, 20)
-	if !strings.Contains(fallback, "Terminal sin soporte") {
+	if !strings.Contains(fallback, "Terminal sin soporte") && !strings.Contains(fallback, "without Kitty Graphics") {
 		t.Errorf("Fallback no emitido en terminal no soportada: %s", fallback)
 	}
 }

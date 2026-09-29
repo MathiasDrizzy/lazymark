@@ -5,9 +5,12 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
+	"time"
 
 	"github.com/MathiasDrizzy/lazymark/internal/clipboard"
 	"github.com/MathiasDrizzy/lazymark/internal/config"
+	"github.com/MathiasDrizzy/lazymark/internal/i18n"
 	"github.com/MathiasDrizzy/lazymark/internal/image"
 	"github.com/MathiasDrizzy/lazymark/internal/storage"
 	"github.com/MathiasDrizzy/lazymark/internal/ui/mouse"
@@ -17,7 +20,7 @@ import (
 	"github.com/charmbracelet/lipgloss"
 )
 
-// EditorFinishedMsg se emite cuando el editor externo (micro) finaliza
+// EditorFinishedMsg se emite cuando el editor externo (micro, vim, etc.) finaliza
 type EditorFinishedMsg struct {
 	Err error
 }
@@ -35,18 +38,30 @@ type AppModel struct {
 	activeTab    int
 	activePanel  int // 0: Lista izquierda, 1: Preview derecho
 
-	// Estado independiente de pestaña [2] Categorías/Tags
+	// Pestañas dinámicas visibles
+	visibleTabs []views.TabItem
+
+	// Estado independiente de pestaña Categorías/Tags
 	tags        []views.TagInfo
 	selectedTag int
 
-	// Estado independiente de pestaña [3] Tareas
+	// Estado independiente de pestaña Tareas
 	tasks        []views.FlatTask
 	selectedTask int
 	taskFilter   views.TaskFilter
 
-	// Estado independiente de pestaña [4] Galería
+	// Estado independiente de pestaña Galería
 	images        []views.ImageEntry
 	selectedImage int
+
+	// Pantalla de configuración y keybindings
+	showSettings    bool
+	settingsSection views.SettingsSection
+	settingsItem    int
+
+	// Control de doble clic con ratón
+	lastClickTime time.Time
+	lastClickZone string
 
 	width     int
 	height    int
@@ -62,6 +77,11 @@ func New(cfg *config.Config) (*AppModel, error) {
 		return nil, err
 	}
 
+	// Configurar idioma si está definido
+	if cfg.Language != "" && cfg.Language != "auto" {
+		i18n.SetLanguage(cfg.Language)
+	}
+
 	assetsDir := filepath.Join(cfg.NotesDir, "assets")
 	m := &AppModel{
 		cfg:          cfg,
@@ -74,7 +94,7 @@ func New(cfg *config.Config) (*AppModel, error) {
 		activeTab:    0,
 		activePanel:  0,
 		taskFilter:   views.TaskFilterAll,
-		statusMsg:    fmt.Sprintf("%d notas cargadas", len(notes)),
+		statusMsg:    fmt.Sprintf(i18n.T("%d notas cargadas", "%d notes loaded"), len(notes)),
 	}
 
 	// Aplicar el tema configurado
@@ -82,8 +102,20 @@ func New(cfg *config.Config) (*AppModel, error) {
 		theme.ApplyThemeByName(cfg.Theme)
 	}
 
+	m.refreshVisibleTabs()
 	m.rebuildDerivedData()
 	return m, nil
+}
+
+// refreshVisibleTabs actualiza la lista de pestañas visibles según la configuración
+func (m *AppModel) refreshVisibleTabs() {
+	m.visibleTabs = views.DefaultTabs(m.cfg.ShowTagsTab, m.cfg.ShowTasksTab, m.cfg.ShowGalleryTab)
+	if m.activeTab >= len(m.visibleTabs) {
+		m.activeTab = len(m.visibleTabs) - 1
+		if m.activeTab < 0 {
+			m.activeTab = 0
+		}
+	}
 }
 
 // rebuildDerivedData recalcula tags, tareas e imágenes a partir de las notas actuales
@@ -92,7 +124,6 @@ func (m *AppModel) rebuildDerivedData() {
 	m.tasks = views.CollectTasks(m.notes, m.taskFilter)
 	m.images = views.CollectImages(m.notes)
 
-	// Ajustar índices de selección si están fuera de rango
 	if m.selectedTag >= len(m.tags) {
 		if len(m.tags) > 0 {
 			m.selectedTag = len(m.tags) - 1
@@ -128,9 +159,17 @@ func (m *AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case EditorFinishedMsg:
-		// Recargar notas después de salir del editor
 		m.reloadNotes()
-		m.statusMsg = "Nota actualizada"
+		if msg.Err != nil {
+			m.statusMsg = fmt.Sprintf("%s: %v", i18n.T("Error en editor", "Editor error"), msg.Err)
+		} else {
+			m.statusMsg = i18n.T("Nota actualizada", "Note updated")
+		}
+
+		// Re-habilitar tracking de ratón explícitamente tras suspender para el editor
+		if m.cfg.MouseClick {
+			return m, tea.EnableMouseCellMotion
+		}
 		return m, nil
 
 	case tea.MouseMsg:
@@ -144,31 +183,99 @@ func (m *AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 
 	case tea.KeyMsg:
-		switch msg.String() {
-		case "ctrl+c", "q", "esc":
+		key := msg.String()
+
+		// Salir de la aplicación
+		if key == "ctrl+c" {
 			m.quitting = true
 			if m.kitty != nil && m.kitty.Supported {
-				// Limpiar imágenes de la terminal al salir
+				fmt.Print(m.kitty.ClearAllCommand())
+			}
+			return m, tea.Quit
+		}
+
+		// Si la pantalla de configuración está abierta
+		if m.showSettings {
+			switch key {
+			case "esc", "?", "q":
+				m.showSettings = false
+				_ = m.cfg.Save()
+				return m, nil
+			case "1", "e":
+				// Ciclar editor
+				m.cycleEditor()
+				return m, nil
+			case "2", "L":
+				// Alternar idioma
+				i18n.ToggleLanguage()
+				m.cfg.Language = string(i18n.CurrentLanguage())
+				m.refreshVisibleTabs()
+				_ = m.cfg.Save()
+				m.statusMsg = fmt.Sprintf("%s: %s", i18n.T("Idioma", "Language"), m.cfg.Language)
+				return m, nil
+			case "3", "t":
+				newTheme := theme.NextTheme()
+				m.cfg.Theme = newTheme
+				_ = m.cfg.Save()
+				m.statusMsg = fmt.Sprintf("%s: %s", i18n.T("Tema", "Theme"), newTheme)
+				return m, nil
+			}
+			return m, nil
+		}
+
+		// Atajos globales fuera de configuración
+		switch key {
+		case "q", "esc":
+			m.quitting = true
+			if m.kitty != nil && m.kitty.Supported {
 				fmt.Print(m.kitty.ClearAllCommand())
 			}
 			return m, tea.Quit
 
-		// Navegación de pestañas [1], [2], [3], [4]
+		case "?", "F2":
+			m.showSettings = true
+			return m, nil
+
+		case "L":
+			// Alternar idioma en cualquier momento
+			i18n.ToggleLanguage()
+			m.cfg.Language = string(i18n.CurrentLanguage())
+			m.refreshVisibleTabs()
+			_ = m.cfg.Save()
+			m.statusMsg = fmt.Sprintf("%s: %s", i18n.T("Idioma", "Language"), m.cfg.Language)
+			return m, nil
+
+		case "t":
+			newTheme := theme.NextTheme()
+			m.cfg.Theme = newTheme
+			_ = m.cfg.Save()
+			m.statusMsg = fmt.Sprintf("%s: %s", i18n.T("Tema", "Theme"), newTheme)
+			return m, nil
+
+		// Navegación de pestañas [1..N]
 		case "1":
-			m.activeTab = 0
-			m.activePanel = 0
+			if len(m.visibleTabs) >= 1 {
+				m.activeTab = 0
+				m.activePanel = 0
+			}
 			return m, nil
 		case "2":
-			m.activeTab = 1
-			m.activePanel = 0
+			if len(m.visibleTabs) >= 2 {
+				m.activeTab = 1
+				m.activePanel = 0
+			}
 			return m, nil
 		case "3":
-			m.activeTab = 2
-			m.activePanel = 0
+			if len(m.visibleTabs) >= 3 {
+				m.activeTab = 2
+				m.activePanel = 0
+			}
 			return m, nil
 		case "4":
-			m.activeTab = 3
-			m.activePanel = 0
+			if len(m.visibleTabs) >= 4 {
+				m.activeTab = 3
+				m.activePanel = 0
+			}
 			return m, nil
 
 		// Alternar panel activo con Tab, Flechas o Vim h/l
@@ -178,31 +285,33 @@ func (m *AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case "shift+tab", "left", "h":
 			m.activePanel = 0
 			return m, nil
-
-		// Ciclar tema con 't'
-		case "t":
-			newTheme := theme.NextTheme()
-			m.statusMsg = fmt.Sprintf("Tema: %s", newTheme)
-			return m, nil
 		}
 
 		// Delegar al handler de la pestaña activa
-		return m.updateForTab(msg)
+		return m.updateForCurrentTab(msg)
 	}
 
 	return m, nil
 }
 
-// updateForTab delega la lógica de teclado según la pestaña activa
-func (m *AppModel) updateForTab(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
-	switch m.activeTab {
-	case 0:
+// currentTabID devuelve el identificador de la pestaña activa ("notes", "tags", "tasks", "gallery")
+func (m *AppModel) currentTabID() string {
+	if m.activeTab >= 0 && m.activeTab < len(m.visibleTabs) {
+		return m.visibleTabs[m.activeTab].ID
+	}
+	return "notes"
+}
+
+// updateForCurrentTab delega la lógica de teclado según la pestaña activa
+func (m *AppModel) updateForCurrentTab(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	switch m.currentTabID() {
+	case "notes":
 		return m.updateNotesTab(msg)
-	case 1:
+	case "tags":
 		return m.updateTagsTab(msg)
-	case 2:
+	case "tasks":
 		return m.updateTasksTab(msg)
-	case 3:
+	case "gallery":
 		return m.updateGalleryTab(msg)
 	}
 	return m, nil
@@ -265,7 +374,6 @@ func (m *AppModel) updateTagsTab(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		}
 		return m, nil
 	case "enter", "e":
-		// Abrir la primera nota del tag seleccionado
 		if m.selectedTag < len(m.tags) {
 			tag := m.tags[m.selectedTag]
 			filtered := views.NotesForTag(m.notes, tag.Name)
@@ -301,14 +409,12 @@ func (m *AppModel) updateTasksTab(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		}
 		return m, nil
 	case "enter", "e":
-		// Abrir la nota que contiene la tarea seleccionada
 		if m.selectedTask < len(m.tasks) {
 			task := m.tasks[m.selectedTask]
 			return m, m.openEditorForPath(task.NotePath)
 		}
 		return m, nil
 	case "f":
-		// Ciclar filtro: All → Pending → Done → All
 		switch m.taskFilter {
 		case views.TaskFilterAll:
 			m.taskFilter = views.TaskFilterPending
@@ -319,7 +425,7 @@ func (m *AppModel) updateTasksTab(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		}
 		m.selectedTask = 0
 		m.tasks = views.CollectTasks(m.notes, m.taskFilter)
-		m.statusMsg = fmt.Sprintf("Filtro: %s", views.TaskFilterLabel(m.taskFilter))
+		m.statusMsg = fmt.Sprintf("%s: %s", i18n.T("Filtro", "Filter"), views.TaskFilterLabel(m.taskFilter))
 		return m, nil
 	}
 	return m, nil
@@ -348,7 +454,6 @@ func (m *AppModel) updateGalleryTab(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		}
 		return m, nil
 	case "enter", "e":
-		// Abrir la nota que contiene la imagen seleccionada
 		if m.selectedImage < len(m.images) {
 			entry := m.images[m.selectedImage]
 			return m, m.openEditorForPath(entry.NotePath)
@@ -360,35 +465,35 @@ func (m *AppModel) updateGalleryTab(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
-// ─── Manejo de clicks en zonas ─────────────────────────────────────
+// ─── Manejo de clics en zonas ──────────────────────────────────────
 
 func (m *AppModel) handleZoneClick(zone *mouse.Zone) (tea.Model, tea.Cmd) {
+	now := time.Now()
+	isDoubleClick := (zone.ID == m.lastClickZone) && (now.Sub(m.lastClickTime) < 400*time.Millisecond)
+	m.lastClickTime = now
+	m.lastClickZone = zone.ID
+
 	switch zone.Type {
 	case mouse.ZoneTab:
 		m.activeTab = zone.Index
 		m.activePanel = 0
 	case mouse.ZoneNote:
-		if m.selectedNote == zone.Index {
-			// Doble clic o clic en la seleccionada -> abrir editor
+		if isDoubleClick {
+			// Doble clic abre el editor
 			return m, m.openEditor()
 		}
+		// Clic simple solo selecciona la nota
 		m.selectedNote = zone.Index
 	case mouse.ZoneTag:
 		m.selectedTag = zone.Index
 	case mouse.ZoneTask:
-		if m.selectedTask == zone.Index {
-			// Doble clic en tarea -> abrir nota
-			if m.selectedTask < len(m.tasks) {
-				return m, m.openEditorForPath(m.tasks[m.selectedTask].NotePath)
-			}
+		if isDoubleClick && m.selectedTask < len(m.tasks) {
+			return m, m.openEditorForPath(m.tasks[m.selectedTask].NotePath)
 		}
 		m.selectedTask = zone.Index
 	case mouse.ZoneGallery:
-		if m.selectedImage == zone.Index {
-			// Doble clic en imagen -> abrir nota
-			if m.selectedImage < len(m.images) {
-				return m, m.openEditorForPath(m.images[m.selectedImage].NotePath)
-			}
+		if isDoubleClick && m.selectedImage < len(m.images) {
+			return m, m.openEditorForPath(m.images[m.selectedImage].NotePath)
 		}
 		m.selectedImage = zone.Index
 	case mouse.ZoneAction:
@@ -397,9 +502,42 @@ func (m *AppModel) handleZoneClick(zone *mouse.Zone) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
-// handleActionClick procesa clics en los botones del footer
+// handleActionClick procesa clics en los botones de acción
 func (m *AppModel) handleActionClick(zone *mouse.Zone) (tea.Model, tea.Cmd) {
-	switch zone.Payload {
+	payload := zone.Payload
+
+	// Comandos de configuración
+	if strings.HasPrefix(payload, "set-editor:") {
+		m.cfg.Editor = strings.TrimPrefix(payload, "set-editor:")
+		_ = m.cfg.Save()
+		m.statusMsg = fmt.Sprintf("Editor: %s", m.cfg.Editor)
+		return m, nil
+	}
+	if strings.HasPrefix(payload, "set-lang:") {
+		lang := strings.TrimPrefix(payload, "set-lang:")
+		i18n.SetLanguage(lang)
+		m.cfg.Language = lang
+		m.refreshVisibleTabs()
+		_ = m.cfg.Save()
+		m.statusMsg = fmt.Sprintf("%s: %s", i18n.T("Idioma", "Language"), lang)
+		return m, nil
+	}
+	if strings.HasPrefix(payload, "toggle-tab:") {
+		target := strings.TrimPrefix(payload, "toggle-tab:")
+		switch target {
+		case "tags":
+			m.cfg.ShowTagsTab = !m.cfg.ShowTagsTab
+		case "tasks":
+			m.cfg.ShowTasksTab = !m.cfg.ShowTasksTab
+		case "gallery":
+			m.cfg.ShowGalleryTab = !m.cfg.ShowGalleryTab
+		}
+		m.refreshVisibleTabs()
+		_ = m.cfg.Save()
+		return m, nil
+	}
+
+	switch payload {
 	case "c":
 		return m, m.createQuickNote()
 	case "e/Enter", "Enter", "e":
@@ -409,7 +547,6 @@ func (m *AppModel) handleActionClick(zone *mouse.Zone) (tea.Model, tea.Cmd) {
 	case "p":
 		return m, m.pasteImage()
 	case "f":
-		// Ciclar filtro de tareas desde el footer
 		switch m.taskFilter {
 		case views.TaskFilterAll:
 			m.taskFilter = views.TaskFilterPending
@@ -420,12 +557,35 @@ func (m *AppModel) handleActionClick(zone *mouse.Zone) (tea.Model, tea.Cmd) {
 		}
 		m.selectedTask = 0
 		m.tasks = views.CollectTasks(m.notes, m.taskFilter)
-		m.statusMsg = fmt.Sprintf("Filtro: %s", views.TaskFilterLabel(m.taskFilter))
+		m.statusMsg = fmt.Sprintf("%s: %s", i18n.T("Filtro", "Filter"), views.TaskFilterLabel(m.taskFilter))
+	case "?":
+		m.showSettings = !m.showSettings
+	case "t":
+		newTheme := theme.NextTheme()
+		m.cfg.Theme = newTheme
+		_ = m.cfg.Save()
+		m.statusMsg = fmt.Sprintf("%s: %s", i18n.T("Tema", "Theme"), newTheme)
 	case "q":
 		m.quitting = true
 		return m, tea.Quit
 	}
 	return m, nil
+}
+
+func (m *AppModel) cycleEditor() {
+	editors := views.AvailableEditors
+	for i, ed := range editors {
+		if strings.Contains(strings.ToLower(m.cfg.Editor), ed) {
+			next := editors[(i+1)%len(editors)]
+			m.cfg.Editor = next
+			_ = m.cfg.Save()
+			m.statusMsg = fmt.Sprintf("Editor: %s", next)
+			return
+		}
+	}
+	m.cfg.Editor = editors[0]
+	_ = m.cfg.Save()
+	m.statusMsg = fmt.Sprintf("Editor: %s", m.cfg.Editor)
 }
 
 // ─── Acciones ──────────────────────────────────────────────────────
@@ -439,48 +599,45 @@ func (m *AppModel) openEditor() tea.Cmd {
 }
 
 func (m *AppModel) openEditorForPath(filePath string) tea.Cmd {
-	editor := m.cfg.Editor
-	if editor == "" {
-		editor = "micro"
+	editorBin := config.ResolveEditorBin(m.cfg.Editor)
+
+	// Limpiar buffer gráfico antes de abrir editor
+	if m.kitty != nil && m.kitty.Supported {
+		fmt.Print(m.kitty.ClearAllCommand())
 	}
 
-	c := exec.Command(editor, filePath)
-	c.Stdin = os.Stdin
-	c.Stdout = os.Stdout
-	c.Stderr = os.Stderr
-
+	c := exec.Command(editorBin, filePath)
 	return tea.ExecProcess(c, func(err error) tea.Msg {
 		return EditorFinishedMsg{Err: err}
 	})
 }
 
 func (m *AppModel) createQuickNote() tea.Cmd {
-	title := fmt.Sprintf("Nueva Nota %d", len(m.notes)+1)
+	title := fmt.Sprintf("%s %d", i18n.T("Nueva Nota", "New Note"), len(m.notes)+1)
 	_, err := m.storage.CreateNote(title)
 	if err != nil {
-		m.statusMsg = fmt.Sprintf("Error: %v", err)
+		m.statusMsg = fmt.Sprintf("%s: %v", i18n.T("Error", "Error"), err)
 		return nil
 	}
 	m.reloadNotes()
 	m.selectedNote = 0
-	m.statusMsg = fmt.Sprintf("Creada '%s'", title)
+	m.statusMsg = fmt.Sprintf("%s '%s'", i18n.T("Creada", "Created"), title)
 	return m.openEditor()
 }
 
 func (m *AppModel) pasteImage() tea.Cmd {
 	if len(m.notes) == 0 {
-		m.statusMsg = "Crea una nota primero para adjuntar imágenes"
+		m.statusMsg = i18n.T("Crea una nota primero para adjuntar imágenes", "Create a note first to attach images")
 		return nil
 	}
 	note := m.notes[m.selectedNote]
 	imgRef, err := m.clipSaver.PasteImage(note.ID)
 	if err != nil {
-		m.statusMsg = fmt.Sprintf("Portapapeles: %v", err)
+		m.statusMsg = fmt.Sprintf("%s: %v", i18n.T("Portapapeles", "Clipboard"), err)
 		return nil
 	}
 
-	// Añadir la referencia al final de la nota
-	appendContent := fmt.Sprintf("\n\n![Imagen](%s)\n", imgRef)
+	appendContent := fmt.Sprintf("\n\n![%s](%s)\n", i18n.T("Imagen", "Image"), imgRef)
 	f, err := os.OpenFile(note.Path, os.O_APPEND|os.O_WRONLY, 0644)
 	if err == nil {
 		_, _ = f.WriteString(appendContent)
@@ -488,7 +645,7 @@ func (m *AppModel) pasteImage() tea.Cmd {
 	}
 
 	m.reloadNotes()
-	m.statusMsg = fmt.Sprintf("Imagen guardada en %s", imgRef)
+	m.statusMsg = fmt.Sprintf("%s: %s", i18n.T("Imagen guardada en", "Image saved to"), imgRef)
 	return nil
 }
 
@@ -502,7 +659,7 @@ func (m *AppModel) deleteCurrentNote() tea.Cmd {
 	if m.selectedNote >= len(m.notes) && len(m.notes) > 0 {
 		m.selectedNote = len(m.notes) - 1
 	}
-	m.statusMsg = fmt.Sprintf("Borrada: %s", note.Title)
+	m.statusMsg = fmt.Sprintf("%s: %s", i18n.T("Borrada", "Deleted"), note.Title)
 	return nil
 }
 
@@ -518,16 +675,16 @@ func (m *AppModel) reloadNotes() {
 
 func (m *AppModel) View() string {
 	if m.quitting {
-		return "¡Hasta luego!\n"
+		return i18n.T("¡Hasta luego!\n", "Goodbye!\n")
 	}
 
 	m.hitTester.Clear()
 
 	// 1. Renderizar pestañas
-	tabsView := views.RenderTabs(m.activeTab, m.width, m.hitTester)
+	tabsView := views.RenderTabs(m.activeTab, m.width, m.hitTester, m.visibleTabs)
 
 	// Dimensiones de paneles
-	panelHeight := m.height - 4 // Tabs (1) + Spacing (1) + Footer (1) + Margin (1)
+	panelHeight := m.height - 4
 	if panelHeight < 5 {
 		panelHeight = 5
 	}
@@ -541,47 +698,63 @@ func (m *AppModel) View() string {
 		rightWidth = 30
 	}
 
+	// Si la pantalla de configuración está activa, mostrarla como panel principal
+	if m.showSettings {
+		settingsView := views.RenderSettingsView(m.cfg, m.settingsSection, m.settingsItem, m.width, panelHeight, m.hitTester)
+		footerView := views.RenderFooter(m.width, m.hitTester, m.height-1, m.statusMsg, []views.ActionBtn{
+			{Key: "1/e", Action: i18n.T("Editor", "Editor"), ID: "action-cfg-ed"},
+			{Key: "2/L", Action: i18n.T("Idioma", "Language"), ID: "action-cfg-lang"},
+			{Key: "3/t", Action: i18n.T("Tema", "Theme"), ID: "action-cfg-theme"},
+			{Key: "?/Esc", Action: i18n.T("Volver", "Back"), ID: "action-config"},
+			{Key: "q", Action: i18n.T("Salir", "Quit"), ID: "action-quit"},
+		})
+		return lipgloss.JoinVertical(lipgloss.Left,
+			tabsView,
+			settingsView,
+			footerView,
+		)
+	}
+
 	var leftView, rightView, footerView string
 
-	switch m.activeTab {
-	case 0: // [1] Notas
+	switch m.currentTabID() {
+	case "notes":
 		leftView = views.RenderNoteList(m.notes, m.selectedNote, leftWidth, panelHeight, m.activePanel == 0, m.hitTester, 1)
 		var currentNote *storage.Note
 		if len(m.notes) > 0 && m.selectedNote < len(m.notes) {
 			currentNote = &m.notes[m.selectedNote]
 		}
 		rightView = views.RenderPreview(currentNote, rightWidth, panelHeight, m.activePanel == 1, m.kitty)
-		footerView = views.RenderFooter(m.width, m.hitTester, m.height-1, m.statusMsg)
+		footerView = views.RenderFooter(m.width, m.hitTester, m.height-1, m.statusMsg, views.GetNotesActions())
 
-	case 1: // [2] Categorías/Tags
+	case "tags":
 		leftView = views.RenderTagList(m.tags, m.selectedTag, leftWidth, panelHeight, m.activePanel == 0, m.hitTester, 1)
 		var selectedTagName string
 		if m.selectedTag < len(m.tags) {
 			selectedTagName = m.tags[m.selectedTag].Name
 		}
 		rightView = views.RenderTagPreview(m.notes, selectedTagName, rightWidth, panelHeight, m.activePanel == 1)
-		footerView = views.RenderFooter(m.width, m.hitTester, m.height-1, m.statusMsg, views.TagActions)
+		footerView = views.RenderFooter(m.width, m.hitTester, m.height-1, m.statusMsg, views.GetTagActions())
 
-	case 2: // [3] Tareas
+	case "tasks":
 		leftView = views.RenderTaskList(m.tasks, m.selectedTask, m.taskFilter, leftWidth, panelHeight, m.activePanel == 0, m.hitTester, 1)
 		var currentTask *views.FlatTask
 		if len(m.tasks) > 0 && m.selectedTask < len(m.tasks) {
 			currentTask = &m.tasks[m.selectedTask]
 		}
 		rightView = views.RenderTaskPreview(currentTask, rightWidth, panelHeight, m.activePanel == 1)
-		footerView = views.RenderFooter(m.width, m.hitTester, m.height-1, m.statusMsg, views.TaskActions)
+		footerView = views.RenderFooter(m.width, m.hitTester, m.height-1, m.statusMsg, views.GetTaskActions())
 
-	case 3: // [4] Galería de Imágenes
+	case "gallery":
 		leftView = views.RenderGalleryList(m.images, m.selectedImage, leftWidth, panelHeight, m.activePanel == 0, m.hitTester, 1)
 		var currentImage *views.ImageEntry
 		if len(m.images) > 0 && m.selectedImage < len(m.images) {
 			currentImage = &m.images[m.selectedImage]
 		}
 		rightView = views.RenderGalleryPreview(currentImage, rightWidth, panelHeight, m.activePanel == 1, m.kitty)
-		footerView = views.RenderFooter(m.width, m.hitTester, m.height-1, m.statusMsg, views.GalleryActions)
+		footerView = views.RenderFooter(m.width, m.hitTester, m.height-1, m.statusMsg, views.GetGalleryActions())
 	}
 
-	// Unir paneles horizontalmente
 	mainView := lipgloss.JoinHorizontal(lipgloss.Top, leftView, rightView)
 
 	return lipgloss.JoinVertical(lipgloss.Left,

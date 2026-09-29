@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/MathiasDrizzy/lazymark/internal/i18n"
 	"github.com/MathiasDrizzy/lazymark/internal/ui/mouse"
 	"github.com/MathiasDrizzy/lazymark/internal/ui/theme"
 )
@@ -14,43 +15,58 @@ type ActionBtn struct {
 	ID     string
 }
 
-var DefaultActions = []ActionBtn{
-	{Key: "c", Action: "Nueva", ID: "action-new"},
-	{Key: "e/Enter", Action: "Editar en micro", ID: "action-edit"},
-	{Key: "d", Action: "Borrar", ID: "action-delete"},
-	{Key: "/", Action: "Buscar", ID: "action-search"},
-	{Key: "p", Action: "Pegar imagen", ID: "action-paste"},
-	{Key: "q", Action: "Salir", ID: "action-quit"},
+// GetNotesActions devuelve los atajos para la pestaña Notas
+func GetNotesActions() []ActionBtn {
+	return []ActionBtn{
+		{Key: "c", Action: i18n.T("Nueva", "New"), ID: "action-new"},
+		{Key: "e", Action: i18n.T("Editar", "Edit"), ID: "action-edit"},
+		{Key: "d", Action: i18n.T("Borrar", "Delete"), ID: "action-delete"},
+		{Key: "p", Action: i18n.T("Pegar img", "Paste img"), ID: "action-paste"},
+		{Key: "t", Action: i18n.T("Tema", "Theme"), ID: "action-theme"},
+		{Key: "?", Action: i18n.T("Config", "Settings"), ID: "action-config"},
+		{Key: "q", Action: i18n.T("Salir", "Quit"), ID: "action-quit"},
+	}
 }
 
-// TagActions son los atajos contextuales de la pestaña Categorías/Tags
-var TagActions = []ActionBtn{
-	{Key: "Enter", Action: "Ver notas", ID: "action-view-tag"},
-	{Key: "e", Action: "Abrir nota", ID: "action-edit"},
-	{Key: "q", Action: "Salir", ID: "action-quit"},
+// GetTagActions devuelve los atajos contextuales de la pestaña Categorías/Tags
+func GetTagActions() []ActionBtn {
+	return []ActionBtn{
+		{Key: "Enter", Action: i18n.T("Ver notas", "View notes"), ID: "action-view-tag"},
+		{Key: "e", Action: i18n.T("Abrir nota", "Open note"), ID: "action-edit"},
+		{Key: "t", Action: i18n.T("Tema", "Theme"), ID: "action-theme"},
+		{Key: "?", Action: i18n.T("Config", "Settings"), ID: "action-config"},
+		{Key: "q", Action: i18n.T("Salir", "Quit"), ID: "action-quit"},
+	}
 }
 
-// TaskActions son los atajos contextuales de la pestaña Tareas
-var TaskActions = []ActionBtn{
-	{Key: "f", Action: "Filtro", ID: "action-filter"},
-	{Key: "Enter", Action: "Abrir nota", ID: "action-open-task"},
-	{Key: "q", Action: "Salir", ID: "action-quit"},
+// GetTaskActions devuelve los atajos contextuales de la pestaña Tareas
+func GetTaskActions() []ActionBtn {
+	return []ActionBtn{
+		{Key: "f", Action: i18n.T("Filtro", "Filter"), ID: "action-filter"},
+		{Key: "Enter", Action: i18n.T("Abrir nota", "Open note"), ID: "action-open-task"},
+		{Key: "t", Action: i18n.T("Tema", "Theme"), ID: "action-theme"},
+		{Key: "?", Action: i18n.T("Config", "Settings"), ID: "action-config"},
+		{Key: "q", Action: i18n.T("Salir", "Quit"), ID: "action-quit"},
+	}
 }
 
-// GalleryActions son los atajos contextuales de la pestaña Galería
-var GalleryActions = []ActionBtn{
-	{Key: "p", Action: "Pegar imagen", ID: "action-paste"},
-	{Key: "Enter", Action: "Abrir nota", ID: "action-open-gallery"},
-	{Key: "q", Action: "Salir", ID: "action-quit"},
+// GetGalleryActions devuelve los atajos contextuales de la pestaña Galería
+func GetGalleryActions() []ActionBtn {
+	return []ActionBtn{
+		{Key: "p", Action: i18n.T("Pegar img", "Paste img"), ID: "action-paste"},
+		{Key: "Enter", Action: i18n.T("Abrir nota", "Open note"), ID: "action-open-gallery"},
+		{Key: "t", Action: i18n.T("Tema", "Theme"), ID: "action-theme"},
+		{Key: "?", Action: i18n.T("Config", "Settings"), ID: "action-config"},
+		{Key: "q", Action: i18n.T("Salir", "Quit"), ID: "action-quit"},
+	}
 }
 
 // RenderFooter renderiza la barra inferior de atajos y registra los botones clickeables
-// Si actions es nil, usa DefaultActions
 func RenderFooter(width int, ht *mouse.HitTester, posY int, statusMsg string, actions ...[]ActionBtn) string {
 	var elements []string
 	currentX := 1
 
-	actionsToRender := DefaultActions
+	actionsToRender := GetNotesActions()
 	if len(actions) > 0 && actions[0] != nil {
 		actionsToRender = actions[0]
 	}

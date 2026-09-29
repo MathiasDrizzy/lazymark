@@ -5,6 +5,7 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/MathiasDrizzy/lazymark/internal/i18n"
 	"github.com/MathiasDrizzy/lazymark/internal/storage"
 	"github.com/MathiasDrizzy/lazymark/internal/ui/mouse"
 	"github.com/MathiasDrizzy/lazymark/internal/ui/theme"
@@ -57,7 +58,7 @@ func RenderTagList(tags []TagInfo, selectedIndex int, width, height int, active 
 	var rows []string
 
 	if len(tags) == 0 {
-		emptyMsg := theme.NormalItem.Copy().Italic(true).Render("  (No hay tags. Usa #tag en tus notas)")
+		emptyMsg := theme.NormalItem.Copy().Italic(true).Render(i18n.T("  (No hay tags. Usa #tag en tus notas)", "  (No tags yet. Use #tag in your notes)"))
 		rows = append(rows, emptyMsg)
 	}
 
@@ -119,14 +120,14 @@ func RenderTagPreview(notes []storage.Note, tag string, width, height int, activ
 	}
 
 	if tag == "" {
-		empty := theme.NormalItem.Copy().Italic(true).Render("Selecciona un tag para ver sus notas...")
+		empty := theme.NormalItem.Copy().Italic(true).Render(i18n.T("Selecciona un tag para ver sus notas...", "Select a tag to view its notes..."))
 		return borderStyle.Width(width).Height(height).Render(empty)
 	}
 
 	filtered := NotesForTag(notes, tag)
 
 	headerStyle := theme.SelectedItem.Copy()
-	header := headerStyle.Render(fmt.Sprintf("  #%s — %d nota(s)", tag, len(filtered)))
+	header := headerStyle.Render(fmt.Sprintf("  #%s — %d %s", tag, len(filtered), i18n.T("nota(s)", "note(s)")))
 
 	var rows []string
 	rows = append(rows, header)

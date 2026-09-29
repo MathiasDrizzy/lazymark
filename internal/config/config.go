@@ -1,24 +1,72 @@
 package config
 
 import (
+	"encoding/json"
 	"os"
+	"os/exec"
 	"path/filepath"
+	"strings"
 )
 
 const (
-	Version   = "0.1.0"
-	AppName   = "lazymark"
+	Version = "0.1.0"
+	AppName = "lazymark"
 )
 
 // Config almacena las preferencias de ejecución de la aplicación.
 type Config struct {
-	NotesDir   string
-	Editor     string
-	MouseClick bool
-	Theme      string
+	NotesDir       string   `json:"notes_dir"`
+	Editor         string   `json:"editor"`
+	MouseClick     bool     `json:"mouse_click"`
+	Theme          string   `json:"theme"`
+	Language       string   `json:"language"`
+	ShowTagsTab    bool     `json:"show_tags_tab"`
+	ShowTasksTab   bool     `json:"show_tasks_tab"`
+	ShowGalleryTab bool     `json:"show_gallery_tab"`
+	configPath     string   `json:"-"`
 }
 
-// Load carga la configuración por defecto o desde variables de entorno / rutas del usuario.
+func configFilePath() string {
+	configDir, err := os.UserConfigDir()
+	if err != nil {
+		home, _ := os.UserHomeDir()
+		configDir = filepath.Join(home, ".config")
+	}
+	return filepath.Join(configDir, AppName, "config.json")
+}
+
+// DefaultConfig devuelve la configuración inicial por defecto
+func DefaultConfig(notesDir string) *Config {
+	editor := os.Getenv("EDITOR")
+	if editor == "" {
+		if path, err := exec.LookPath("micro"); err == nil {
+			editor = path
+		} else if _, err := os.Stat("/opt/homebrew/bin/micro"); err == nil {
+			editor = "/opt/homebrew/bin/micro"
+		} else if _, err := os.Stat("/usr/local/bin/micro"); err == nil {
+			editor = "/usr/local/bin/micro"
+		} else if path, err := exec.LookPath("vim"); err == nil {
+			editor = path
+		} else if path, err := exec.LookPath("nano"); err == nil {
+			editor = path
+		} else {
+			editor = "micro"
+		}
+	}
+
+	return &Config{
+		NotesDir:       notesDir,
+		Editor:         editor,
+		MouseClick:     true,
+		Theme:          "catppuccin-mocha",
+		Language:       "auto",
+		ShowTagsTab:    true,
+		ShowTasksTab:   true,
+		ShowGalleryTab: true,
+	}
+}
+
+// Load carga la configuración desde disco o crea una con valores por defecto.
 func Load(customDir string) (*Config, error) {
 	home, err := os.UserHomeDir()
 	if err != nil {
@@ -39,15 +87,81 @@ func Load(customDir string) (*Config, error) {
 	assetsDir := filepath.Join(notesDir, "assets")
 	_ = os.MkdirAll(assetsDir, 0755)
 
-	editor := os.Getenv("EDITOR")
-	if editor == "" {
-		editor = "micro" // Editor predeterminado de nuestro ecosistema
+	cfg := DefaultConfig(notesDir)
+	cfgPath := configFilePath()
+	cfg.configPath = cfgPath
+
+	// Intentar leer archivo de configuración existente
+	if data, err := os.ReadFile(cfgPath); err == nil {
+		var diskCfg Config
+		if err := json.Unmarshal(data, &diskCfg); err == nil {
+			if diskCfg.Editor != "" {
+				cfg.Editor = diskCfg.Editor
+			}
+			if diskCfg.Theme != "" {
+				cfg.Theme = diskCfg.Theme
+			}
+			if diskCfg.Language != "" {
+				cfg.Language = diskCfg.Language
+			}
+			cfg.MouseClick = diskCfg.MouseClick
+			cfg.ShowTagsTab = diskCfg.ShowTagsTab
+			cfg.ShowTasksTab = diskCfg.ShowTasksTab
+			cfg.ShowGalleryTab = diskCfg.ShowGalleryTab
+			if customDir == "" && diskCfg.NotesDir != "" {
+				cfg.NotesDir = diskCfg.NotesDir
+			}
+		}
 	}
 
-	return &Config{
-		NotesDir:   notesDir,
-		Editor:     editor,
-		MouseClick: true,
-		Theme:      "catppuccin-mocha",
-	}, nil
+	return cfg, nil
+}
+
+// Save persiste la configuración actual en ~/.config/lazymark/config.json
+func (c *Config) Save() error {
+	if c.configPath == "" {
+		c.configPath = configFilePath()
+	}
+	if err := os.MkdirAll(filepath.Dir(c.configPath), 0755); err != nil {
+		return err
+	}
+	data, err := json.MarshalIndent(c, "", "  ")
+	if err != nil {
+		return err
+	}
+	return os.WriteFile(c.configPath, data, 0644)
+}
+
+// ResolveEditorBin busca la ruta absoluta ejecutable para el editor
+func ResolveEditorBin(name string) string {
+	if name == "" {
+		name = "micro"
+	}
+
+	// Si es una ruta absoluta o relativa existente
+	if strings.Contains(name, string(filepath.Separator)) {
+		if _, err := os.Stat(name); err == nil {
+			return name
+		}
+	}
+
+	// Buscar en PATH
+	if p, err := exec.LookPath(name); err == nil {
+		return p
+	}
+
+	// Rutas conocidas en macOS / Linux
+	knownPaths := []string{
+		"/opt/homebrew/bin/" + name,
+		"/usr/local/bin/" + name,
+		"/usr/bin/" + name,
+		"/bin/" + name,
+	}
+	for _, kp := range knownPaths {
+		if _, err := os.Stat(kp); err == nil {
+			return kp
+		}
+	}
+
+	return name
 }

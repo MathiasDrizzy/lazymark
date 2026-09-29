@@ -9,6 +9,8 @@ import (
 	"sort"
 	"strings"
 	"time"
+
+	"github.com/MathiasDrizzy/lazymark/internal/i18n"
 )
 
 // Task representa un ítem de tarea de markdown (- [ ] o - [x])
@@ -163,8 +165,8 @@ func (s *Storage) CreateNote(title string) (*Note, error) {
 		return nil, fmt.Errorf("ya existe una nota con el nombre: %s", fileName)
 	}
 
-	initialContent := fmt.Sprintf("# %s\n\nFecha: %s\nTags: #general\n\n- [ ] Primera tarea pendiente\n",
-		title, time.Now().Format("2006-01-02 15:04"))
+	initialContent := fmt.Sprintf("# %s\n\n%s: %s\nTags: #general\n\n- [ ] %s\n",
+		title, i18n.T("Fecha", "Date"), time.Now().Format("2006-01-02 15:04"), i18n.T("Primera tarea pendiente", "First pending task"))
 
 	if err := os.WriteFile(fullPath, []byte(initialContent), 0644); err != nil {
 		return nil, err

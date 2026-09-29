@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/MathiasDrizzy/lazymark/internal/i18n"
 	"github.com/MathiasDrizzy/lazymark/internal/storage"
 	"github.com/MathiasDrizzy/lazymark/internal/ui/mouse"
 	"github.com/MathiasDrizzy/lazymark/internal/ui/theme"
@@ -52,11 +53,11 @@ func CollectTasks(notes []storage.Note, filter TaskFilter) []FlatTask {
 func TaskFilterLabel(filter TaskFilter) string {
 	switch filter {
 	case TaskFilterPending:
-		return "Pendientes"
+		return i18n.T("Pendientes", "Pending")
 	case TaskFilterDone:
-		return "Completadas"
+		return i18n.T("Completadas", "Completed")
 	default:
-		return "Todas"
+		return i18n.T("Todas", "All")
 	}
 }
 
@@ -92,11 +93,11 @@ func RenderTaskList(tasks []FlatTask, selectedIndex int, filter TaskFilter, widt
 		var emptyText string
 		switch filter {
 		case TaskFilterPending:
-			emptyText = "  ¡Sin tareas pendientes! 🎉"
+			emptyText = i18n.T("  ¡Sin tareas pendientes! 🎉", "  No pending tasks! 🎉")
 		case TaskFilterDone:
-			emptyText = "  (Sin tareas completadas aún)"
+			emptyText = i18n.T("  (Sin tareas completadas aún)", "  (No completed tasks yet)")
 		default:
-			emptyText = "  (Sin tareas. Usa - [ ] en tus notas)"
+			emptyText = i18n.T("  (Sin tareas. Usa - [ ] en tus notas)", "  (No tasks. Use - [ ] in your notes)")
 		}
 		emptyMsg := theme.NormalItem.Copy().Italic(true).Render(emptyText)
 		rows = append(rows, emptyMsg)
@@ -185,7 +186,7 @@ func RenderTaskPreview(task *FlatTask, width, height int, active bool) string {
 	}
 
 	if task == nil {
-		empty := theme.NormalItem.Copy().Italic(true).Render("Selecciona una tarea para ver detalles...")
+		empty := theme.NormalItem.Copy().Italic(true).Render(i18n.T("Selecciona una tarea para ver detalles...", "Select a task to view details..."))
 		return borderStyle.Width(width).Height(height).Render(empty)
 	}
 
@@ -194,33 +195,33 @@ func RenderTaskPreview(task *FlatTask, width, height int, active bool) string {
 	// Estado
 	var statusLine string
 	if task.Done {
-		statusLine = theme.NormalItem.Copy().Foreground(theme.ColorGreen).Bold(true).Render("  ☑ COMPLETADA")
+		statusLine = theme.NormalItem.Copy().Foreground(theme.ColorGreen).Bold(true).Render("  " + i18n.T("☑ COMPLETADA", "☑ COMPLETED"))
 	} else {
-		statusLine = theme.NormalItem.Copy().Foreground(theme.ColorYellow).Bold(true).Render("  ☐ PENDIENTE")
+		statusLine = theme.NormalItem.Copy().Foreground(theme.ColorYellow).Bold(true).Render("  " + i18n.T("☐ PENDIENTE", "☐ PENDING"))
 	}
 	rows = append(rows, statusLine)
 	rows = append(rows, "")
 
 	// Texto de la tarea
-	taskLabel := theme.NormalItem.Copy().Foreground(theme.ColorPeach).Bold(true).Render("  Tarea:")
+	taskLabel := theme.NormalItem.Copy().Foreground(theme.ColorPeach).Bold(true).Render("  " + i18n.T("Tarea:", "Task:"))
 	rows = append(rows, taskLabel)
 	rows = append(rows, fmt.Sprintf("  %s", theme.NormalItem.Render(task.Text)))
 	rows = append(rows, "")
 
 	// Nota de origen
-	noteLabel := theme.NormalItem.Copy().Foreground(theme.ColorBlue).Bold(true).Render("  Nota:")
+	noteLabel := theme.NormalItem.Copy().Foreground(theme.ColorBlue).Bold(true).Render("  " + i18n.T("Nota:", "Note:"))
 	rows = append(rows, noteLabel)
 	rows = append(rows, fmt.Sprintf("  📝 %s", theme.NormalItem.Render(task.NoteTitle)))
 	rows = append(rows, "")
 
 	// Línea en el archivo
-	lineLabel := theme.NormalItem.Copy().Foreground(theme.ColorMauve).Render(fmt.Sprintf("  Línea: %d", task.Line))
+	lineLabel := theme.NormalItem.Copy().Foreground(theme.ColorMauve).Render(fmt.Sprintf("  %s: %d", i18n.T("Línea", "Line"), task.Line))
 	rows = append(rows, lineLabel)
 	rows = append(rows, "")
 
 	// Tip
 	tipLabel := theme.NormalItem.Copy().Foreground(theme.ColorOverlay0).Italic(true).
-		Render("  Presiona Enter para abrir la nota en el editor")
+		Render(i18n.T("  Presiona Enter para abrir la nota en el editor", "  Press Enter to open note in editor"))
 	rows = append(rows, tipLabel)
 
 	content := strings.Join(rows, "\n")

@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/MathiasDrizzy/lazymark/internal/i18n"
 	"github.com/MathiasDrizzy/lazymark/internal/storage"
 	"github.com/MathiasDrizzy/lazymark/internal/ui/mouse"
 	"github.com/MathiasDrizzy/lazymark/internal/ui/theme"
@@ -14,7 +15,7 @@ func RenderNoteList(notes []storage.Note, selectedIndex int, width, height int, 
 	var rows []string
 
 	if len(notes) == 0 {
-		emptyMsg := theme.NormalItem.Copy().Italic(true).Render("  (No hay notas aún. Presiona 'c' para crear una)")
+		emptyMsg := theme.NormalItem.Copy().Italic(true).Render(i18n.T("  (No hay notas aún. Presiona 'c' para crear una)", "  (No notes yet. Press 'c' to create one)"))
 		rows = append(rows, emptyMsg)
 	}
 

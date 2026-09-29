@@ -4,6 +4,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/MathiasDrizzy/lazymark/internal/config"
 	"github.com/MathiasDrizzy/lazymark/internal/storage"
 	"github.com/MathiasDrizzy/lazymark/internal/ui/mouse"
 )
@@ -79,8 +80,9 @@ func TestCollectTasksAndFilters(t *testing.T) {
 		t.Fatalf("se esperaba 1 tarea completada ('Revisar email'), obtenidas %d", len(done))
 	}
 
-	if TaskFilterLabel(TaskFilterPending) != "Pendientes" {
-		t.Errorf("etiqueta inesperada para TaskFilterPending")
+	label := TaskFilterLabel(TaskFilterPending)
+	if label != "Pendientes" && label != "Pending" {
+		t.Errorf("etiqueta inesperada para TaskFilterPending: %s", label)
 	}
 }
 
@@ -135,5 +137,27 @@ func TestRenderNoteListAndPreview(t *testing.T) {
 	prevOut := RenderPreview(&notes[0], 60, 20, false, nil)
 	if prevOut == "" {
 		t.Errorf("RenderPreview devolvió string vacío")
+	}
+}
+
+func TestRenderSettingsView(t *testing.T) {
+	cfg := &config.Config{
+		Editor:         "micro",
+		Theme:          "catppuccin-mocha",
+		Language:       "es",
+		ShowTagsTab:    true,
+		ShowTasksTab:   true,
+		ShowGalleryTab: true,
+	}
+	ht := mouse.NewHitTester()
+	out := RenderSettingsView(cfg, SectionEditor, 0, 80, 24, ht)
+	if out == "" {
+		t.Errorf("RenderSettingsView devolvió string vacío")
+	}
+
+	// Comprobar que los botones de acción se registraron
+	zone, ok := ht.Check(5, 4)
+	if !ok || zone.Type != mouse.ZoneAction {
+		t.Errorf("hit-test en configuración falló")
 	}
 }

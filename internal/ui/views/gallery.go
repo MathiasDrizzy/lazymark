@@ -5,6 +5,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/MathiasDrizzy/lazymark/internal/i18n"
 	"github.com/MathiasDrizzy/lazymark/internal/image"
 	"github.com/MathiasDrizzy/lazymark/internal/storage"
 	"github.com/MathiasDrizzy/lazymark/internal/ui/mouse"
@@ -42,11 +43,11 @@ func RenderGalleryList(images []ImageEntry, selectedIndex int, width, height int
 
 	// Cabecera
 	header := theme.SelectedItem.Copy().Foreground(theme.ColorBlue).
-		Render(fmt.Sprintf(" 🖼️  Galería (%d adjuntos)", len(images)))
+		Render(fmt.Sprintf(" 🖼️  %s (%d %s)", i18n.T("Galería", "Gallery"), len(images), i18n.T("adjuntos", "attachments")))
 	rows = append(rows, header)
 
 	if len(images) == 0 {
-		emptyMsg := theme.NormalItem.Copy().Italic(true).Render("  (Sin imágenes. Usa 'p' para pegar del portapapeles)")
+		emptyMsg := theme.NormalItem.Copy().Italic(true).Render(i18n.T("  (Sin imágenes. Usa 'p' para pegar del portapapeles)", "  (No images. Press 'p' to paste from clipboard)"))
 		rows = append(rows, emptyMsg)
 	}
 
@@ -146,7 +147,7 @@ func RenderGalleryPreview(entry *ImageEntry, width, height int, active bool, kit
 	}
 
 	if entry == nil {
-		empty := theme.NormalItem.Copy().Italic(true).Render("Selecciona una imagen para previsualizarla...")
+		empty := theme.NormalItem.Copy().Italic(true).Render(i18n.T("Selecciona una imagen para previsualizarla...", "Select an image to preview..."))
 		return borderStyle.Width(width).Height(height).Render(empty)
 	}
 
@@ -158,18 +159,25 @@ func RenderGalleryPreview(entry *ImageEntry, width, height int, active bool, kit
 	rows = append(rows, "")
 
 	// Información
-	noteRef := fmt.Sprintf("  📝 Nota: %s", theme.NormalItem.Render(entry.NoteTitle))
+	noteRef := fmt.Sprintf("  📝 %s %s", i18n.T("Nota:", "Note:"), theme.NormalItem.Render(entry.NoteTitle))
 	rows = append(rows, noteRef)
 
-	pathRef := fmt.Sprintf("  📂 Ruta: %s",
+	pathRef := fmt.Sprintf("  📂 %s %s",
+		i18n.T("Ruta:", "Path:"),
 		theme.NormalItem.Copy().Foreground(theme.ColorOverlay0).Render(entry.Path))
 	rows = append(rows, pathRef)
 
 	ext := strings.ToLower(filepath.Ext(entry.Path))
-	formatRef := fmt.Sprintf("  📐 Formato: %s",
+	formatRef := fmt.Sprintf("  📐 %s %s",
+		i18n.T("Formato:", "Format:"),
 		theme.NormalItem.Copy().Foreground(theme.ColorTeal).Render(strings.ToUpper(strings.TrimPrefix(ext, "."))))
 	rows = append(rows, formatRef)
 	rows = append(rows, "")
+
+	resolvedPath := entry.Path
+	if !filepath.IsAbs(resolvedPath) && entry.NotePath != "" {
+		resolvedPath = filepath.Join(filepath.Dir(entry.NotePath), resolvedPath)
+	}
 
 	// Renderizado Kitty o Fallback
 	if kittyClient != nil && kittyClient.Supported {
@@ -177,7 +185,7 @@ func RenderGalleryPreview(entry *ImageEntry, width, height int, active bool, kit
 		if imgRows < 4 {
 			imgRows = 4
 		}
-		imgOutput := kittyClient.RenderCommand(entry.Path, contentWidth, imgRows)
+		imgOutput := kittyClient.RenderCommand(resolvedPath, contentWidth, imgRows)
 		rows = append(rows, imgOutput)
 	} else {
 		// Fallback elegante para terminales sin soporte gráfico
@@ -202,7 +210,7 @@ func RenderGalleryPreview(entry *ImageEntry, width, height int, active bool, kit
 		rows = append(rows, fmt.Sprintf("  └%s┘", box))
 		rows = append(rows, "")
 		rows = append(rows, theme.NormalItem.Copy().Foreground(theme.ColorOverlay0).Italic(true).
-			Render("  (Terminal sin soporte Kitty Graphics)"))
+			Render(i18n.T("  (Terminal sin soporte Kitty Graphics)", "  (Terminal without Kitty Graphics support)")))
 	}
 
 	content := strings.Join(rows, "\n")

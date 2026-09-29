@@ -4,24 +4,48 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/MathiasDrizzy/lazymark/internal/i18n"
 	"github.com/MathiasDrizzy/lazymark/internal/ui/mouse"
 	"github.com/MathiasDrizzy/lazymark/internal/ui/theme"
 )
 
-var TabTitles = []string{
-	"Notas",
-	"Categorías/Tags",
-	"Tareas",
-	"Imágenes/Adjuntos",
+// TabItem define una pestaña individual
+type TabItem struct {
+	ID    string
+	Title string
+}
+
+// DefaultTabs devuelve las pestañas por defecto localizadas
+func DefaultTabs(showTags, showTasks, showGallery bool) []TabItem {
+	tabs := []TabItem{
+		{ID: "notes", Title: i18n.T("Notas", "Notes")},
+	}
+	if showTags {
+		tabs = append(tabs, TabItem{ID: "tags", Title: i18n.T("Categorías/Tags", "Tags/Categories")})
+	}
+	if showTasks {
+		tabs = append(tabs, TabItem{ID: "tasks", Title: i18n.T("Tareas", "Tasks")})
+	}
+	if showGallery {
+		tabs = append(tabs, TabItem{ID: "gallery", Title: i18n.T("Imágenes/Adjuntos", "Images/Attachments")})
+	}
+	return tabs
 }
 
 // RenderTabs genera la barra superior de pestañas y registra sus zonas de clic
-func RenderTabs(activeTab int, totalWidth int, ht *mouse.HitTester) string {
+func RenderTabs(activeTab int, totalWidth int, ht *mouse.HitTester, customTabs ...[]TabItem) string {
+	var tabs []TabItem
+	if len(customTabs) > 0 && len(customTabs[0]) > 0 {
+		tabs = customTabs[0]
+	} else {
+		tabs = DefaultTabs(true, true, true)
+	}
+
 	var renderedTabs []string
 	currentX := 0
 
-	for i, title := range TabTitles {
-		tabLabel := fmt.Sprintf("[%d] %s", i+1, title)
+	for i, item := range tabs {
+		tabLabel := fmt.Sprintf("[%d] %s", i+1, item.Title)
 		var tabStr string
 
 		if i == activeTab {
@@ -32,7 +56,7 @@ func RenderTabs(activeTab int, totalWidth int, ht *mouse.HitTester) string {
 
 		tabWidth := len(tabLabel) + 4 // padding 2 a cada lado
 		if ht != nil {
-			ht.Register(fmt.Sprintf("tab-%d", i), mouse.ZoneTab, currentX, 0, currentX+tabWidth, 0, i, title)
+			ht.Register(fmt.Sprintf("tab-%d", i), mouse.ZoneTab, currentX, 0, currentX+tabWidth, 0, i, item.ID)
 		}
 		currentX += tabWidth + 1
 		renderedTabs = append(renderedTabs, tabStr)
