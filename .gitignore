@@ -22,7 +22,8 @@ Thumbs.db
 *.swo
 *~
 
-# Configuración y desarrollo local de agentes / auditoría interna
+# Herramientas internas de desarrollo y agentes locales
 .agents/
 AGENTS.md
 LEARNING_SYSTEM.md
+harness/

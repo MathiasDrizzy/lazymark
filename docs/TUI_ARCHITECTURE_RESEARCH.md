@@ -1,9 +1,8 @@
 # 🔬 TUI Architecture Research: Diseño e Implementación de TUIs Modernas en Go
 
 > **Proyecto:** `lazymark` (TUI para Markdown, Tareas e Imágenes estilo Lazygit)  
-> **Investigador:** Cerebro Maestro & Auditor Principal  
-> **Fecha:** 2026-09-29  
-> **Target:** Multiplataforma (macOS, Linux, Windows) en terminales con protocolo Kitty Graphics (Ghostty, WezTerm, Kitty).  
+> **Arquitectura:** Lazymark Core Architecture  
+> **Target:** Multiplataforma (macOS, Linux, Windows) en terminales modernas (Ghostty, WezTerm, Kitty).  
 
 ---
 
