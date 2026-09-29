@@ -1,0 +1,17 @@
+#!/bin/bash
+set -e
+
+REPO_ROOT="$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
+
+echo "🛡️ [PRE-COMMIT HOOK] Ejecutando Lazymark Quality Harness..."
+python3 "${REPO_ROOT}/harness/validate_project.py"
+STATUS=$?
+
+if [ $STATUS -ne 0 ]; then
+    echo "❌ [ERROR] El commit fue cancelado debido a fallos detectados por el Harness."
+    echo "👉 Corrige los errores señalados arriba antes de commitear."
+    exit 1
+fi
+
+echo "✅ [SUCCESS] Harness verificado. Procediendo con el commit."
+exit 0
