@@ -8,6 +8,9 @@ const (
 	ZoneNote    ZoneType = "note"
 	ZoneAction  ZoneType = "action"
 	ZonePreview ZoneType = "preview"
+	ZoneTag     ZoneType = "tag"
+	ZoneTask    ZoneType = "task"
+	ZoneGallery ZoneType = "gallery"
 )
 
 // Zone representa una región rectangular en la pantalla de la terminal

@@ -23,12 +23,39 @@ var DefaultActions = []ActionBtn{
 	{Key: "q", Action: "Salir", ID: "action-quit"},
 }
 
+// TagActions son los atajos contextuales de la pestaña Categorías/Tags
+var TagActions = []ActionBtn{
+	{Key: "Enter", Action: "Ver notas", ID: "action-view-tag"},
+	{Key: "e", Action: "Abrir nota", ID: "action-edit"},
+	{Key: "q", Action: "Salir", ID: "action-quit"},
+}
+
+// TaskActions son los atajos contextuales de la pestaña Tareas
+var TaskActions = []ActionBtn{
+	{Key: "f", Action: "Filtro", ID: "action-filter"},
+	{Key: "Enter", Action: "Abrir nota", ID: "action-open-task"},
+	{Key: "q", Action: "Salir", ID: "action-quit"},
+}
+
+// GalleryActions son los atajos contextuales de la pestaña Galería
+var GalleryActions = []ActionBtn{
+	{Key: "p", Action: "Pegar imagen", ID: "action-paste"},
+	{Key: "Enter", Action: "Abrir nota", ID: "action-open-gallery"},
+	{Key: "q", Action: "Salir", ID: "action-quit"},
+}
+
 // RenderFooter renderiza la barra inferior de atajos y registra los botones clickeables
-func RenderFooter(width int, ht *mouse.HitTester, posY int, statusMsg string) string {
+// Si actions es nil, usa DefaultActions
+func RenderFooter(width int, ht *mouse.HitTester, posY int, statusMsg string, actions ...[]ActionBtn) string {
 	var elements []string
 	currentX := 1
 
-	for _, act := range DefaultActions {
+	actionsToRender := DefaultActions
+	if len(actions) > 0 && actions[0] != nil {
+		actionsToRender = actions[0]
+	}
+
+	for _, act := range actionsToRender {
 		keyStr := theme.FooterKey.Render(fmt.Sprintf("[%s]", act.Key))
 		actStr := theme.NormalItem.Copy().Foreground(theme.ColorSubtext0).Render(act.Action)
 		btnStr := fmt.Sprintf("%s %s", keyStr, actStr)

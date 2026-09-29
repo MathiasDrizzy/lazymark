@@ -45,9 +45,13 @@ def test_go_tests_race():
     else:
         log_fail("Fallo en suite de pruebas unitarias", res.stderr + "\n" + res.stdout)
 
+def get_bin_target():
+    bin_name = "lazymark.exe" if sys.platform == "win32" else "lazymark"
+    return os.path.join(REPO_ROOT, "bin", bin_name)
+
 def test_go_build():
     print("\n🔨 Compilando Binario Lazymark...")
-    bin_target = os.path.join(REPO_ROOT, "bin", "lazymark")
+    bin_target = get_bin_target()
     os.makedirs(os.path.dirname(bin_target), exist_ok=True)
     res = subprocess.run(["go", "build", "-o", bin_target, "./cmd/lazymark"], cwd=REPO_ROOT, capture_output=True, text=True)
     if res.returncode == 0:
@@ -57,7 +61,7 @@ def test_go_build():
 
 def test_smoke_cli():
     print("\n💨 Ejecutando Smoke Tests de CLI (--version, --help)...")
-    bin_target = os.path.join(REPO_ROOT, "bin", "lazymark")
+    bin_target = get_bin_target()
     if not os.path.exists(bin_target):
         log_fail("Binario no encontrado para smoke test")
         return

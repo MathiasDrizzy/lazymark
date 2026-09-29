@@ -18,11 +18,20 @@ func New() *Client {
 	term := strings.ToLower(os.Getenv("TERM"))
 	termProg := strings.ToLower(os.Getenv("TERM_PROGRAM"))
 
-	// Ghostty, Kitty y WezTerm soportan el protocolo en macOS, Linux y Windows
+	// Detectar por TERM y TERM_PROGRAM (macOS/Linux)
 	supported := strings.Contains(term, "kitty") ||
 		strings.Contains(termProg, "ghostty") ||
 		strings.Contains(termProg, "wezterm") ||
 		strings.Contains(termProg, "kitty")
+
+	// Detectar por variables específicas del emulador (necesario en Windows
+	// donde TERM y TERM_PROGRAM no siempre se propagan)
+	if !supported {
+		supported = os.Getenv("KITTY_WINDOW_ID") != "" ||
+			os.Getenv("WEZTERM_PANE") != "" ||
+			os.Getenv("WEZTERM_EXECUTABLE") != "" ||
+			os.Getenv("GHOSTTY_RESOURCES_DIR") != ""
+	}
 
 	return &Client{Supported: supported}
 }

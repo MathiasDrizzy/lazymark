@@ -43,9 +43,10 @@ func New(baseDir string) *Storage {
 }
 
 var (
-	taskRegex  = regexp.MustCompile(`^[-*]\s+\[([ xX])\]\s+(.*)$`)
-	imageRegex = regexp.MustCompile(`!\[(.*?)\]\((.*?)\)`)
-	tagRegex   = regexp.MustCompile(`#([a-zA-Z0-9_-]+)`)
+	taskRegex     = regexp.MustCompile(`^[-*]\s+\[([ xX])\]\s+(.*)$`)
+	imageRegex    = regexp.MustCompile(`!\[(.*?)\]\((.*?)\)`)
+	tagRegex      = regexp.MustCompile(`#([a-zA-Z0-9_-]+)`)
+	unsafeChars   = regexp.MustCompile(`[\\/:*?"<>|]`)
 )
 
 // ListNotes escanea el directorio y devuelve todas las notas .md ordenadas por fecha de modificación
@@ -154,6 +155,7 @@ func (s *Storage) extractImages(content string) []string {
 func (s *Storage) CreateNote(title string) (*Note, error) {
 	cleanName := strings.ToLower(title)
 	cleanName = strings.ReplaceAll(cleanName, " ", "-")
+	cleanName = unsafeChars.ReplaceAllString(cleanName, "")
 	fileName := fmt.Sprintf("%s.md", cleanName)
 	fullPath := filepath.Join(s.BaseDir, fileName)
 

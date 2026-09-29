@@ -1,0 +1,55 @@
+# .goreleaser.yaml
+# Configuración oficial de GoReleaser para releases públicas y Homebrew Tap
+version: 2
+
+project_name: lazymark
+
+builds:
+  - id: lazymark
+    main: ./cmd/lazymark
+    binary: lazymark
+    env:
+      - CGO_ENABLED=0
+    goos:
+      - darwin
+      - linux
+      - windows
+    goarch:
+      - amd64
+      - arm64
+
+archives:
+  - id: default
+    format: tar.gz
+    format_overrides:
+      - goos: windows
+        format: zip
+    name_template: "{{ .ProjectName }}_{{ .Os }}_{{ .Arch }}"
+    files:
+      - README.md
+      - LICENSE*
+
+brews:
+  - repository:
+      owner: MathiasDrizzy
+      name: homebrew-tap
+      branch: main
+    homepage: "https://github.com/MathiasDrizzy/lazymark"
+    description: "Terminal Markdown powerhouse & task manager inspired by lazygit"
+    license: "MIT"
+    install: |
+      bin.install "lazymark"
+
+checksum:
+  name_template: "checksums.txt"
+
+snapshot:
+  version_template: "{{ incpatch .Version }}-snapshot"
+
+changelog:
+  sort: asc
+  filters:
+    exclude:
+      - "^docs:"
+      - "^test:"
+      - "Merge pull request"

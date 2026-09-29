@@ -3,8 +3,17 @@ set -e
 
 REPO_ROOT="$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
 
-echo "🛡️ [PRE-COMMIT HOOK] Ejecutando Lazymark Quality Harness..."
-python3 "${REPO_ROOT}/harness/validate_project.py"
+PYTHON_BIN="python3"
+if ! command -v python3 >/dev/null 2>&1; then
+    if command -v python >/dev/null 2>&1; then
+        PYTHON_BIN="python"
+    elif command -v py >/dev/null 2>&1; then
+        PYTHON_BIN="py -3"
+    fi
+fi
+
+echo "🛡️ [PRE-COMMIT HOOK] Ejecutando Lazymark Quality Harness con $PYTHON_BIN..."
+$PYTHON_BIN "${REPO_ROOT}/harness/validate_project.py"
 STATUS=$?
 
 if [ $STATUS -ne 0 ]; then

@@ -7,18 +7,32 @@
 
 ## ✨ Características Principales
 
-* 🖱️ **Soporte Completo para Ratón (Clicks):** Selecciona notas, cambia de pestaña y ejecuta acciones en el footer directamente haciendo clic con el mouse.
-* ⌨️ **Ergonomía Lazygit (No-Vim):** Navegación oficial con **Flechas** (`↑`, `↓`), **Tab** (alternar panel izquierdo/derecho), números **1, 2, 3, 4** (pestañas) y atajos intuitivos.
-* 🖼️ **Protocolo Gráfico Kitty Nativo:** Previsualización de imágenes adjuntas (`.png`, `.jpg`) directamente dentro de la terminal en emuladores compatibles como **Ghostty**, Kitty y WezTerm.
-* 📋 **Pegado de Imágenes desde el Portapapeles:** Presiona `p` para pegar una captura del portapapeles directamente en la nota activa.
-* 📝 **Integración con Editor Externo (`micro`):** Presiona `Enter` o `e` para editar la nota en `micro` (o `$EDITOR`). Al salir, la TUI se reanuda al instante sin parpadeos.
-* 🎨 **Estética Catppuccin Mocha:** Colores TrueColor armonizados (Peach, Mauve, Teal, Surface0).
-* 🌍 **Multiplataforma:** Compatible con **macOS**, **Linux** y **Windows**.
-* 🛡️ **Blindado con Harness:** Suite de calidad automatizada con pre-commit hook (`harness/validate_project.py`).
+* 🖱️ **Soporte Completo para Ratón (Clicks):** Selecciona notas, tareas o imágenes, cambia de pestaña y activa botones del footer haciendo clic con el mouse.
+* ⌨️ **Ergonomía Dual (Lazygit + Vim):**
+  - **Navegación Lazygit:** Flechas (`↑`, `↓`), `Tab` (alternar panel izquierdo/derecho), números `1, 2, 3, 4` (pestañas) y atajos rápidos.
+  - **Compatibilidad Vim:** Atajos familiares `j` / `k` (bajar/subir), `h` / `l` (paneles), `g` / `G` (inicio/fin).
+* 📑 **4 Pestañas Especializadas:**
+  1. **[1] Notas:** Lista con orden cronológico y renderizado Markdown con Glamour.
+  2. **[2] Categorías/Tags:** Agrupación y conteo por hashtags (`#tag`), con vista previa de notas filtradas.
+  3. **[3] Tareas:** Lista agregada de checkboxes Markdown (`- [ ]` / `- [x]`) con filtro interactivo (`f`: Todas / Pendientes / Completadas).
+  4. **[4] Imágenes/Adjuntos:** Galería de capturas y diagramas incrustados.
+* 🎨 **7 Temas de Color Dinámicos (`t` / `--theme`):**
+  - `catppuccin-mocha` (por defecto)
+  - `catppuccin-latte` (claro)
+  - `catppuccin-frappe`
+  - `catppuccin-macchiato`
+  - `tokyo-night`
+  - `gruvbox-dark`
+  - `nord`
+* 🖼️ **Protocolo Gráfico Kitty Nativo:** Previsualización de imágenes adjuntas (`.png`, `.jpg`, etc.) dentro de la terminal en emuladores compatibles (**Ghostty**, **Kitty**, **WezTerm**), con fallback ASCII elegante en terminales tradicionales.
+* 📋 **Pegado Directo desde el Portapapeles:** Presiona `p` para pegar una captura del portapapeles directamente en la nota activa.
+* 📝 **Integración con Editor Externo (`micro` / `$EDITOR`):** Presiona `Enter` o `e` para suspender temporalmente la TUI y abrir tu editor. Al salir, la sesión se restaura al instante.
+* 🌍 **Compatibilidad Multiplataforma Real:** macOS, Linux (X11 con `xclip` o Wayland con `wl-paste`) y Windows (PowerShell nativo).
+* 🛡️ **Arnés de Calidad Integrado:** Pruebas unitarias con detector de condiciones de carrera (`-race`), análisis estático (`go vet`), y verificación de escape codes sin interferencia con multiplexers.
 
 ---
 
-## 🗂️ Arquitectura de Interfaz
+## 🗂️ Interfaz Visual
 
 ```
 ┌────────────────────────────────────────────────────────────────────────┐
@@ -39,30 +53,76 @@
 
 ---
 
-## 🚀 Compilación e Instalación
+## 🚀 Instalación y Distribución
 
+### Vía Homebrew (macOS / Linux)
 ```bash
-# Compilar binario
+brew install MathiasDrizzy/tap/lazymark
+```
+
+### Vía Script de Instalación Rápida (`curl`)
+```bash
+curl -fsSL https://raw.githubusercontent.com/MathiasDrizzy/lazymark/main/scripts/install.sh | bash
+```
+
+### Vía Go (desde fuentes)
+```bash
+go install github.com/MathiasDrizzy/lazymark/cmd/lazymark@latest
+```
+
+### Compilación Manual
+```bash
+git clone https://github.com/MathiasDrizzy/lazymark.git
+cd lazymark
 go build -o bin/lazymark ./cmd/lazymark
-
-# Ejecutar
 ./bin/lazymark
-
-# Especificar directorio de notas personalizado
-./bin/lazymark --dir ~/Documents/mis-notas
 ```
 
 ---
 
-## 🧪 Arnés de Calidad (Harness)
+## ⌨️ Guía de Atajos de Teclado
 
-Antes de cada commit, ejecuta el arnés de verificación:
+| Atajo | Acción | Contexto |
+|---|---|---|
+| `1`, `2`, `3`, `4` | Cambiar a pestaña [Notas, Tags, Tareas, Galería] | Global |
+| `↑` / `↓` ó `k` / `j` | Navegar hacia arriba / abajo | Listas |
+| `←` / `→` ó `h` / `l` | Alternar entre panel de lista y vista previa | Global |
+| `Tab` / `Shift+Tab` | Alternar entre paneles | Global |
+| `g` / `G` | Ir al primer / último ítem | Listas |
+| `Enter` / `e` | Abrir nota en `$EDITOR` (`micro`) | Global |
+| `c` | Crear nueva nota rápida | Notas |
+| `d` | Eliminar nota seleccionada | Notas |
+| `p` | Pegar imagen del portapapeles | Notas / Galería |
+| `f` | Alternar filtro (Todas → Pendientes → Completadas) | Tareas |
+| `t` | Ciclar tema de colores dinámicamente | Global |
+| `q` / `Esc` / `Ctrl+C` | Salir limpiando imágenes Kitty de la terminal | Global |
+| **Clic izquierdo** | Seleccionar ítems, pestañas y botones del footer | Todo con ratón |
+
+---
+
+## ⚙️ Opciones de Línea de Comandos
+
+```bash
+lazymark [opciones]
+
+Opciones:
+  --dir string       Ruta al directorio de notas (por defecto: ~/Documents/notes)
+  --theme string     Tema inicial (catppuccin-mocha, nord, tokyo-night, gruvbox-dark, etc.)
+  --no-mouse         Desactiva la interacción con ratón y clics
+  --version, -v      Muestra la versión de lazymark y sale
+```
+
+---
+
+## 🧪 Arnés de Calidad (Quality Harness)
+
+Para validar la integridad del proyecto antes de publicar o contribuir:
 ```bash
 python3 harness/validate_project.py
 ```
-El arnés ejecuta:
+El arnés verifica automáticamente:
 1. `go vet ./...` (análisis estático).
-2. `go test -race ./...` (pruebas unitarias con detector de condiciones de carrera).
-3. `go build` (compilación estática de producción).
-4. Smoke tests (`--version`, `--help`).
-5. Verificación de ausencia de secuencias OSC tóxicas para multiplexers (`herdr`).
+2. `go test -race ./...` (pruebas unitarias concurrentes sin condiciones de carrera).
+3. `go build` (compilación estática del binario).
+4. Smoke tests de CLI (`--version`, `--help`).
+5. Detección de secuencias OSC tóxicas para multiplexers.

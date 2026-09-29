@@ -8,7 +8,6 @@ import (
 const (
 	Version   = "0.1.0"
 	AppName   = "lazymark"
-	DefaultDir = "Documents/notes"
 )
 
 // Config almacena las preferencias de ejecución de la aplicación.
@@ -28,7 +27,7 @@ func Load(customDir string) (*Config, error) {
 
 	notesDir := customDir
 	if notesDir == "" {
-		notesDir = filepath.Join(home, DefaultDir)
+		notesDir = filepath.Join(home, "Documents", "notes")
 	}
 
 	// Asegurar que el directorio de notas exista

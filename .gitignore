@@ -1,8 +1,28 @@
+# Binarios y compilados
 bin/
 dist/
 *.exe
 *.dll
 *.so
 *.dylib
-.DS_Store
+
+# Archivos de depuración y cobertura
 *.tmp
+coverage.out
+profile.out
+
+# Sistema operativo
+.DS_Store
+Thumbs.db
+
+# Editores y entornos
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# Configuración y desarrollo local de agentes / auditoría interna
+.agents/
+AGENTS.md
+LEARNING_SYSTEM.md
