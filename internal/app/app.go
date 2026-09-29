@@ -55,9 +55,8 @@ type AppModel struct {
 	selectedImage int
 
 	// Pantalla de configuración y keybindings
-	showSettings    bool
-	settingsSection views.SettingsSection
-	settingsItem    int
+	showSettings bool
+	settingsItem views.SettingsItem
 
 	// Control de doble clic con ratón
 	lastClickTime time.Time
@@ -201,23 +200,22 @@ func (m *AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.showSettings = false
 				_ = m.cfg.Save()
 				return m, nil
-			case "1", "e":
-				// Ciclar editor
-				m.cycleEditor()
+			case "up", "k":
+				if m.settingsItem > 0 {
+					m.settingsItem--
+				} else {
+					m.settingsItem = views.TotalSettingsItems - 1
+				}
 				return m, nil
-			case "2", "L":
-				// Alternar idioma
-				i18n.ToggleLanguage()
-				m.cfg.Language = string(i18n.CurrentLanguage())
-				m.refreshVisibleTabs()
-				_ = m.cfg.Save()
-				m.statusMsg = fmt.Sprintf("%s: %s", i18n.T("Idioma", "Language"), m.cfg.Language)
+			case "down", "j":
+				if m.settingsItem < views.TotalSettingsItems-1 {
+					m.settingsItem++
+				} else {
+					m.settingsItem = 0
+				}
 				return m, nil
-			case "3", "t":
-				newTheme := theme.NextTheme()
-				m.cfg.Theme = newTheme
-				_ = m.cfg.Save()
-				m.statusMsg = fmt.Sprintf("%s: %s", i18n.T("Tema", "Theme"), newTheme)
+			case "enter", " ", "left", "right":
+				m.toggleConfigItem(m.settingsItem)
 				return m, nil
 			}
 			return m, nil
@@ -236,45 +234,33 @@ func (m *AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.showSettings = true
 			return m, nil
 
-		case "L":
-			// Alternar idioma en cualquier momento
-			i18n.ToggleLanguage()
-			m.cfg.Language = string(i18n.CurrentLanguage())
-			m.refreshVisibleTabs()
-			_ = m.cfg.Save()
-			m.statusMsg = fmt.Sprintf("%s: %s", i18n.T("Idioma", "Language"), m.cfg.Language)
-			return m, nil
-
-		case "t":
-			newTheme := theme.NextTheme()
-			m.cfg.Theme = newTheme
-			_ = m.cfg.Save()
-			m.statusMsg = fmt.Sprintf("%s: %s", i18n.T("Tema", "Theme"), newTheme)
-			return m, nil
-
 		// Navegación de pestañas [1..N]
 		case "1":
 			if len(m.visibleTabs) >= 1 {
 				m.activeTab = 0
 				m.activePanel = 0
+				m.clearKittyIfNecessary()
 			}
 			return m, nil
 		case "2":
 			if len(m.visibleTabs) >= 2 {
 				m.activeTab = 1
 				m.activePanel = 0
+				m.clearKittyIfNecessary()
 			}
 			return m, nil
 		case "3":
 			if len(m.visibleTabs) >= 3 {
 				m.activeTab = 2
 				m.activePanel = 0
+				m.clearKittyIfNecessary()
 			}
 			return m, nil
 		case "4":
 			if len(m.visibleTabs) >= 4 {
 				m.activeTab = 3
 				m.activePanel = 0
+				m.clearKittyIfNecessary()
 			}
 			return m, nil
 
@@ -507,6 +493,15 @@ func (m *AppModel) handleActionClick(zone *mouse.Zone) (tea.Model, tea.Cmd) {
 	payload := zone.Payload
 
 	// Comandos de configuración
+	if strings.HasPrefix(payload, "select-config:") {
+		var id int
+		if _, err := fmt.Sscanf(payload, "select-config:%d", &id); err == nil {
+			m.settingsItem = views.SettingsItem(id)
+			m.toggleConfigItem(m.settingsItem)
+		}
+		return m, nil
+	}
+
 	if strings.HasPrefix(payload, "set-editor:") {
 		m.cfg.Editor = strings.TrimPrefix(payload, "set-editor:")
 		_ = m.cfg.Save()
@@ -570,6 +565,47 @@ func (m *AppModel) handleActionClick(zone *mouse.Zone) (tea.Model, tea.Cmd) {
 		return m, tea.Quit
 	}
 	return m, nil
+}
+
+func (m *AppModel) clearKittyIfNecessary() {
+	if m.kitty != nil && m.kitty.Supported {
+		fmt.Print(m.kitty.ClearAllCommand())
+	}
+}
+
+func (m *AppModel) toggleConfigItem(item views.SettingsItem) {
+	switch item {
+	case views.ItemLanguage:
+		i18n.ToggleLanguage()
+		m.cfg.Language = string(i18n.CurrentLanguage())
+		m.refreshVisibleTabs()
+		_ = m.cfg.Save()
+		m.statusMsg = fmt.Sprintf("%s: %s", i18n.T("Idioma", "Language"), m.cfg.Language)
+
+	case views.ItemEditor:
+		m.cycleEditor()
+
+	case views.ItemTheme:
+		newTheme := theme.NextTheme()
+		m.cfg.Theme = newTheme
+		_ = m.cfg.Save()
+		m.statusMsg = fmt.Sprintf("%s: %s", i18n.T("Tema", "Theme"), newTheme)
+
+	case views.ItemTabTags:
+		m.cfg.ShowTagsTab = !m.cfg.ShowTagsTab
+		m.refreshVisibleTabs()
+		_ = m.cfg.Save()
+
+	case views.ItemTabTasks:
+		m.cfg.ShowTasksTab = !m.cfg.ShowTasksTab
+		m.refreshVisibleTabs()
+		_ = m.cfg.Save()
+
+	case views.ItemTabGallery:
+		m.cfg.ShowGalleryTab = !m.cfg.ShowGalleryTab
+		m.refreshVisibleTabs()
+		_ = m.cfg.Save()
+	}
 }
 
 func (m *AppModel) cycleEditor() {
@@ -698,21 +734,9 @@ func (m *AppModel) View() string {
 		rightWidth = 30
 	}
 
-	// Si la pantalla de configuración está activa, mostrarla como panel principal
+	// Si la pantalla de configuración está activa, mostrar el modal centrado
 	if m.showSettings {
-		settingsView := views.RenderSettingsView(m.cfg, m.settingsSection, m.settingsItem, m.width, panelHeight, m.hitTester)
-		footerView := views.RenderFooter(m.width, m.hitTester, m.height-1, m.statusMsg, []views.ActionBtn{
-			{Key: "1/e", Action: i18n.T("Editor", "Editor"), ID: "action-cfg-ed"},
-			{Key: "2/L", Action: i18n.T("Idioma", "Language"), ID: "action-cfg-lang"},
-			{Key: "3/t", Action: i18n.T("Tema", "Theme"), ID: "action-cfg-theme"},
-			{Key: "?/Esc", Action: i18n.T("Volver", "Back"), ID: "action-config"},
-			{Key: "q", Action: i18n.T("Salir", "Quit"), ID: "action-quit"},
-		})
-		return lipgloss.JoinVertical(lipgloss.Left,
-			tabsView,
-			settingsView,
-			footerView,
-		)
+		return views.RenderSettingsModal(m.cfg, views.SettingsItem(m.settingsItem), m.width, m.height, m.hitTester)
 	}
 
 	var leftView, rightView, footerView string

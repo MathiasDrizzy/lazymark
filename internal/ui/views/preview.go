@@ -47,17 +47,15 @@ func RenderPreview(note *storage.Note, width, height int, active bool, kittyClie
 		renderedContent = note.Content
 	}
 
-	// Si la nota tiene imágenes adjuntas, añadir la representación gráfica Kitty
-	if len(note.Images) > 0 && kittyClient != nil && kittyClient.Supported {
-		var imgOutputs []string
+	// Si la nota tiene imágenes adjuntas, añadir badges limpios sin secuencias de escape corruptoras
+	if len(note.Images) > 0 {
+		var imgBadges []string
 		for _, imgPath := range note.Images {
-			resolvedImg := imgPath
-			if !filepath.IsAbs(resolvedImg) {
-				resolvedImg = filepath.Join(filepath.Dir(note.Path), resolvedImg)
-			}
-			imgOutputs = append(imgOutputs, kittyClient.RenderCommand(resolvedImg, contentWidth, 12))
+			imgBadges = append(imgBadges, theme.TagBadge.Render("🖼️ "+filepath.Base(imgPath)))
 		}
-		renderedContent = fmt.Sprintf("%s\n\n%s", renderedContent, strings.Join(imgOutputs, "\n"))
+		attachmentLabel := theme.NormalItem.Copy().Foreground(theme.ColorOverlay0).Italic(true).
+			Render(i18n.T("Adjuntos (ver en pestaña Galería):", "Attachments (view in Gallery tab):"))
+		renderedContent = fmt.Sprintf("%s\n\n  %s %s", renderedContent, attachmentLabel, strings.Join(imgBadges, " "))
 	}
 
 	return borderStyle.

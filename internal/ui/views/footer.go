@@ -22,7 +22,6 @@ func GetNotesActions() []ActionBtn {
 		{Key: "e", Action: i18n.T("Editar", "Edit"), ID: "action-edit"},
 		{Key: "d", Action: i18n.T("Borrar", "Delete"), ID: "action-delete"},
 		{Key: "p", Action: i18n.T("Pegar img", "Paste img"), ID: "action-paste"},
-		{Key: "t", Action: i18n.T("Tema", "Theme"), ID: "action-theme"},
 		{Key: "?", Action: i18n.T("Config", "Settings"), ID: "action-config"},
 		{Key: "q", Action: i18n.T("Salir", "Quit"), ID: "action-quit"},
 	}
@@ -32,8 +31,7 @@ func GetNotesActions() []ActionBtn {
 func GetTagActions() []ActionBtn {
 	return []ActionBtn{
 		{Key: "Enter", Action: i18n.T("Ver notas", "View notes"), ID: "action-view-tag"},
-		{Key: "e", Action: i18n.T("Abrir nota", "Open note"), ID: "action-edit"},
-		{Key: "t", Action: i18n.T("Tema", "Theme"), ID: "action-theme"},
+		{Key: "e", Action: i18n.T("Editar", "Edit"), ID: "action-edit"},
 		{Key: "?", Action: i18n.T("Config", "Settings"), ID: "action-config"},
 		{Key: "q", Action: i18n.T("Salir", "Quit"), ID: "action-quit"},
 	}
@@ -44,7 +42,6 @@ func GetTaskActions() []ActionBtn {
 	return []ActionBtn{
 		{Key: "f", Action: i18n.T("Filtro", "Filter"), ID: "action-filter"},
 		{Key: "Enter", Action: i18n.T("Abrir nota", "Open note"), ID: "action-open-task"},
-		{Key: "t", Action: i18n.T("Tema", "Theme"), ID: "action-theme"},
 		{Key: "?", Action: i18n.T("Config", "Settings"), ID: "action-config"},
 		{Key: "q", Action: i18n.T("Salir", "Quit"), ID: "action-quit"},
 	}
@@ -55,7 +52,6 @@ func GetGalleryActions() []ActionBtn {
 	return []ActionBtn{
 		{Key: "p", Action: i18n.T("Pegar img", "Paste img"), ID: "action-paste"},
 		{Key: "Enter", Action: i18n.T("Abrir nota", "Open note"), ID: "action-open-gallery"},
-		{Key: "t", Action: i18n.T("Tema", "Theme"), ID: "action-theme"},
 		{Key: "?", Action: i18n.T("Config", "Settings"), ID: "action-config"},
 		{Key: "q", Action: i18n.T("Salir", "Quit"), ID: "action-quit"},
 	}

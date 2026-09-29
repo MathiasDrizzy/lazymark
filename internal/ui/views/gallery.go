@@ -181,11 +181,21 @@ func RenderGalleryPreview(entry *ImageEntry, width, height int, active bool, kit
 
 	// Renderizado Kitty o Fallback
 	if kittyClient != nil && kittyClient.Supported {
-		imgRows := height - 10
-		if imgRows < 4 {
-			imgRows = 4
+		imgRows := height - 12
+		if imgRows > 12 {
+			imgRows = 12
 		}
-		imgOutput := kittyClient.RenderCommand(resolvedPath, contentWidth, imgRows)
+		if imgRows < 6 {
+			imgRows = 6
+		}
+		imgCols := contentWidth - 4
+		if imgCols > 40 {
+			imgCols = 40
+		}
+		if imgCols < 10 {
+			imgCols = 10
+		}
+		imgOutput := kittyClient.RenderCommand(resolvedPath, imgCols, imgRows)
 		rows = append(rows, imgOutput)
 	} else {
 		// Fallback elegante para terminales sin soporte gráfico

@@ -140,7 +140,7 @@ func TestRenderNoteListAndPreview(t *testing.T) {
 	}
 }
 
-func TestRenderSettingsView(t *testing.T) {
+func TestRenderSettingsModal(t *testing.T) {
 	cfg := &config.Config{
 		Editor:         "micro",
 		Theme:          "catppuccin-mocha",
@@ -150,14 +150,14 @@ func TestRenderSettingsView(t *testing.T) {
 		ShowGalleryTab: true,
 	}
 	ht := mouse.NewHitTester()
-	out := RenderSettingsView(cfg, SectionEditor, 0, 80, 24, ht)
+	out := RenderSettingsModal(cfg, ItemLanguage, 80, 24, ht)
 	if out == "" {
-		t.Errorf("RenderSettingsView devolvió string vacío")
+		t.Errorf("RenderSettingsModal devolvió string vacío")
 	}
 
-	// Comprobar que los botones de acción se registraron
-	zone, ok := ht.Check(5, 4)
+	// Comprobar que los ítems del modal se registraron (X=20, Y=7)
+	zone, ok := ht.Check(20, 7)
 	if !ok || zone.Type != mouse.ZoneAction {
-		t.Errorf("hit-test en configuración falló")
+		t.Errorf("hit-test en modal de configuración falló: %+v", zone)
 	}
 }
