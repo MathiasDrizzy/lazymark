@@ -308,21 +308,33 @@ func (m *AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			case "d":
 				if len(m.trashItems) > 0 && m.selectedTrashItem < len(m.trashItems) {
 					item := m.trashItems[m.selectedTrashItem]
-					_ = m.storage.DeleteTrashItem(item.ID)
-					m.trashItems, _ = m.storage.ListTrash()
-					if m.selectedTrashItem >= len(m.trashItems) && len(m.trashItems) > 0 {
-						m.selectedTrashItem = len(m.trashItems) - 1
+					m.confirmTitle = i18n.T("󰀪  Eliminar Definitivamente", "󰀪  Permanently Delete")
+					m.confirmMsg = fmt.Sprintf(i18n.T("¿Estás seguro de que deseas eliminar permanentemente '%s'?\nEsta acción no se puede deshacer.", "Are you sure you want to permanently delete '%s'?\nThis action cannot be undone."), item.Name)
+					m.confirmAction = func() tea.Cmd {
+						_ = m.storage.DeleteTrashItem(item.ID)
+						m.trashItems, _ = m.storage.ListTrash()
+						if m.selectedTrashItem >= len(m.trashItems) && len(m.trashItems) > 0 {
+							m.selectedTrashItem = len(m.trashItems) - 1
+						}
+						m.statusMsg = fmt.Sprintf("%s: %s", i18n.T("Eliminado permanente", "Permanently deleted"), item.Name)
+						return nil
 					}
-					m.statusMsg = fmt.Sprintf("%s: %s", i18n.T("Eliminado permanente", "Permanently deleted"), item.Name)
+					m.showConfirmModal = true
 				}
 				return m, nil
 			case "c":
 				count := len(m.trashItems)
 				if count > 0 {
-					_ = m.storage.EmptyTrash()
-					m.trashItems = nil
-					m.selectedTrashItem = 0
-					m.statusMsg = fmt.Sprintf(i18n.T("Papelera vaciada (%d elementos)", "Trash emptied (%d items)"), count)
+					m.confirmTitle = i18n.T("󰀪  Vaciar Papelera", "󰀪  Empty Trash")
+					m.confirmMsg = fmt.Sprintf(i18n.T("¿Estás seguro de que deseas vaciar la papelera (%d elementos)?\nTodos los archivos se eliminarán permanentemente.", "Are you sure you want to empty the trash (%d items)?\nAll files will be permanently deleted."), count)
+					m.confirmAction = func() tea.Cmd {
+						_ = m.storage.EmptyTrash()
+						m.trashItems = nil
+						m.selectedTrashItem = 0
+						m.statusMsg = fmt.Sprintf(i18n.T("Papelera vaciada (%d elementos)", "Trash emptied (%d items)"), count)
+						return nil
+					}
+					m.showConfirmModal = true
 				}
 				return m, nil
 			}
@@ -1440,19 +1452,15 @@ func (m *AppModel) View() string {
 		footerView,
 	)
 
-	// Si la papelera está activa, mostrar modal superpuesto centrado
+	currentBase := fullView
+
+	// Si la papelera está activa, superponerla
 	if m.showTrashModal {
 		trashModal := views.RenderTrashModal(m.trashItems, m.selectedTrashItem, m.width, m.height, m.hitTester)
-		return views.OverlayLayers(fullView, trashModal, m.width, m.height, false)
+		currentBase = views.OverlayLayers(currentBase, trashModal, m.width, m.height, false)
 	}
 
-	// Si la ventana de confirmación está activa, mostrarla superpuesta centrada
-	if m.showConfirmModal {
-		confirmModal := views.RenderConfirmModal(m.confirmTitle, m.confirmMsg, m.width, m.height, m.hitTester)
-		return views.OverlayLayers(fullView, confirmModal, m.width, m.height, false)
-	}
-
-	// Si la ventana para mover nota está activa, mostrar modal superpuesto
+	// Si la ventana para mover nota está activa, superponerla
 	if m.showMoveModal {
 		noteName := ""
 		if len(m.selectedPaths) > 1 {
@@ -1461,7 +1469,17 @@ func (m *AppModel) View() string {
 			noteName = m.entries[m.selectedEntry].Name
 		}
 		moveModal := views.RenderMoveModal(m.moveFolders, m.storage.BaseDir, m.selectedMoveFolder, noteName, m.width, m.height, m.hitTester)
-		return views.OverlayLayers(fullView, moveModal, m.width, m.height, false)
+		currentBase = views.OverlayLayers(currentBase, moveModal, m.width, m.height, false)
+	}
+
+	// Si la ventana de confirmación está activa, mostrarla superpuesta centrada en primer plano
+	if m.showConfirmModal {
+		confirmModal := views.RenderConfirmModal(m.confirmTitle, m.confirmMsg, m.width, m.height, m.hitTester)
+		return views.OverlayLayers(currentBase, confirmModal, m.width, m.height, false)
+	}
+
+	if m.showTrashModal || m.showMoveModal {
+		return currentBase
 	}
 
 	// Si la pantalla de configuración está activa, mostrar modal superpuesto en vivo abajo a la derecha

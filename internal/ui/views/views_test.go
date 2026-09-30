@@ -8,6 +8,7 @@ import (
 	"github.com/MathiasDrizzy/lazymark/internal/config"
 	"github.com/MathiasDrizzy/lazymark/internal/storage"
 	"github.com/MathiasDrizzy/lazymark/internal/ui/mouse"
+	"github.com/charmbracelet/lipgloss"
 	"github.com/charmbracelet/x/ansi"
 )
 
@@ -152,16 +153,28 @@ func TestRenderNoteListAndPreview(t *testing.T) {
 
 func TestRenderConfirmModal(t *testing.T) {
 	ht := mouse.NewHitTester()
-	modal := RenderConfirmModal("󰀪  Eliminar Carpeta con Contenido", "La carpeta 'carpeta-8' contiene 2 elemento(s).\n¿Deseas eliminarla junto con todas sus notas?", 80, 24, ht)
+	notes := []storage.Note{
+		{Title: "Nota de prueba", Path: "/notes/test.md"},
+	}
+	entries := []storage.NoteEntry{
+		{Name: "folder-8", Path: "/notes/folder-8", Type: storage.EntryFolder},
+		{Name: "nota-1", Path: "/notes/nota-1.md", Type: storage.EntryNote, Note: &notes[0]},
+	}
+	listOut := RenderNoteList(entries, nil, 0, 26, 20, true, ht, 1)
+	prevOut := RenderPreview(&notes[0], 46, 20, false, nil, 0, 0)
+	mainView := lipgloss.JoinHorizontal(lipgloss.Top, listOut, prevOut)
+	fullView := lipgloss.JoinVertical(lipgloss.Left, "TABS", mainView, "FOOTER")
+
+	modal := RenderConfirmModal("󰀪  Delete Folder with Items", "The folder 'folder-8' contains 2 item(s).\nDo you want to move it and all its notes to trash?", 80, 24, ht)
 	if modal == "" {
 		t.Fatalf("RenderConfirmModal devolvió string vacío")
 	}
-	lines := strings.Split(modal, "\n")
-	w0 := ansi.StringWidth(lines[0])
-	for idx, l := range lines {
+
+	over := OverlayLayers(fullView, modal, 80, 24, false)
+	for idx, l := range strings.Split(over, "\n") {
 		w := ansi.StringWidth(l)
-		if w != w0 {
-			t.Errorf("Línea %d tiene ancho %d, se esperaba %d: %q", idx, w, w0, l)
+		if idx >= 7 && idx <= 15 && w != 80 {
+			t.Errorf("Línea %d tiene ancho %d, se esperaba 80: %q", idx, w, l)
 		}
 	}
 }

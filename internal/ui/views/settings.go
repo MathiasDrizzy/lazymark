@@ -230,7 +230,9 @@ func OverlayLayers(base, overlay string, totalWidth, totalHeight int, alignBotto
 
 		bLine := baseLines[targetY]
 		bLen := ansi.StringWidth(bLine)
-		if bLen < totalWidth {
+		if bLen > totalWidth {
+			bLine = ansi.Truncate(bLine, totalWidth, "")
+		} else if bLen < totalWidth {
 			bLine = bLine + strings.Repeat(" ", totalWidth-bLen)
 		}
 
@@ -250,17 +252,19 @@ func OverlayLayers(base, overlay string, totalWidth, totalHeight int, alignBotto
 			oLine = oLine + strings.Repeat(" ", overlayW-oLen)
 		}
 
-		// Recortar derecha con soporte ANSI:
-		// Si está anclado abajo a la derecha, rellenar con espacios para no arrastrar bordes fantasma del panel de fondo
+		// Recortar derecha con soporte ANSI
+		expectedRightWidth := totalWidth - (startX + overlayW)
 		right := ""
-		if alignBottomRight {
-			if remaining := totalWidth - (startX + overlayW); remaining > 0 {
-				right = strings.Repeat(" ", remaining)
-			}
-		} else {
-			remainingStart := startX + overlayW
-			if remainingStart < totalWidth {
-				right = ansi.CutWc(bLine, remainingStart, totalWidth)
+		if expectedRightWidth > 0 {
+			if alignBottomRight {
+				right = strings.Repeat(" ", expectedRightWidth)
+			} else {
+				remainingStart := startX + overlayW
+				right = ansi.Cut(bLine, remainingStart, totalWidth)
+				rw := ansi.StringWidth(right)
+				if rw < expectedRightWidth {
+					right += strings.Repeat(" ", expectedRightWidth-rw)
+				}
 			}
 		}
 
