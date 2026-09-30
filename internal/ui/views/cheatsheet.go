@@ -10,8 +10,8 @@ import (
 
 // RenderCheatsheetPopup genera una tarjeta flotante con los atajos rápidos
 func RenderCheatsheetPopup(width, height int) string {
-	boxWidth := 46
-	if width < 50 {
+	boxWidth := 58
+	if width < 62 {
 		boxWidth = width - 4
 	}
 
@@ -32,7 +32,8 @@ func RenderCheatsheetPopup(width, height int) string {
 		{"Ctrl+V", i18n.T("Pegar imagen del portapapeles", "Paste clipboard image")},
 		{"Tab • h/l", i18n.T("Alternar foco lista/preview", "Toggle list/preview focus")},
 		{"1, 2, 3", i18n.T("Cambiar de pestaña", "Switch tabs")},
-		{"[ / ]", i18n.T("Redimensionar paneles", "Resize panels")},
+		{"[ / ]", i18n.T("Redimensionar paneles (estrecho / ancho)", "Resize panels (narrower / wider)")},
+		{"Arrastre", i18n.T("Arrastrar separador con el ratón", "Drag panel divider with mouse")},
 		{"?", i18n.T("Configuración en vivo", "Live settings")},
 		{"q • Esc", i18n.T("Cerrar / Salir", "Close / Quit")},
 	}

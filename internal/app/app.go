@@ -252,16 +252,11 @@ func (m *AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 			if msg.Button == tea.MouseButtonLeft {
 				if !m.isModalOpen() {
-					totalDecorations := 8
-					availableWidth := m.width - totalDecorations
-					if availableWidth > 0 {
-						leftWidth := int(float64(availableWidth) * m.sidebarRatio)
-						divX := leftWidth + 4
-						if msg.X >= divX-2 && msg.X <= divX+2 && msg.Y >= 1 && msg.Y < m.height-1 {
-							m.isDraggingDivider = true
-							m.updateSidebarRatioFromMouseX(msg.X)
-							return m, nil
-						}
+					_, _, _, divX := m.calcLayout()
+					if msg.X >= divX-1 && msg.X <= divX+2 && msg.Y >= 1 && msg.Y < m.height-1 {
+						m.isDraggingDivider = true
+						m.updateSidebarRatioFromMouseX(msg.X)
+						return m, nil
 					}
 				}
 				if zone, ok := m.hitTester.Check(msg.X, msg.Y); ok {
@@ -1175,13 +1170,42 @@ func (m *AppModel) toggleConfigItem(item views.SettingsItem, forward bool) {
 	}
 }
 
+// calcLayout calcula de forma unificada el ancho disponible, ancho de los paneles y la columna del divisor
+func (m *AppModel) calcLayout() (availableWidth, leftWidth, rightWidth, divX int) {
+	totalDecorations := 4
+	availableWidth = m.width - totalDecorations
+	if availableWidth < 30 {
+		availableWidth = 30
+	}
+
+	ratio := m.sidebarRatio
+	if ratio < 0.15 || ratio > 0.75 {
+		ratio = 0.33
+		m.sidebarRatio = ratio
+	}
+
+	leftWidth = int(float64(availableWidth) * ratio)
+	if leftWidth < 16 {
+		leftWidth = 16
+	}
+	if leftWidth > availableWidth-16 {
+		leftWidth = availableWidth - 16
+	}
+	rightWidth = availableWidth - leftWidth
+	if rightWidth < 16 {
+		rightWidth = 16
+	}
+
+	divX = leftWidth + 1
+	return
+}
+
 func (m *AppModel) updateSidebarRatioFromMouseX(mouseX int) {
-	totalDecorations := 8
-	availableWidth := m.width - totalDecorations
+	availableWidth, _, _, _ := m.calcLayout()
 	if availableWidth < 30 {
 		return
 	}
-	newLeftWidth := mouseX - 4
+	newLeftWidth := mouseX - 1
 	newRatio := float64(newLeftWidth) / float64(availableWidth)
 	if newRatio < 0.15 {
 		newRatio = 0.15
@@ -1577,34 +1601,9 @@ func (m *AppModel) View() string {
 		panelHeight = 5
 	}
 
-	// Cada panel con RoundedBorder y Padding(0,1) ocupa 4 columnas extra (2 borde + 2 padding)
-	// Para que la suma total sea exactamente m.width sin desbordar ni provocar saltos de línea:
-	totalDecorations := 8
-	availableWidth := m.width - totalDecorations
-	if availableWidth < 30 {
-		availableWidth = 30
-	}
-
-	ratio := m.sidebarRatio
-	if ratio < 0.15 || ratio > 0.75 {
-		ratio = 0.33
-		m.sidebarRatio = ratio
-	}
-
-	leftWidth := int(float64(availableWidth) * ratio)
-	if leftWidth < 16 {
-		leftWidth = 16
-	}
-	if leftWidth > availableWidth-16 {
-		leftWidth = availableWidth - 16
-	}
-	rightWidth := availableWidth - leftWidth
-	if rightWidth < 16 {
-		rightWidth = 16
-	}
+	_, leftWidth, rightWidth, divX := m.calcLayout()
 
 	var leftView, rightView, footerView string
-	divX := leftWidth + 4
 
 	switch m.currentTabID() {
 	case "notes":
@@ -1616,13 +1615,6 @@ func (m *AppModel) View() string {
 		rightView = views.RenderPreview(currentNote, rightWidth, panelHeight, m.activePanel == 1, m.kitty, m.previewScrollY, m.previewScrollX)
 		footerView = views.RenderFooter(m.width, m.hitTester, m.height-1, m.statusMsg, m.storage.CountTrash(), views.GetNotesActions())
 
-		// Registrar zonas de clic para alternar paneles y divisor
-		if m.hitTester != nil && !m.isModalOpen() {
-			m.hitTester.Register("panel-preview", mouse.ZoneAction, divX+1, 1, m.width, m.height-2, 0, "focus-preview")
-			m.hitTester.Register("panel-list", mouse.ZoneAction, 0, 1, divX-2, m.height-2, 0, "focus-list")
-			m.hitTester.Register("panel-divider", mouse.ZoneAction, divX-1, 1, divX, m.height-2, 0, "action-divider-click")
-		}
-
 	case "tags":
 		leftView = views.RenderTagList(m.tags, m.selectedTag, leftWidth, panelHeight, m.activePanel == 0, m.hitTester, 1)
 		var selectedTagName string
@@ -1631,9 +1623,6 @@ func (m *AppModel) View() string {
 		}
 		rightView = views.RenderTagPreview(m.notes, selectedTagName, rightWidth, panelHeight, m.activePanel == 1)
 		footerView = views.RenderFooter(m.width, m.hitTester, m.height-1, m.statusMsg, m.storage.CountTrash(), views.GetTagActions())
-		if m.hitTester != nil && !m.isModalOpen() {
-			m.hitTester.Register("panel-divider", mouse.ZoneAction, divX-1, 1, divX, m.height-2, 0, "action-divider-click")
-		}
 
 	case "tasks":
 		leftView = views.RenderTaskList(m.tasks, m.selectedTask, m.taskFilter, leftWidth, panelHeight, m.activePanel == 0, m.hitTester, 1)
@@ -1643,9 +1632,6 @@ func (m *AppModel) View() string {
 		}
 		rightView = views.RenderTaskPreview(currentTask, rightWidth, panelHeight, m.activePanel == 1)
 		footerView = views.RenderFooter(m.width, m.hitTester, m.height-1, m.statusMsg, m.storage.CountTrash(), views.GetTaskActions())
-		if m.hitTester != nil && !m.isModalOpen() {
-			m.hitTester.Register("panel-divider", mouse.ZoneAction, divX-1, 1, divX, m.height-2, 0, "action-divider-click")
-		}
 
 	case "gallery":
 		leftView = views.RenderGalleryList(m.images, m.selectedImage, leftWidth, panelHeight, m.activePanel == 0, m.hitTester, 1)
@@ -1655,9 +1641,13 @@ func (m *AppModel) View() string {
 		}
 		rightView = views.RenderGalleryPreview(currentImage, rightWidth, panelHeight, m.activePanel == 1, m.kitty)
 		footerView = views.RenderFooter(m.width, m.hitTester, m.height-1, m.statusMsg, m.storage.CountTrash(), views.GetGalleryActions())
-		if m.hitTester != nil && !m.isModalOpen() {
-			m.hitTester.Register("panel-divider", mouse.ZoneAction, divX-1, 1, divX, m.height-2, 0, "action-divider-click")
-		}
+	}
+
+	// Registrar zonas de clic para alternar paneles y divisor
+	if m.hitTester != nil && !m.isModalOpen() {
+		m.hitTester.Register("panel-preview", mouse.ZoneAction, divX+2, 1, m.width, m.height-2, 0, "focus-preview")
+		m.hitTester.Register("panel-list", mouse.ZoneAction, 0, 1, divX-1, m.height-2, 0, "focus-list")
+		m.hitTester.Register("panel-divider", mouse.ZoneAction, divX, 1, divX+1, m.height-2, 0, "action-divider-click")
 	}
 
 	mainView := lipgloss.JoinHorizontal(lipgloss.Top, leftView, rightView)

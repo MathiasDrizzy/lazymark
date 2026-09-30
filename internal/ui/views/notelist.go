@@ -112,7 +112,7 @@ func RenderNoteList(entries []storage.NoteEntry, selectedPaths map[string]bool, 
 			}
 
 			if badge != "" {
-				rowText = fmt.Sprintf("%s%s%s%s%-*s %s", cursor, effIndent, arrowStyled, folderIcon, availName, itemStyle.Render(name), badge)
+				rowText = fmt.Sprintf("%s%s%s%s%s %s", cursor, effIndent, arrowStyled, folderIcon, itemStyle.Render(name), badge)
 			} else {
 				rowText = fmt.Sprintf("%s%s%s%s%s", cursor, effIndent, arrowStyled, folderIcon, itemStyle.Render(name))
 			}
@@ -165,7 +165,7 @@ func RenderNoteList(entries []storage.NoteEntry, selectedPaths map[string]bool, 
 			}
 
 			if badge != "" {
-				rowText = fmt.Sprintf("%s%s%s%s%-*s %s", cursor, effIndent, selBox, noteIcon, availName, itemStyle.Render(name), badge)
+				rowText = fmt.Sprintf("%s%s%s%s%s %s", cursor, effIndent, selBox, noteIcon, itemStyle.Render(name), badge)
 			} else {
 				rowText = fmt.Sprintf("%s%s%s%s%s", cursor, effIndent, selBox, noteIcon, itemStyle.Render(name))
 			}

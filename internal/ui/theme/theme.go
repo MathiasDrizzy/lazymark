@@ -287,6 +287,7 @@ func ApplyPalette(p Palette) {
 		Foreground(ColorYellow)
 
 	FooterBar = lipgloss.NewStyle().
+		Background(ColorSurface0).
 		Foreground(ColorSubtext0).
 		Padding(0, 1)
 
