@@ -319,3 +319,19 @@ func NextTheme() string {
 	ApplyThemeByName(names[0])
 	return names[0]
 }
+
+// PrevTheme cicla al tema anterior disponible y lo aplica
+func PrevTheme() string {
+	names := ThemeNames()
+	for i, n := range names {
+		if n == CurrentThemeName {
+			prev := names[(i-1+len(names))%len(names)]
+			ApplyThemeByName(prev)
+			return prev
+		}
+	}
+	// Fallback: aplicar el primero
+	ApplyThemeByName(names[0])
+	return names[0]
+}
+

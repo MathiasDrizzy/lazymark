@@ -111,8 +111,12 @@ func RenderGalleryList(images []ImageEntry, selectedIndex int, width, height int
 		// Nota origen
 		noteRef := theme.NormalItem.Copy().Foreground(theme.ColorOverlay0).Render(fmt.Sprintf("(%s)", img.NoteTitle))
 
+		contentWidth := width - 2
+		if contentWidth < 4 {
+			contentWidth = 4
+		}
 		rowText := fmt.Sprintf("%s%s %s %s", cursor, icon, fileStyle, noteRef)
-		rowText = ansi.Truncate(rowText, width, "")
+		rowText = ansi.Truncate(rowText, contentWidth, "")
 
 		// Registrar zona de clic
 		if ht != nil {

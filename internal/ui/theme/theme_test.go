@@ -52,3 +52,19 @@ func TestNextTheme(t *testing.T) {
 		t.Errorf("CurrentThemeName no coincide con el retornado por NextTheme")
 	}
 }
+
+func TestPrevTheme(t *testing.T) {
+	ApplyThemeByName("catppuccin-mocha")
+	prev := PrevTheme()
+	if prev == "catppuccin-mocha" {
+		t.Errorf("PrevTheme debió cambiar el tema actual")
+	}
+	if CurrentThemeName != prev {
+		t.Errorf("CurrentThemeName no coincide con el retornado por PrevTheme")
+	}
+	// Si aplicamos NextTheme después de PrevTheme, debemos volver a catppuccin-mocha
+	afterNext := NextTheme()
+	if afterNext != "catppuccin-mocha" {
+		t.Errorf("NextTheme después de PrevTheme debió volver a catppuccin-mocha, obtenido '%s'", afterNext)
+	}
+}

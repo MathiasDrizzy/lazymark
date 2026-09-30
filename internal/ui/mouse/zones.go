@@ -64,3 +64,10 @@ func (h *HitTester) Check(x, y int) (*Zone, bool) {
 	}
 	return nil, false
 }
+
+// Zones devuelve una copia de las zonas registradas (útil para pruebas y depuración)
+func (h *HitTester) Zones() []Zone {
+	result := make([]Zone, len(h.zones))
+	copy(result, h.zones)
+	return result
+}

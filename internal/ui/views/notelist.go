@@ -44,6 +44,12 @@ func RenderNoteList(entries []storage.NoteEntry, selectedPaths map[string]bool, 
 		endIdx = len(entries)
 	}
 
+	// Ancho interior disponible para el contenido (descontando 2 columnas por Padding(0, 1))
+	contentWidth := width - 2
+	if contentWidth < 4 {
+		contentWidth = 4
+	}
+
 	for i := startIdx; i < endIdx; i++ {
 		entry := entries[i]
 		isSelected := i == selectedIndex
@@ -72,32 +78,51 @@ func RenderNoteList(entries []storage.NoteEntry, selectedPaths map[string]bool, 
 			badge := ""
 			badgeLen := 0
 			// Solo mostrar contador de carpeta si hay ancho suficiente
-			if width-len(indent) >= 18 {
+			if contentWidth-len(indent) >= 18 {
 				cntStr := fmt.Sprintf("(%d)", entry.Children)
 				badge = theme.NormalItem.Copy().Foreground(theme.ColorOverlay0).Render(cntStr)
 				badgeLen = len(cntStr) + 1
 			}
 
-			availName := width - len(indent) - 7 - badgeLen
-			if availName < 3 {
-				availName = 3
+			// Ajustar sangría si el espacio es muy estrecho para garantizar nombre visible
+			effIndent := indent
+			fixedPrefix := 2 + 4 + badgeLen // cursor(2) + arrow(2) + icon(2) + badge
+			if contentWidth-fixedPrefix-len(effIndent) < 3 && len(effIndent) > 0 {
+				maxIndent := contentWidth - fixedPrefix - 3
+				if maxIndent < 0 {
+					maxIndent = 0
+				}
+				if len(effIndent) > maxIndent {
+					effIndent = effIndent[:maxIndent]
+				}
+			}
+
+			availName := contentWidth - fixedPrefix - len(effIndent)
+			if availName < 2 {
+				availName = 2
 			}
 
 			name := entry.Name
 			if len(name) > availName {
-				name = name[:availName-1] + "…"
+				if availName > 1 {
+					name = name[:availName-1] + "…"
+				} else {
+					name = "…"
+				}
 			}
 
 			if badge != "" {
-				rowText = fmt.Sprintf("%s%s%s%s%-*s %s", cursor, indent, arrowStyled, folderIcon, availName, itemStyle.Render(name), badge)
+				rowText = fmt.Sprintf("%s%s%s%s%-*s %s", cursor, effIndent, arrowStyled, folderIcon, availName, itemStyle.Render(name), badge)
 			} else {
-				rowText = fmt.Sprintf("%s%s%s%s%s", cursor, indent, arrowStyled, folderIcon, itemStyle.Render(name))
+				rowText = fmt.Sprintf("%s%s%s%s%s", cursor, effIndent, arrowStyled, folderIcon, itemStyle.Render(name))
 			}
 		} else {
 			// Indicador de selección múltiple
-			selBox := " "
+			selBox := ""
+			selLen := 0
 			if selectedPaths != nil && selectedPaths[entry.Path] {
 				selBox = theme.SelectedItem.Copy().Foreground(theme.ColorGreen).Bold(true).Render("✓ ")
+				selLen = 2
 			}
 
 			// Icono Markdown estilo nerd font en color teal
@@ -106,30 +131,47 @@ func RenderNoteList(entries []storage.NoteEntry, selectedPaths map[string]bool, 
 			badge := ""
 			badgeLen := 0
 			// Solo mostrar fecha si el panel tiene ancho suficiente para que no desborde hacia abajo
-			if width-len(indent) >= 25 {
+			if contentWidth-len(indent) >= 22 {
 				timeStr := entry.ModTime.Format("02 Jan")
 				badge = theme.NormalItem.Copy().Foreground(theme.ColorOverlay0).Render(timeStr)
 				badgeLen = 7 // " " + "02 Jan"
 			}
 
-			availName := width - len(indent) - 7 - badgeLen
-			if availName < 3 {
-				availName = 3
+			// Ajustar sangría si el espacio es muy estrecho para garantizar nombre visible
+			effIndent := indent
+			fixedPrefix := 2 + selLen + 2 + badgeLen // cursor(2) + selBox + noteIcon(2) + badge
+			if contentWidth-fixedPrefix-len(effIndent) < 3 && len(effIndent) > 0 {
+				maxIndent := contentWidth - fixedPrefix - 3
+				if maxIndent < 0 {
+					maxIndent = 0
+				}
+				if len(effIndent) > maxIndent {
+					effIndent = effIndent[:maxIndent]
+				}
+			}
+
+			availName := contentWidth - fixedPrefix - len(effIndent)
+			if availName < 2 {
+				availName = 2
 			}
 
 			name := entry.Name
 			if len(name) > availName {
-				name = name[:availName-1] + "…"
+				if availName > 1 {
+					name = name[:availName-1] + "…"
+				} else {
+					name = "…"
+				}
 			}
 
 			if badge != "" {
-				rowText = fmt.Sprintf("%s%s %s%s%-*s %s", cursor, indent, selBox, noteIcon, availName, itemStyle.Render(name), badge)
+				rowText = fmt.Sprintf("%s%s%s%s%-*s %s", cursor, effIndent, selBox, noteIcon, availName, itemStyle.Render(name), badge)
 			} else {
-				rowText = fmt.Sprintf("%s%s %s%s%s", cursor, indent, selBox, noteIcon, itemStyle.Render(name))
+				rowText = fmt.Sprintf("%s%s%s%s%s", cursor, effIndent, selBox, noteIcon, itemStyle.Render(name))
 			}
 		}
 
-		rowText = ansi.Truncate(rowText, width, "")
+		rowText = ansi.Truncate(rowText, contentWidth, "")
 
 		// Registrar zona de clic del mouse
 		if ht != nil {

@@ -89,8 +89,12 @@ func RenderTagList(tags []TagInfo, selectedIndex int, width, height int, active 
 		tagBadge := theme.TagBadge.Render(fmt.Sprintf("#%s", tag.Name))
 		countStr := theme.NormalItem.Copy().Foreground(theme.ColorOverlay0).Render(fmt.Sprintf("(%d)", tag.NoteCount))
 
+		contentWidth := width - 2
+		if contentWidth < 4 {
+			contentWidth = 4
+		}
 		rowText := fmt.Sprintf("%s%s %s", cursor, tagBadge, countStr)
-		rowText = ansi.Truncate(rowText, width, "")
+		rowText = ansi.Truncate(rowText, contentWidth, "")
 
 		// Registrar zona de clic para esta fila
 		if ht != nil {

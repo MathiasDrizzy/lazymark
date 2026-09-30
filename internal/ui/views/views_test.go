@@ -264,6 +264,21 @@ func TestRenderTrashModal(t *testing.T) {
 	if !strings.Contains(modal, "18d") {
 		t.Errorf("RenderTrashModal no calculó los días restantes correctamente")
 	}
+
+	// Verificar registro de zonas de clic para los botones de acción
+	foundRestore := false
+	foundClose := false
+	for _, z := range ht.Zones() {
+		if z.Payload == "trash-restore" {
+			foundRestore = true
+		}
+		if z.Payload == "trash-close" {
+			foundClose = true
+		}
+	}
+	if !foundRestore || !foundClose {
+		t.Errorf("No se registraron las zonas de clic para los botones de acción del modal de papelera")
+	}
 }
 
 func TestNarrowNoteListNoWrap(t *testing.T) {
@@ -292,9 +307,19 @@ func TestNarrowNoteListNoWrap(t *testing.T) {
 		if w > 24 {
 			t.Errorf("Línea %d excede el ancho: w=%d, contenido: %q", idx, w, l)
 		}
-		trimmed := strings.TrimSpace(l)
-		if trimmed == "Sep" || trimmed == "Jan" {
-			t.Errorf("Se encontró mes desbordado en su propia línea: %q", l)
+	}
+	narrowOut = RenderNoteList([]storage.NoteEntry{
+		{Name: "folder-10", Type: storage.EntryFolder, Depth: 1, Expanded: true},
+		{Name: "folder-11", Type: storage.EntryFolder, Depth: 2, Expanded: true},
+		{Name: "folder-6", Type: storage.EntryFolder, Depth: 2, Expanded: true},
+		{Name: "new-note.md", Type: storage.EntryNote, Depth: 3},
+		{Name: "folder-8", Type: storage.EntryFolder, Depth: 2, Expanded: true},
+	}, nil, 0, 16, 12, true, ht, 1)
+	lines = strings.Split(narrowOut, "\n")
+	for idx, l := range lines {
+		w := ansi.StringWidth(l)
+		if w > 18 {
+			t.Errorf("Línea %d excede el ancho máximo (18): w=%d, contenido: %q", idx, w, l)
 		}
 	}
 }

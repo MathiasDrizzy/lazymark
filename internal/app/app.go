@@ -90,7 +90,8 @@ type AppModel struct {
 	lastClickZone string
 
 	// Proporción de ancho de paneles (Split ratio)
-	sidebarRatio float64
+	sidebarRatio      float64
+	isDraggingDivider bool
 
 	width     int
 	height    int
@@ -227,6 +228,14 @@ func (m *AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if !m.cfg.MouseClick {
 			return m, nil
 		}
+		if msg.Action == tea.MouseActionMotion && m.isDraggingDivider {
+			m.updateSidebarRatioFromMouseX(msg.X)
+			return m, nil
+		}
+		if msg.Action == tea.MouseActionRelease {
+			m.isDraggingDivider = false
+			return m, nil
+		}
 		if msg.Action == tea.MouseActionPress {
 			if msg.Button == tea.MouseButtonWheelUp {
 				if m.previewScrollY > 0 {
@@ -242,6 +251,19 @@ func (m *AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				return m, nil
 			}
 			if msg.Button == tea.MouseButtonLeft {
+				if !m.isModalOpen() {
+					totalDecorations := 8
+					availableWidth := m.width - totalDecorations
+					if availableWidth > 0 {
+						leftWidth := int(float64(availableWidth) * m.sidebarRatio)
+						divX := leftWidth + 4
+						if msg.X >= divX-2 && msg.X <= divX+2 && msg.Y >= 1 && msg.Y < m.height-1 {
+							m.isDraggingDivider = true
+							m.updateSidebarRatioFromMouseX(msg.X)
+							return m, nil
+						}
+					}
+				}
 				if zone, ok := m.hitTester.Check(msg.X, msg.Y); ok {
 					return m.handleZoneClick(zone)
 				}
@@ -298,52 +320,11 @@ func (m *AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				}
 				return m, nil
 			case "r":
-				if len(m.trashItems) > 0 && m.selectedTrashItem < len(m.trashItems) {
-					item := m.trashItems[m.selectedTrashItem]
-					if err := m.storage.RestoreTrashItem(item.ID); err != nil {
-						m.statusMsg = fmt.Sprintf("%s: %v", i18n.T("Error al restaurar", "Error restoring"), err)
-					} else {
-						m.statusMsg = fmt.Sprintf("%s: %s", i18n.T("Restaurado", "Restored"), item.Name)
-					}
-					m.trashItems, _ = m.storage.ListTrash()
-					if m.selectedTrashItem >= len(m.trashItems) && len(m.trashItems) > 0 {
-						m.selectedTrashItem = len(m.trashItems) - 1
-					}
-					m.reloadEntries()
-				}
-				return m, nil
+				return m.restoreSelectedTrashItem()
 			case "d":
-				if len(m.trashItems) > 0 && m.selectedTrashItem < len(m.trashItems) {
-					item := m.trashItems[m.selectedTrashItem]
-					m.confirmTitle = i18n.T("󰀪  Eliminar Definitivamente", "󰀪  Permanently Delete")
-					m.confirmMsg = fmt.Sprintf(i18n.T("¿Estás seguro de que deseas eliminar permanentemente '%s'?\nEsta acción no se puede deshacer.", "Are you sure you want to permanently delete '%s'?\nThis action cannot be undone."), item.Name)
-					m.confirmAction = func() tea.Cmd {
-						_ = m.storage.DeleteTrashItem(item.ID)
-						m.trashItems, _ = m.storage.ListTrash()
-						if m.selectedTrashItem >= len(m.trashItems) && len(m.trashItems) > 0 {
-							m.selectedTrashItem = len(m.trashItems) - 1
-						}
-						m.statusMsg = fmt.Sprintf("%s: %s", i18n.T("Eliminado permanente", "Permanently deleted"), item.Name)
-						return nil
-					}
-					m.showConfirmModal = true
-				}
-				return m, nil
+				return m.promptDeleteTrashItem()
 			case "c":
-				count := len(m.trashItems)
-				if count > 0 {
-					m.confirmTitle = i18n.T("󰀪  Vaciar Papelera", "󰀪  Empty Trash")
-					m.confirmMsg = fmt.Sprintf(i18n.T("¿Estás seguro de que deseas vaciar la papelera (%d elementos)?\nTodos los archivos se eliminarán permanentemente.", "Are you sure you want to empty the trash (%d items)?\nAll files will be permanently deleted."), count)
-					m.confirmAction = func() tea.Cmd {
-						_ = m.storage.EmptyTrash()
-						m.trashItems = nil
-						m.selectedTrashItem = 0
-						m.statusMsg = fmt.Sprintf(i18n.T("Papelera vaciada (%d elementos)", "Trash emptied (%d items)"), count)
-						return nil
-					}
-					m.showConfirmModal = true
-				}
-				return m, nil
+				return m.promptEmptyTrash()
 			}
 			return m, nil
 		}
@@ -369,8 +350,11 @@ func (m *AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					m.settingsItem = 0
 				}
 				return m, nil
-			case "enter", " ", "left", "right":
-				m.toggleConfigItem(m.settingsItem)
+			case "enter", " ", "right", "l":
+				m.toggleConfigItem(m.settingsItem, true)
+				return m, nil
+			case "left", "h":
+				m.toggleConfigItem(m.settingsItem, false)
 				return m, nil
 			}
 			return m, nil
@@ -781,9 +765,40 @@ func (m *AppModel) updateGalleryTab(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
+func (m *AppModel) isModalOpen() bool {
+	return m.showSettings || m.showCheatsheet || m.showMoveModal || m.showConfirmModal || m.showTrashModal
+}
+
 // ─── Manejo de clics en zonas ──────────────────────────────────────
 
 func (m *AppModel) handleZoneClick(zone *mouse.Zone) (tea.Model, tea.Cmd) {
+	if m.showConfirmModal {
+		if zone.Payload != "confirm-yes" && zone.Payload != "confirm-no" {
+			return m, nil
+		}
+	} else if m.showTrashModal {
+		if !strings.HasPrefix(zone.Payload, "select-trash:") &&
+			zone.Payload != "trash-restore" &&
+			zone.Payload != "trash-delete" &&
+			zone.Payload != "trash-empty" &&
+			zone.Payload != "trash-close" &&
+			zone.Payload != "action-trash" {
+			return m, nil
+		}
+	} else if m.showMoveModal {
+		if !strings.HasPrefix(zone.Payload, "move-to:") && zone.Payload != "confirm-no" {
+			return m, nil
+		}
+	} else if m.showSettings {
+		if !strings.HasPrefix(zone.Payload, "select-config:") && zone.Payload != "action-config" {
+			return m, nil
+		}
+	} else if m.showCheatsheet {
+		if zone.Payload != "action-cheatsheet" {
+			return m, nil
+		}
+	}
+
 	now := time.Now()
 	isDoubleClick := (zone.ID == m.lastClickZone) && (now.Sub(m.lastClickTime) < 400*time.Millisecond)
 	m.lastClickTime = now
@@ -847,8 +862,14 @@ func (m *AppModel) handleActionClick(zone *mouse.Zone) (tea.Model, tea.Cmd) {
 	if strings.HasPrefix(payload, "select-config:") {
 		var id int
 		if _, err := fmt.Sscanf(payload, "select-config:%d", &id); err == nil {
-			m.settingsItem = views.SettingsItem(id)
-			m.toggleConfigItem(m.settingsItem)
+			targetItem := views.SettingsItem(id)
+			if m.settingsItem != targetItem {
+				// Primer clic: solo mover el cursor '>' al ítem seleccionado sin cambiar su valor
+				m.settingsItem = targetItem
+			} else {
+				// Segundo clic en el mismo ítem ya seleccionado: cambiar/ciclar valor hacia adelante
+				m.toggleConfigItem(m.settingsItem, true)
+			}
 		}
 		return m, nil
 	}
@@ -901,6 +922,15 @@ func (m *AppModel) handleActionClick(zone *mouse.Zone) (tea.Model, tea.Cmd) {
 	}
 
 	switch payload {
+	case "trash-restore":
+		return m.restoreSelectedTrashItem()
+	case "trash-delete":
+		return m.promptDeleteTrashItem()
+	case "trash-empty":
+		return m.promptEmptyTrash()
+	case "trash-close":
+		m.showTrashModal = false
+		return m, nil
 	case "[", "action-shrink-panel":
 		m.adjustSidebarRatio(-0.04)
 		return m, nil
@@ -1054,7 +1084,7 @@ func (m *AppModel) clearKittyIfNecessary() {
 	}
 }
 
-func (m *AppModel) toggleConfigItem(item views.SettingsItem) {
+func (m *AppModel) toggleConfigItem(item views.SettingsItem, forward bool) {
 	switch item {
 	case views.ItemLanguage:
 		i18n.ToggleLanguage()
@@ -1064,25 +1094,60 @@ func (m *AppModel) toggleConfigItem(item views.SettingsItem) {
 		m.statusMsg = fmt.Sprintf("%s: %s", i18n.T("Idioma", "Language"), m.cfg.Language)
 
 	case views.ItemEditor:
-		m.cycleEditor()
+		m.cycleEditor(forward)
 
 	case views.ItemTheme:
-		newTheme := theme.NextTheme()
+		var newTheme string
+		if forward {
+			newTheme = theme.NextTheme()
+		} else {
+			newTheme = theme.PrevTheme()
+		}
 		m.cfg.Theme = newTheme
 		_ = m.cfg.Save()
 		m.statusMsg = fmt.Sprintf("%s: %s", i18n.T("Tema", "Theme"), newTheme)
 
 	case views.ItemKeybindings:
-		switch strings.ToLower(m.cfg.KeybindingMode) {
-		case "dual":
-			m.cfg.KeybindingMode = "lazygit"
-		case "lazygit":
-			m.cfg.KeybindingMode = "vim"
-		default:
-			m.cfg.KeybindingMode = "dual"
+		modes := []string{"dual", "lazygit", "vim"}
+		currIdx := 0
+		for i, mode := range modes {
+			if strings.EqualFold(m.cfg.KeybindingMode, mode) {
+				currIdx = i
+				break
+			}
 		}
+		if forward {
+			currIdx = (currIdx + 1) % len(modes)
+		} else {
+			currIdx = (currIdx - 1 + len(modes)) % len(modes)
+		}
+		m.cfg.KeybindingMode = modes[currIdx]
 		_ = m.cfg.Save()
 		m.statusMsg = fmt.Sprintf("%s: %s", i18n.T("Atajos", "Keys"), m.cfg.KeybindingMode)
+
+	case views.ItemSidebarRatio:
+		ratios := []float64{0.25, 0.33, 0.45, 0.55, 0.65}
+		currIdx := 1
+		diff := 1.0
+		for i, r := range ratios {
+			d := m.cfg.SidebarRatio - r
+			if d < 0 {
+				d = -d
+			}
+			if d < diff {
+				diff = d
+				currIdx = i
+			}
+		}
+		if forward {
+			currIdx = (currIdx + 1) % len(ratios)
+		} else {
+			currIdx = (currIdx - 1 + len(ratios)) % len(ratios)
+		}
+		m.cfg.SidebarRatio = ratios[currIdx]
+		m.sidebarRatio = m.cfg.SidebarRatio
+		_ = m.cfg.Save()
+		m.statusMsg = fmt.Sprintf("%s: %d%%", i18n.T("Panel izquierdo", "Left panel"), int(m.sidebarRatio*100))
 
 	case views.ItemTabTags:
 		m.cfg.ShowTagsTab = !m.cfg.ShowTagsTab
@@ -1099,23 +1164,6 @@ func (m *AppModel) toggleConfigItem(item views.SettingsItem) {
 		m.refreshVisibleTabs()
 		_ = m.cfg.Save()
 
-	case views.ItemSidebarRatio:
-		switch {
-		case m.cfg.SidebarRatio < 0.28:
-			m.cfg.SidebarRatio = 0.33
-		case m.cfg.SidebarRatio < 0.38:
-			m.cfg.SidebarRatio = 0.45
-		case m.cfg.SidebarRatio < 0.50:
-			m.cfg.SidebarRatio = 0.55
-		case m.cfg.SidebarRatio < 0.65:
-			m.cfg.SidebarRatio = 0.25
-		default:
-			m.cfg.SidebarRatio = 0.33
-		}
-		m.sidebarRatio = m.cfg.SidebarRatio
-		_ = m.cfg.Save()
-		m.statusMsg = fmt.Sprintf("%s: %d%%", i18n.T("Panel izquierdo", "Left panel"), int(m.sidebarRatio*100))
-
 	case views.ItemConfirmDelete:
 		m.cfg.ConfirmDelete = !m.cfg.ConfirmDelete
 		_ = m.cfg.Save()
@@ -1125,6 +1173,26 @@ func (m *AppModel) toggleConfigItem(item views.SettingsItem) {
 		}
 		m.statusMsg = fmt.Sprintf("%s: %s", i18n.T("Confirmar borrado", "Confirm deletion"), state)
 	}
+}
+
+func (m *AppModel) updateSidebarRatioFromMouseX(mouseX int) {
+	totalDecorations := 8
+	availableWidth := m.width - totalDecorations
+	if availableWidth < 30 {
+		return
+	}
+	newLeftWidth := mouseX - 4
+	newRatio := float64(newLeftWidth) / float64(availableWidth)
+	if newRatio < 0.15 {
+		newRatio = 0.15
+	}
+	if newRatio > 0.75 {
+		newRatio = 0.75
+	}
+	m.sidebarRatio = newRatio
+	m.cfg.SidebarRatio = newRatio
+	_ = m.cfg.Save()
+	m.statusMsg = fmt.Sprintf(i18n.T("Panel izquierdo: %d%%", "Left panel: %d%%"), int(m.sidebarRatio*100))
 }
 
 func (m *AppModel) adjustSidebarRatio(delta float64) {
@@ -1140,22 +1208,29 @@ func (m *AppModel) adjustSidebarRatio(delta float64) {
 	m.statusMsg = fmt.Sprintf(i18n.T("Panel izquierdo: %d%%", "Left panel: %d%%"), int(m.sidebarRatio*100))
 }
 
-func (m *AppModel) cycleEditor() {
+func (m *AppModel) cycleEditor(forward bool) {
 	editors := config.DetectInstalledEditors()
+	if len(editors) == 0 {
+		m.cfg.Editor = "micro"
+		_ = m.cfg.Save()
+		m.statusMsg = fmt.Sprintf("Editor: %s", m.cfg.Editor)
+		return
+	}
 	for i, ed := range editors {
 		if strings.Contains(strings.ToLower(m.cfg.Editor), ed) {
-			next := editors[(i+1)%len(editors)]
+			var next string
+			if forward {
+				next = editors[(i+1)%len(editors)]
+			} else {
+				next = editors[(i-1+len(editors))%len(editors)]
+			}
 			m.cfg.Editor = next
 			_ = m.cfg.Save()
 			m.statusMsg = fmt.Sprintf("Editor: %s", next)
 			return
 		}
 	}
-	if len(editors) > 0 {
-		m.cfg.Editor = editors[0]
-	} else {
-		m.cfg.Editor = "micro"
-	}
+	m.cfg.Editor = editors[0]
 	_ = m.cfg.Save()
 	m.statusMsg = fmt.Sprintf("Editor: %s", m.cfg.Editor)
 }
@@ -1378,6 +1453,59 @@ func (m *AppModel) openTrashModal() tea.Cmd {
 	return nil
 }
 
+func (m *AppModel) restoreSelectedTrashItem() (tea.Model, tea.Cmd) {
+	if len(m.trashItems) > 0 && m.selectedTrashItem < len(m.trashItems) {
+		item := m.trashItems[m.selectedTrashItem]
+		if err := m.storage.RestoreTrashItem(item.ID); err != nil {
+			m.statusMsg = fmt.Sprintf("%s: %v", i18n.T("Error al restaurar", "Error restoring"), err)
+		} else {
+			m.statusMsg = fmt.Sprintf("%s: %s", i18n.T("Restaurado", "Restored"), item.Name)
+		}
+		m.trashItems, _ = m.storage.ListTrash()
+		if m.selectedTrashItem >= len(m.trashItems) && len(m.trashItems) > 0 {
+			m.selectedTrashItem = len(m.trashItems) - 1
+		}
+		m.reloadEntries()
+	}
+	return m, nil
+}
+
+func (m *AppModel) promptDeleteTrashItem() (tea.Model, tea.Cmd) {
+	if len(m.trashItems) > 0 && m.selectedTrashItem < len(m.trashItems) {
+		item := m.trashItems[m.selectedTrashItem]
+		m.confirmTitle = i18n.T("󰀪  Eliminar Definitivamente", "󰀪  Permanently Delete")
+		m.confirmMsg = fmt.Sprintf(i18n.T("¿Estás seguro de que deseas eliminar permanentemente '%s'?\nEsta acción no se puede deshacer.", "Are you sure you want to permanently delete '%s'?\nThis action cannot be undone."), item.Name)
+		m.confirmAction = func() tea.Cmd {
+			_ = m.storage.DeleteTrashItem(item.ID)
+			m.trashItems, _ = m.storage.ListTrash()
+			if m.selectedTrashItem >= len(m.trashItems) && len(m.trashItems) > 0 {
+				m.selectedTrashItem = len(m.trashItems) - 1
+			}
+			m.statusMsg = fmt.Sprintf("%s: %s", i18n.T("Eliminado permanente", "Permanently deleted"), item.Name)
+			return nil
+		}
+		m.showConfirmModal = true
+	}
+	return m, nil
+}
+
+func (m *AppModel) promptEmptyTrash() (tea.Model, tea.Cmd) {
+	count := len(m.trashItems)
+	if count > 0 {
+		m.confirmTitle = i18n.T("󰀪  Vaciar Papelera", "󰀪  Empty Trash")
+		m.confirmMsg = fmt.Sprintf(i18n.T("¿Estás seguro de que deseas vaciar la papelera (%d elementos)?\nTodos los archivos se eliminarán permanentemente.", "Are you sure you want to empty the trash (%d items)?\nAll files will be permanently deleted."), count)
+		m.confirmAction = func() tea.Cmd {
+			_ = m.storage.EmptyTrash()
+			m.trashItems = nil
+			m.selectedTrashItem = 0
+			m.statusMsg = fmt.Sprintf(i18n.T("Papelera vaciada (%d elementos)", "Trash emptied (%d items)"), count)
+			return nil
+		}
+		m.showConfirmModal = true
+	}
+	return m, nil
+}
+
 func (m *AppModel) pasteImage() tea.Cmd {
 	if len(m.entries) == 0 {
 		m.statusMsg = i18n.T("Crea una nota primero para adjuntar imágenes", "Create a note first to attach images")
@@ -1489,7 +1617,7 @@ func (m *AppModel) View() string {
 		footerView = views.RenderFooter(m.width, m.hitTester, m.height-1, m.statusMsg, m.storage.CountTrash(), views.GetNotesActions())
 
 		// Registrar zonas de clic para alternar paneles y divisor
-		if m.hitTester != nil {
+		if m.hitTester != nil && !m.isModalOpen() {
 			m.hitTester.Register("panel-preview", mouse.ZoneAction, divX+1, 1, m.width, m.height-2, 0, "focus-preview")
 			m.hitTester.Register("panel-list", mouse.ZoneAction, 0, 1, divX-2, m.height-2, 0, "focus-list")
 			m.hitTester.Register("panel-divider", mouse.ZoneAction, divX-1, 1, divX, m.height-2, 0, "action-divider-click")
@@ -1503,7 +1631,7 @@ func (m *AppModel) View() string {
 		}
 		rightView = views.RenderTagPreview(m.notes, selectedTagName, rightWidth, panelHeight, m.activePanel == 1)
 		footerView = views.RenderFooter(m.width, m.hitTester, m.height-1, m.statusMsg, m.storage.CountTrash(), views.GetTagActions())
-		if m.hitTester != nil {
+		if m.hitTester != nil && !m.isModalOpen() {
 			m.hitTester.Register("panel-divider", mouse.ZoneAction, divX-1, 1, divX, m.height-2, 0, "action-divider-click")
 		}
 
@@ -1515,7 +1643,7 @@ func (m *AppModel) View() string {
 		}
 		rightView = views.RenderTaskPreview(currentTask, rightWidth, panelHeight, m.activePanel == 1)
 		footerView = views.RenderFooter(m.width, m.hitTester, m.height-1, m.statusMsg, m.storage.CountTrash(), views.GetTaskActions())
-		if m.hitTester != nil {
+		if m.hitTester != nil && !m.isModalOpen() {
 			m.hitTester.Register("panel-divider", mouse.ZoneAction, divX-1, 1, divX, m.height-2, 0, "action-divider-click")
 		}
 
@@ -1527,7 +1655,7 @@ func (m *AppModel) View() string {
 		}
 		rightView = views.RenderGalleryPreview(currentImage, rightWidth, panelHeight, m.activePanel == 1, m.kitty)
 		footerView = views.RenderFooter(m.width, m.hitTester, m.height-1, m.statusMsg, m.storage.CountTrash(), views.GetGalleryActions())
-		if m.hitTester != nil {
+		if m.hitTester != nil && !m.isModalOpen() {
 			m.hitTester.Register("panel-divider", mouse.ZoneAction, divX-1, 1, divX, m.height-2, 0, "action-divider-click")
 		}
 	}

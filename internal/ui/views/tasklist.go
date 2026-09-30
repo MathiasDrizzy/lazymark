@@ -155,8 +155,12 @@ func RenderTaskList(tasks []FlatTask, selectedIndex int, filter TaskFilter, widt
 		// Nota origen en sutil
 		originLabel := theme.NormalItem.Copy().Foreground(theme.ColorOverlay0).Render(fmt.Sprintf("(%s)", task.NoteTitle))
 
+		contentWidth := width - 2
+		if contentWidth < 4 {
+			contentWidth = 4
+		}
 		rowText := fmt.Sprintf("%s%s %s %s", cursor, checkbox, textStyle, originLabel)
-		rowText = ansi.Truncate(rowText, width, "")
+		rowText = ansi.Truncate(rowText, contentWidth, "")
 
 		// Registrar zona de clic
 		if ht != nil {

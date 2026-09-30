@@ -32,8 +32,8 @@ const (
 
 // RenderSettingsModal renderiza un popup modal flotante, minimalista y centrado
 func RenderSettingsModal(cfg *config.Config, selectedItem SettingsItem, totalWidth, totalHeight int, ht *mouse.HitTester) string {
-	modalWidth := 50
-	if totalWidth < 54 {
+	modalWidth := 52
+	if totalWidth < 56 {
 		modalWidth = totalWidth - 4
 	}
 
@@ -59,20 +59,20 @@ func RenderSettingsModal(cfg *config.Config, selectedItem SettingsItem, totalWid
 			label: i18n.T("Idioma / Language", "Language / Idioma"),
 			val: func() string {
 				if i18n.CurrentLanguage() == i18n.LangES {
-					return "Español"
+					return "◀ Español ▶"
 				}
-				return "English"
+				return "◀ English ▶"
 			}(),
 		},
 		{
 			id:    ItemEditor,
 			label: i18n.T("Editor de Texto", "Text Editor"),
-			val:   filepath.Base(cfg.Editor),
+			val:   fmt.Sprintf("◀ %s ▶", filepath.Base(cfg.Editor)),
 		},
 		{
 			id:    ItemTheme,
 			label: i18n.T("Tema de Color", "Color Theme"),
-			val:   theme.CurrentThemeName,
+			val:   fmt.Sprintf("◀ %s ▶", theme.CurrentThemeName),
 		},
 		{
 			id:    ItemKeybindings,
@@ -80,11 +80,11 @@ func RenderSettingsModal(cfg *config.Config, selectedItem SettingsItem, totalWid
 			val: func() string {
 				switch strings.ToLower(keyMode) {
 				case "vim":
-					return "Vim"
+					return "◀ Vim ▶"
 				case "lazygit":
-					return "Lazygit"
+					return "◀ Lazygit ▶"
 				default:
-					return i18n.T("Dual (Ambos)", "Dual (Both)")
+					return fmt.Sprintf("◀ %s ▶", i18n.T("Dual (Ambos)", "Dual (Both)"))
 				}
 			}(),
 		},
@@ -96,7 +96,7 @@ func RenderSettingsModal(cfg *config.Config, selectedItem SettingsItem, totalWid
 				if pct == 0 {
 					pct = 33
 				}
-				return fmt.Sprintf("%d%%", pct)
+				return fmt.Sprintf("◀ %d%% ▶", pct)
 			}(),
 		},
 		{
@@ -190,7 +190,7 @@ func RenderSettingsModal(cfg *config.Config, selectedItem SettingsItem, totalWid
 	rows = append(rows, fmt.Sprintf("  %s", divider))
 
 	hint := theme.NormalItem.Copy().Foreground(theme.ColorOverlay0).Italic(true).
-		Render(i18n.T("↑/↓: Mover  •  Enter/Espacio: Cambiar  •  Esc: Cerrar", "↑/↓: Move  •  Enter/Space: Toggle  •  Esc: Close"))
+		Render(i18n.T("↑/↓: Mover  •  ←/→/Enter: Cambiar  •  Esc: Cerrar", "↑/↓: Move  •  ←/→/Enter: Change  •  Esc: Close"))
 	rows = append(rows, fmt.Sprintf("  %s", hint))
 
 	body := strings.Join(rows, "\n")
