@@ -15,22 +15,19 @@ import (
 func RenderNoteList(entries []storage.NoteEntry, selectedPaths map[string]bool, selectedIndex int, width, height int, active bool, ht *mouse.HitTester, offsetY int) string {
 	var rows []string
 
-	// Cabecera con título de sección y contador de selección múltiple
-	headerTitle := "   notes"
+	title := i18n.T("[1] Notas", "[1] Notes")
 	selCount := len(selectedPaths)
+	badge := fmt.Sprintf("(%d)", len(entries))
 	if selCount > 0 {
-		selBadge := theme.SelectedItem.Copy().Foreground(theme.ColorTeal).Render(fmt.Sprintf(" [%d %s]", selCount, i18n.T("sel", "sel")))
-		headerTitle += selBadge
+		badge = fmt.Sprintf("[%d sel]", selCount)
 	}
-	header := theme.SelectedItem.Copy().Foreground(theme.ColorPeach).Bold(true).Render(headerTitle)
-	rows = append(rows, header)
 
 	if len(entries) == 0 {
 		emptyMsg := theme.NormalItem.Copy().Italic(true).Render(i18n.T("  (Carpeta vacía. 'c': nueva nota, 'F': carpeta)", "  (Empty folder. 'c': new note, 'F': folder)"))
 		rows = append(rows, emptyMsg)
 	}
 
-	usableHeight := height - 3
+	usableHeight := height - 2
 	if usableHeight < 1 {
 		usableHeight = 1
 	}
@@ -44,8 +41,8 @@ func RenderNoteList(entries []storage.NoteEntry, selectedPaths map[string]bool, 
 		endIdx = len(entries)
 	}
 
-	// Ancho interior disponible para el contenido (descontando 2 columnas por Padding(0, 1))
-	contentWidth := width - 2
+	// Ancho interior disponible para el contenido (descontando 4 columnas por bordes '│ ' y ' │')
+	contentWidth := width - 4
 	if contentWidth < 4 {
 		contentWidth = 4
 	}
@@ -175,7 +172,7 @@ func RenderNoteList(entries []storage.NoteEntry, selectedPaths map[string]bool, 
 
 		// Registrar zona de clic del mouse
 		if ht != nil {
-			rowY := offsetY + (i - startIdx) + 2
+			rowY := offsetY + 1 + (i - startIdx)
 			ht.Register(fmt.Sprintf("entry-%d", i), mouse.ZoneNote, 0, rowY, width, rowY, i, entry.Path)
 		}
 
@@ -183,14 +180,5 @@ func RenderNoteList(entries []storage.NoteEntry, selectedPaths map[string]bool, 
 	}
 
 	content := strings.Join(rows, "\n")
-
-	borderStyle := theme.InactivePanelBorder
-	if active {
-		borderStyle = theme.ActivePanelBorder
-	}
-
-	return borderStyle.
-		Width(width).
-		Height(height).
-		Render(content)
+	return theme.RenderBoxWithTitle(title, badge, content, width, height, active)
 }

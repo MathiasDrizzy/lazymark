@@ -18,10 +18,8 @@ var mdImageRegex = regexp.MustCompile(`!\[(.*?)\]\((.*?)\)`)
 
 // RenderPreview renderiza el panel derecho de vista previa con Glamour (Markdown), imágenes inline y scroll vertical/horizontal
 func RenderPreview(note *storage.Note, width, height int, active bool, kittyClient *image.Client, scrollY, scrollX int) string {
-	borderStyle := theme.InactivePanelBorder
-	if active {
-		borderStyle = theme.ActivePanelBorder
-	}
+	title := i18n.T("[4] Vista Previa", "[4] Preview")
+	badge := ""
 
 	contentWidth := width - 4
 	if contentWidth < 10 {
@@ -30,12 +28,20 @@ func RenderPreview(note *storage.Note, width, height int, active bool, kittyClie
 
 	if note == nil {
 		empty := theme.NormalItem.Copy().Italic(true).Render(i18n.T("Selecciona una nota para ver el contenido...", "Select a note to view content..."))
-		return borderStyle.Width(width).Height(height).Render(empty)
+		return theme.RenderBoxWithTitle(title, badge, empty, width, height, active)
+	}
+
+	badge = note.Title
+
+	// Limitar el ancho de lectura a un máximo óptimo de 85 columnas en pantallas anchas
+	wrapWidth := contentWidth
+	if wrapWidth > 85 {
+		wrapWidth = 85
 	}
 
 	renderer, _ := glamour.NewTermRenderer(
 		glamour.WithStandardStyle("dark"),
-		glamour.WithWordWrap(contentWidth),
+		glamour.WithWordWrap(wrapWidth),
 		glamour.WithPreservedNewLines(),
 	)
 
@@ -118,11 +124,23 @@ func RenderPreview(note *storage.Note, width, height int, active bool, kittyClie
 		endLine = totalLines
 	}
 
+	leftPad := 0
+	if contentWidth > 85 {
+		leftPad = (contentWidth - 85) / 2
+	}
+	padStr := ""
+	if leftPad > 0 {
+		padStr = strings.Repeat(" ", leftPad)
+	}
+
 	var visibleLines []string
 	for i := scrollY; i < endLine; i++ {
 		line := lines[i]
 		if scrollX > 0 {
-			line = ansi.CutWc(line, scrollX, scrollX+contentWidth)
+			line = ansi.CutWc(line, scrollX, scrollX+wrapWidth)
+		}
+		if padStr != "" && strings.TrimSpace(line) != "" {
+			line = padStr + line
 		}
 		visibleLines = append(visibleLines, line)
 	}
@@ -154,9 +172,5 @@ func RenderPreview(note *storage.Note, width, height int, active bool, kittyClie
 	}
 
 	viewContent := strings.Join(visibleLines, "\n")
-
-	return borderStyle.
-		Width(width).
-		Height(height).
-		Render(viewContent)
+	return theme.RenderBoxWithTitle(title, badge, viewContent, width, height, active)
 }

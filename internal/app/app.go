@@ -25,6 +25,14 @@ type EditorFinishedMsg struct {
 	Err error
 }
 
+// Constantes de identificación de paneles modulares estilo Lazygit
+const (
+	PanelNotes   = 0 // [1] Notas
+	PanelTasks   = 1 // [2] Tareas
+	PanelTags    = 2 // [3] Categorías / Tags
+	PanelPreview = 3 // [4] Vista Previa
+)
+
 // AppModel es el modelo raíz de la aplicación Bubble Tea
 type AppModel struct {
 	cfg       *config.Config
@@ -38,7 +46,9 @@ type AppModel struct {
 	entries      []storage.NoteEntry // Carpetas y notas navegables
 	selectedEntry int
 	activeTab    int
-	activePanel  int // 0: Lista izquierda, 1: Preview derecho
+	activePanel   int  // PanelNotes, PanelTasks, PanelTags, PanelPreview
+	lastLeftPanel int  // Último panel izquierdo activo (PanelNotes, PanelTasks, PanelTags)
+	isMaximized   bool // Maximización del panel activo al 100%
 
 	// Pestañas dinámicas visibles
 	visibleTabs []views.TabItem
@@ -129,7 +139,9 @@ func New(cfg *config.Config) (*AppModel, error) {
 		selectedNote:    0,
 		selectedEntry:   0,
 		activeTab:       0,
-		activePanel:     0,
+		activePanel:     PanelNotes,
+		lastLeftPanel:   PanelNotes,
+		isMaximized:     false,
 		taskFilter:      views.TaskFilterAll,
 		sidebarRatio:    cfg.SidebarRatio,
 		statusMsg:       fmt.Sprintf(i18n.T("%d notas cargadas", "%d notes loaded"), len(notes)),
@@ -259,7 +271,7 @@ func (m *AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if msg.Button == tea.MouseButtonLeft {
 				if !m.isModalOpen() {
 					_, _, _, divX := m.calcLayout()
-					if msg.X >= divX-1 && msg.X <= divX+2 && msg.Y >= 1 && msg.Y < m.height-1 {
+					if msg.X >= divX-1 && msg.X <= divX+2 && msg.Y >= 0 && msg.Y < m.height-1 {
 						m.isDraggingDivider = true
 						m.hasDraggedDivider = false
 						return m, nil
@@ -431,132 +443,85 @@ func (m *AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.showCheatsheet = !m.showCheatsheet
 			return m, nil
 
-		// Navegación de pestañas [1..N]
-		case "1":
-			if len(m.visibleTabs) >= 1 {
-				m.activeTab = 0
-				m.activePanel = 0
-				m.clearKittyIfNecessary()
+		case "w":
+			m.isMaximized = !m.isMaximized
+			if m.isMaximized {
+				m.statusMsg = i18n.T("Panel maximizado (presiona 'w' para restaurar)", "Panel maximized (press 'w' to restore)")
+			} else {
+				m.statusMsg = i18n.T("Panel restaurado", "Panel restored")
 			}
+			return m, nil
+
+		// Navegación modular de paneles [1..4]
+		case "1":
+			m.activePanel = PanelNotes
+			m.lastLeftPanel = PanelNotes
+			m.clearKittyIfNecessary()
 			return m, nil
 		case "2":
-			if len(m.visibleTabs) >= 2 {
-				m.activeTab = 1
-				m.activePanel = 0
-				m.clearKittyIfNecessary()
-			}
+			m.activePanel = PanelTasks
+			m.lastLeftPanel = PanelTasks
+			m.clearKittyIfNecessary()
 			return m, nil
 		case "3":
-			if len(m.visibleTabs) >= 3 {
-				m.activeTab = 2
-				m.activePanel = 0
-				m.clearKittyIfNecessary()
-			}
+			m.activePanel = PanelTags
+			m.lastLeftPanel = PanelTags
+			m.clearKittyIfNecessary()
 			return m, nil
 		case "4":
-			if len(m.visibleTabs) >= 4 {
-				m.activeTab = 3
-				m.activePanel = 0
-				m.clearKittyIfNecessary()
+			m.activePanel = PanelPreview
+			return m, nil
+
+		// Alternar panel activo con Tab / Shift+Tab o Flechas
+		case "tab":
+			m.activePanel = (m.activePanel + 1) % 4
+			if m.activePanel < PanelPreview {
+				m.lastLeftPanel = m.activePanel
 			}
 			return m, nil
-
-		// Alternar panel activo con Tab o Flechas
-		case "tab", "right", "l":
-			m.activePanel = 1
+		case "shift+tab", "backtab":
+			m.activePanel = (m.activePanel + 3) % 4
+			if m.activePanel < PanelPreview {
+				m.lastLeftPanel = m.activePanel
+			}
 			return m, nil
-		case "shift+tab", "left":
-			m.activePanel = 0
-			return m, nil
+		case "right":
+			if m.activePanel < PanelPreview {
+				m.activePanel = PanelPreview
+				return m, nil
+			}
+		case "left":
+			if m.activePanel == PanelPreview {
+				m.activePanel = m.lastLeftPanel
+				return m, nil
+			}
 		}
 
-		// Delegar al handler de la pestaña activa
-		return m.updateForCurrentTab(msg)
+		// Delegar al panel activo
+		return m.updateForActivePanel(msg)
 	}
 
 	return m, nil
 }
 
-// currentTabID devuelve el identificador de la pestaña activa ("notes", "tags", "tasks", "gallery")
-func (m *AppModel) currentTabID() string {
-	if m.activeTab >= 0 && m.activeTab < len(m.visibleTabs) {
-		return m.visibleTabs[m.activeTab].ID
-	}
-	return "notes"
-}
-
-// updateForCurrentTab delega la lógica de teclado según la pestaña activa
-func (m *AppModel) updateForCurrentTab(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
-	switch m.currentTabID() {
-	case "notes":
+// updateForActivePanel delega la lógica de teclado según el panel enfocado
+func (m *AppModel) updateForActivePanel(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	switch m.activePanel {
+	case PanelNotes:
 		return m.updateNotesTab(msg)
-	case "tags":
-		return m.updateTagsTab(msg)
-	case "tasks":
+	case PanelTasks:
 		return m.updateTasksTab(msg)
-	case "gallery":
-		return m.updateGalleryTab(msg)
+	case PanelTags:
+		return m.updateTagsTab(msg)
+	case PanelPreview:
+		return m.updatePreviewPanel(msg)
 	}
 	return m, nil
 }
 
-// ─── Pestaña [1] Notas ─────────────────────────────────────────────
+// ─── Panel [1] Notas ───────────────────────────────────────────────
 
 func (m *AppModel) updateNotesTab(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
-	// Si el foco está en el panel derecho (Preview de la nota)
-	if m.activePanel == 1 {
-		switch msg.String() {
-		case "up", "k":
-			if m.previewScrollY > 0 {
-				m.previewScrollY--
-			}
-			return m, nil
-		case "down", "j":
-			m.previewScrollY++
-			return m, nil
-		case "left", "h":
-			if m.previewScrollX > 0 {
-				m.previewScrollX -= 4
-				if m.previewScrollX < 0 {
-					m.previewScrollX = 0
-				}
-			} else {
-				m.activePanel = 0
-			}
-			return m, nil
-		case "right", "l":
-			m.previewScrollX += 4
-			return m, nil
-		case "pageup", "ctrl+u":
-			m.previewScrollY -= 8
-			if m.previewScrollY < 0 {
-				m.previewScrollY = 0
-			}
-			return m, nil
-		case "pagedown", "ctrl+d":
-			m.previewScrollY += 8
-			return m, nil
-		case "g":
-			m.previewScrollY = 0
-			return m, nil
-		case "G":
-			m.previewScrollY = 9999
-			return m, nil
-		case "enter", "e":
-			return m, m.openEditor()
-		case "m":
-			return m, m.openMoveModal()
-		case "c":
-			return m, m.createQuickNote()
-		case "f", "F":
-			return m, m.createQuickFolder()
-		case "d":
-			return m.promptDelete()
-		}
-		return m, nil
-	}
-
-	// Panel izquierdo (Explorador de Notas y Carpetas en Árbol)
 	switch msg.String() {
 	case "up", "k":
 		if m.selectedEntry > 0 {
@@ -650,46 +615,14 @@ func (m *AppModel) updateNotesTab(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, m.pasteImage()
 	case "d":
 		return m.promptDelete()
-	}
-	return m, nil
-}
-
-// ─── Pestaña [2] Categorías/Tags ───────────────────────────────────
-
-func (m *AppModel) updateTagsTab(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
-	switch msg.String() {
-	case "up", "k":
-		if m.selectedTag > 0 {
-			m.selectedTag--
-		}
-		return m, nil
-	case "down", "j":
-		if m.selectedTag < len(m.tags)-1 {
-			m.selectedTag++
-		}
-		return m, nil
-	case "g":
-		m.selectedTag = 0
-		return m, nil
-	case "G":
-		if len(m.tags) > 0 {
-			m.selectedTag = len(m.tags) - 1
-		}
-		return m, nil
-	case "enter", "e":
-		if m.selectedTag < len(m.tags) {
-			tag := m.tags[m.selectedTag]
-			filtered := views.NotesForTag(m.notes, tag.Name)
-			if len(filtered) > 0 {
-				return m, m.openEditorForPath(filtered[0].Path)
-			}
-		}
+	case "l":
+		m.activePanel = PanelPreview
 		return m, nil
 	}
 	return m, nil
 }
 
-// ─── Pestaña [3] Tareas ────────────────────────────────────────────
+// ─── Panel [2] Tareas ──────────────────────────────────────────────
 
 func (m *AppModel) updateTasksTab(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	switch msg.String() {
@@ -730,6 +663,112 @@ func (m *AppModel) updateTasksTab(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.tasks = views.CollectTasks(m.notes, m.taskFilter)
 		m.statusMsg = fmt.Sprintf("%s: %s", i18n.T("Filtro", "Filter"), views.TaskFilterLabel(m.taskFilter))
 		return m, nil
+	case "l":
+		m.activePanel = PanelPreview
+		return m, nil
+	}
+	return m, nil
+}
+
+// ─── Panel [3] Categorías/Tags ─────────────────────────────────────
+
+func (m *AppModel) updateTagsTab(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	switch msg.String() {
+	case "up", "k":
+		if m.selectedTag > 0 {
+			m.selectedTag--
+		}
+		return m, nil
+	case "down", "j":
+		if m.selectedTag < len(m.tags)-1 {
+			m.selectedTag++
+		}
+		return m, nil
+	case "g":
+		m.selectedTag = 0
+		return m, nil
+	case "G":
+		if len(m.tags) > 0 {
+			m.selectedTag = len(m.tags) - 1
+		}
+		return m, nil
+	case "enter", "e":
+		if m.selectedTag < len(m.tags) {
+			tag := m.tags[m.selectedTag]
+			filtered := views.NotesForTag(m.notes, tag.Name)
+			if len(filtered) > 0 {
+				return m, m.openEditorForPath(filtered[0].Path)
+			}
+		}
+		return m, nil
+	case "l":
+		m.activePanel = PanelPreview
+		return m, nil
+	}
+	return m, nil
+}
+
+// ─── Panel [4] Vista Previa ────────────────────────────────────────
+
+func (m *AppModel) updatePreviewPanel(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	switch msg.String() {
+	case "up", "k":
+		if m.previewScrollY > 0 {
+			m.previewScrollY--
+		}
+		return m, nil
+	case "down", "j":
+		m.previewScrollY++
+		return m, nil
+	case "left", "h":
+		if m.previewScrollX > 0 {
+			m.previewScrollX -= 4
+			if m.previewScrollX < 0 {
+				m.previewScrollX = 0
+			}
+		} else {
+			m.activePanel = m.lastLeftPanel
+		}
+		return m, nil
+	case "right", "l":
+		m.previewScrollX += 4
+		return m, nil
+	case "pageup", "ctrl+u":
+		m.previewScrollY -= 8
+		if m.previewScrollY < 0 {
+			m.previewScrollY = 0
+		}
+		return m, nil
+	case "pagedown", "ctrl+d":
+		m.previewScrollY += 8
+		return m, nil
+	case "g":
+		m.previewScrollY = 0
+		return m, nil
+	case "G":
+		m.previewScrollY = 9999
+		return m, nil
+	case "enter", "e":
+		if m.lastLeftPanel == PanelTasks && len(m.tasks) > 0 && m.selectedTask < len(m.tasks) {
+			return m, m.openEditorForPath(m.tasks[m.selectedTask].NotePath)
+		}
+		if m.lastLeftPanel == PanelTags && len(m.tags) > 0 && m.selectedTag < len(m.tags) {
+			filtered := views.NotesForTag(m.notes, m.tags[m.selectedTag].Name)
+			if len(filtered) > 0 {
+				return m, m.openEditorForPath(filtered[0].Path)
+			}
+		}
+		return m, m.openEditor()
+	case "m":
+		return m, m.openMoveModal()
+	case "c":
+		return m, m.createQuickNote()
+	case "f", "F":
+		return m, m.createQuickFolder()
+	case "d":
+		return m.promptDelete()
+	case "p":
+		return m, m.pasteImage()
 	}
 	return m, nil
 }
@@ -810,9 +849,11 @@ func (m *AppModel) handleZoneClick(zone *mouse.Zone) (tea.Model, tea.Cmd) {
 	switch zone.Type {
 	case mouse.ZoneTab:
 		m.activeTab = zone.Index
-		m.activePanel = 0
+		m.activePanel = PanelNotes
+		m.lastLeftPanel = PanelNotes
 	case mouse.ZoneNote:
-		m.activePanel = 0
+		m.activePanel = PanelNotes
+		m.lastLeftPanel = PanelNotes
 		prevSelected := m.selectedEntry
 		m.selectedEntry = zone.Index
 		m.previewScrollY = 0
@@ -830,16 +871,19 @@ func (m *AppModel) handleZoneClick(zone *mouse.Zone) (tea.Model, tea.Cmd) {
 			}
 		}
 	case mouse.ZoneTag:
-		m.activePanel = 0
+		m.activePanel = PanelTags
+		m.lastLeftPanel = PanelTags
 		m.selectedTag = zone.Index
 	case mouse.ZoneTask:
-		m.activePanel = 0
+		m.activePanel = PanelTasks
+		m.lastLeftPanel = PanelTasks
 		if isDoubleClick && m.selectedTask < len(m.tasks) {
 			return m, m.openEditorForPath(m.tasks[m.selectedTask].NotePath)
 		}
 		m.selectedTask = zone.Index
 	case mouse.ZoneGallery:
-		m.activePanel = 0
+		m.activePanel = PanelNotes
+		m.lastLeftPanel = PanelNotes
 		if isDoubleClick && m.selectedImage < len(m.images) {
 			return m, m.openEditorForPath(m.images[m.selectedImage].NotePath)
 		}
@@ -953,10 +997,25 @@ func (m *AppModel) handleActionClick(zone *mouse.Zone) (tea.Model, tea.Cmd) {
 	case "action-trash":
 		return m, m.openTrashModal()
 	case "focus-preview":
-		m.activePanel = 1
+		m.activePanel = PanelPreview
+		return m, nil
+	case "focus-notes":
+		m.activePanel = PanelNotes
+		m.lastLeftPanel = PanelNotes
+		return m, nil
+	case "focus-tasks":
+		m.activePanel = PanelTasks
+		m.lastLeftPanel = PanelTasks
+		return m, nil
+	case "focus-tags":
+		m.activePanel = PanelTags
+		m.lastLeftPanel = PanelTags
 		return m, nil
 	case "focus-list":
-		m.activePanel = 0
+		m.activePanel = m.lastLeftPanel
+		return m, nil
+	case "action-zoom":
+		m.isMaximized = !m.isMaximized
 		return m, nil
 	case "c", "action-new":
 		return m, m.createQuickNote()
@@ -1173,10 +1232,8 @@ func (m *AppModel) toggleConfigItem(item views.SettingsItem, forward bool) {
 
 // calcLayout calcula de forma unificada el ancho disponible, ancho de los paneles y la columna del divisor
 func (m *AppModel) calcLayout() (availableWidth, leftWidth, rightWidth, divX int) {
-	totalDecorations := 4
-	availableWidth = m.width - totalDecorations
-	if availableWidth < 30 {
-		availableWidth = 30
+	if m.width < 30 {
+		m.width = 30
 	}
 
 	ratio := m.sidebarRatio
@@ -1185,29 +1242,64 @@ func (m *AppModel) calcLayout() (availableWidth, leftWidth, rightWidth, divX int
 		m.sidebarRatio = ratio
 	}
 
-	leftWidth = int(float64(availableWidth) * ratio)
+	leftWidth = int(float64(m.width) * ratio)
 	if leftWidth < 16 {
 		leftWidth = 16
 	}
-	if leftWidth > availableWidth-16 {
-		leftWidth = availableWidth - 16
+	if leftWidth > m.width-16 {
+		leftWidth = m.width - 16
 	}
-	rightWidth = availableWidth - leftWidth
-	if rightWidth < 16 {
-		rightWidth = 16
-	}
-
-	divX = leftWidth + 1
+	rightWidth = m.width - leftWidth
+	divX = leftWidth
+	availableWidth = m.width
 	return
 }
 
+// calcStackedHeights calcula las alturas de los 3 paneles apilados de la columna izquierda
+func (m *AppModel) calcStackedHeights(totalH int) (hNotes, hTasks, hTags int) {
+	if totalH < 9 {
+		if totalH >= 6 {
+			return totalH - 3, 3, 0
+		}
+		return totalH, 0, 0
+	}
+	if m.isMaximized {
+		switch m.activePanel {
+		case PanelNotes:
+			return totalH, 0, 0
+		case PanelTasks:
+			return 0, totalH, 0
+		case PanelTags:
+			return 0, 0, totalH
+		}
+	}
+	hNotes = (totalH * 50) / 100
+	hTasks = (totalH * 25) / 100
+	hTags = totalH - hNotes - hTasks
+
+	// Altura mínima de 3 filas para cada panel visible
+	minH := 3
+	if hNotes < minH {
+		hNotes = minH
+	}
+	if hTasks < minH {
+		hTasks = minH
+	}
+	if hTags < minH {
+		hTags = minH
+	}
+	diff := (hNotes + hTasks + hTags) - totalH
+	if diff > 0 {
+		hNotes -= diff
+	}
+	return hNotes, hTasks, hTags
+}
+
 func (m *AppModel) updateSidebarRatioFromMouseX(mouseX int) {
-	availableWidth, _, _, _ := m.calcLayout()
-	if availableWidth < 30 {
+	if m.width < 30 {
 		return
 	}
-	newLeftWidth := mouseX - 1
-	newRatio := float64(newLeftWidth) / float64(availableWidth)
+	newRatio := float64(mouseX) / float64(m.width)
 	if newRatio < 0.15 {
 		newRatio = 0.15
 	}
@@ -1611,82 +1703,133 @@ func (m *AppModel) View() string {
 
 	m.hitTester.Clear()
 
-	// Dimensiones de paneles
-	panelHeight := m.height - 4
-	if panelHeight < 5 {
-		panelHeight = 5
+	// 1. Dimensiones verticales (reserva 1 fila inferior para el footer)
+	totalH := m.height - 1
+	if totalH < 3 {
+		totalH = 3
 	}
 
+	// 2. Dimensiones horizontales
 	_, leftWidth, rightWidth, divX := m.calcLayout()
 
-	// Zonas de fondo base: se registran PRIMERO (menor prioridad al evaluar en orden inverso).
-	// De este modo, cualquier clic sobre una nota, carpeta, tag, tarea o botón toma precedencia inmediata.
+	// 3. Alturas apiladas de la columna izquierda (50% notas, 25% tareas, 25% tags)
+	hNotes, hTasks, hTags := m.calcStackedHeights(totalH)
+
+	// 4. Registro de zonas de fondo base en HitTester (REVERSE ORDER LAYERING - Incidente #04)
+	// Se registran PRIMERO para tener menor prioridad z-index que los ítems internos
 	if m.hitTester != nil && !m.isModalOpen() {
-		m.hitTester.Register("panel-preview", mouse.ZoneAction, divX+2, 1, m.width, m.height-2, 0, "focus-preview")
-		m.hitTester.Register("panel-list", mouse.ZoneAction, 0, 1, divX-1, m.height-2, 0, "focus-list")
-		m.hitTester.Register("panel-divider", mouse.ZoneAction, divX, 1, divX+1, m.height-2, 0, "action-divider-click")
+		if m.isMaximized && m.activePanel == PanelPreview {
+			m.hitTester.Register("panel-preview", mouse.ZoneAction, 0, 0, m.width, totalH-1, 0, "focus-preview")
+		} else {
+			m.hitTester.Register("panel-preview", mouse.ZoneAction, divX, 0, m.width, totalH-1, 0, "focus-preview")
+			m.hitTester.Register("panel-divider", mouse.ZoneAction, divX-1, 0, divX+1, totalH-1, 0, "action-divider-click")
+
+			currY := 0
+			if hNotes > 0 {
+				m.hitTester.Register("panel-notes", mouse.ZoneAction, 0, currY, leftWidth, currY+hNotes-1, 0, "focus-notes")
+				currY += hNotes
+			}
+			if hTasks > 0 {
+				m.hitTester.Register("panel-tasks", mouse.ZoneAction, 0, currY, leftWidth, currY+hTasks-1, 0, "focus-tasks")
+				currY += hTasks
+			}
+			if hTags > 0 {
+				m.hitTester.Register("panel-tags", mouse.ZoneAction, 0, currY, leftWidth, currY+hTags-1, 0, "focus-tags")
+			}
+		}
 	}
 
-	// 1. Renderizar pestañas
-	tabsView := views.RenderTabs(m.activeTab, m.width, m.hitTester, m.visibleTabs)
+	// 5. Renderizado de vistas apiladas en la columna izquierda
+	var leftStacked []string
+	currY := 0
 
-	var leftView, rightView, footerView string
+	if hNotes > 0 {
+		notesView := views.RenderNoteList(m.entries, m.selectedPaths, m.selectedEntry, leftWidth, hNotes, m.activePanel == PanelNotes, m.hitTester, currY)
+		leftStacked = append(leftStacked, notesView)
+		currY += hNotes
+	}
 
-	switch m.currentTabID() {
-	case "notes":
-		leftView = views.RenderNoteList(m.entries, m.selectedPaths, m.selectedEntry, leftWidth, panelHeight, m.activePanel == 0, m.hitTester, 1)
-		var currentNote *storage.Note
-		if len(m.entries) > 0 && m.selectedEntry < len(m.entries) {
-			currentNote = m.entries[m.selectedEntry].Note
-		}
-		rightView = views.RenderPreview(currentNote, rightWidth, panelHeight, m.activePanel == 1, m.kitty, m.previewScrollY, m.previewScrollX)
-		footerView = views.RenderFooter(m.width, m.hitTester, m.height-1, m.statusMsg, m.storage.CountTrash(), views.GetNotesActions())
+	if hTasks > 0 {
+		tasksView := views.RenderTaskList(m.tasks, m.selectedTask, m.taskFilter, leftWidth, hTasks, m.activePanel == PanelTasks, m.hitTester, currY)
+		leftStacked = append(leftStacked, tasksView)
+		currY += hTasks
+	}
 
-	case "tags":
-		leftView = views.RenderTagList(m.tags, m.selectedTag, leftWidth, panelHeight, m.activePanel == 0, m.hitTester, 1)
-		var selectedTagName string
-		if m.selectedTag < len(m.tags) {
-			selectedTagName = m.tags[m.selectedTag].Name
-		}
-		rightView = views.RenderTagPreview(m.notes, selectedTagName, rightWidth, panelHeight, m.activePanel == 1)
-		footerView = views.RenderFooter(m.width, m.hitTester, m.height-1, m.statusMsg, m.storage.CountTrash(), views.GetTagActions())
+	if hTags > 0 {
+		tagsView := views.RenderTagList(m.tags, m.selectedTag, leftWidth, hTags, m.activePanel == PanelTags, m.hitTester, currY)
+		leftStacked = append(leftStacked, tagsView)
+	}
 
-	case "tasks":
-		leftView = views.RenderTaskList(m.tasks, m.selectedTask, m.taskFilter, leftWidth, panelHeight, m.activePanel == 0, m.hitTester, 1)
+	leftColumn := lipgloss.JoinVertical(lipgloss.Left, leftStacked...)
+
+	// 6. Renderizado del panel derecho de Vista Previa (Preview)
+	var rightView string
+	previewW := rightWidth
+	if m.isMaximized && m.activePanel == PanelPreview {
+		previewW = m.width
+	}
+
+	previewContext := m.activePanel
+	if previewContext == PanelPreview {
+		previewContext = m.lastLeftPanel
+	}
+
+	switch previewContext {
+	case PanelTasks:
 		var currentTask *views.FlatTask
 		if len(m.tasks) > 0 && m.selectedTask < len(m.tasks) {
 			currentTask = &m.tasks[m.selectedTask]
 		}
-		rightView = views.RenderTaskPreview(currentTask, rightWidth, panelHeight, m.activePanel == 1)
-		footerView = views.RenderFooter(m.width, m.hitTester, m.height-1, m.statusMsg, m.storage.CountTrash(), views.GetTaskActions())
+		rightView = views.RenderTaskPreview(currentTask, previewW, totalH, m.activePanel == PanelPreview)
 
-	case "gallery":
-		leftView = views.RenderGalleryList(m.images, m.selectedImage, leftWidth, panelHeight, m.activePanel == 0, m.hitTester, 1)
-		var currentImage *views.ImageEntry
-		if len(m.images) > 0 && m.selectedImage < len(m.images) {
-			currentImage = &m.images[m.selectedImage]
+	case PanelTags:
+		var selectedTagName string
+		if m.selectedTag < len(m.tags) {
+			selectedTagName = m.tags[m.selectedTag].Name
 		}
-		rightView = views.RenderGalleryPreview(currentImage, rightWidth, panelHeight, m.activePanel == 1, m.kitty)
-		footerView = views.RenderFooter(m.width, m.hitTester, m.height-1, m.statusMsg, m.storage.CountTrash(), views.GetGalleryActions())
+		rightView = views.RenderTagPreview(m.notes, selectedTagName, previewW, totalH, m.activePanel == PanelPreview)
+
+	default: // PanelNotes
+		var currentNote *storage.Note
+		if len(m.entries) > 0 && m.selectedEntry < len(m.entries) {
+			currentNote = m.entries[m.selectedEntry].Note
+		}
+		rightView = views.RenderPreview(currentNote, previewW, totalH, m.activePanel == PanelPreview, m.kitty, m.previewScrollY, m.previewScrollX)
 	}
 
-	mainView := lipgloss.JoinHorizontal(lipgloss.Top, leftView, rightView)
+	// 7. Combinar columnas
+	var mainView string
+	if m.isMaximized && m.activePanel == PanelPreview {
+		mainView = rightView
+	} else {
+		mainView = lipgloss.JoinHorizontal(lipgloss.Top, leftColumn, rightView)
+	}
 
-	fullView := lipgloss.JoinVertical(lipgloss.Left,
-		tabsView,
-		mainView,
-		footerView,
-	)
+	// 8. Footer contextual dinámico según el panel actualmente enfocado
+	var actions []views.ActionBtn
+	switch m.activePanel {
+	case PanelNotes:
+		actions = views.GetNotesActions()
+	case PanelTasks:
+		actions = views.GetTaskActions()
+	case PanelTags:
+		actions = views.GetTagActions()
+	case PanelPreview:
+		actions = views.GetPreviewActions()
+	}
+
+	footerView := views.RenderFooter(m.width, m.hitTester, m.height-1, m.statusMsg, m.storage.CountTrash(), actions)
+
+	fullView := lipgloss.JoinVertical(lipgloss.Left, mainView, footerView)
 
 	currentBase := fullView
 
-	// Si la papelera está activa, superponerla
+	// 9. Modales superpuestos
 	if m.showTrashModal {
 		trashModal := views.RenderTrashModal(m.trashItems, m.selectedTrashItem, m.width, m.height, m.hitTester)
 		currentBase = views.OverlayLayers(currentBase, trashModal, m.width, m.height, false)
 	}
 
-	// Si la ventana para mover nota está activa, superponerla
 	if m.showMoveModal {
 		noteName := ""
 		if len(m.selectedPaths) > 1 {

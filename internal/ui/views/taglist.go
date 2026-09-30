@@ -58,6 +58,9 @@ func NotesForTag(notes []storage.Note, tag string) []storage.Note {
 func RenderTagList(tags []TagInfo, selectedIndex int, width, height int, active bool, ht *mouse.HitTester, offsetY int) string {
 	var rows []string
 
+	title := i18n.T("[3] Categorías", "[3] Categories")
+	badge := fmt.Sprintf("(%d)", len(tags))
+
 	if len(tags) == 0 {
 		emptyMsg := theme.NormalItem.Copy().Italic(true).Render(i18n.T("  (No hay tags. Usa #tag en tus notas)", "  (No tags yet. Use #tag in your notes)"))
 		rows = append(rows, emptyMsg)
@@ -89,7 +92,7 @@ func RenderTagList(tags []TagInfo, selectedIndex int, width, height int, active 
 		tagBadge := theme.TagBadge.Render(fmt.Sprintf("#%s", tag.Name))
 		countStr := theme.NormalItem.Copy().Foreground(theme.ColorOverlay0).Render(fmt.Sprintf("(%d)", tag.NoteCount))
 
-		contentWidth := width - 2
+		contentWidth := width - 4
 		if contentWidth < 4 {
 			contentWidth = 4
 		}
@@ -98,7 +101,7 @@ func RenderTagList(tags []TagInfo, selectedIndex int, width, height int, active 
 
 		// Registrar zona de clic para esta fila
 		if ht != nil {
-			rowY := offsetY + (i - startIdx) + 1
+			rowY := offsetY + 1 + (i - startIdx)
 			ht.Register(fmt.Sprintf("tag-%d", i), mouse.ZoneTag, 0, rowY, width, rowY, i, tag.Name)
 		}
 
@@ -106,29 +109,20 @@ func RenderTagList(tags []TagInfo, selectedIndex int, width, height int, active 
 	}
 
 	content := strings.Join(rows, "\n")
-
-	borderStyle := theme.InactivePanelBorder
-	if active {
-		borderStyle = theme.ActivePanelBorder
-	}
-
-	return borderStyle.
-		Width(width).
-		Height(height).
-		Render(content)
+	return theme.RenderBoxWithTitle(title, badge, content, width, height, active)
 }
 
 // RenderTagPreview muestra las notas asociadas al tag seleccionado
 func RenderTagPreview(notes []storage.Note, tag string, width, height int, active bool) string {
-	borderStyle := theme.InactivePanelBorder
-	if active {
-		borderStyle = theme.ActivePanelBorder
-	}
+	title := i18n.T("[4] Vista Previa", "[4] Preview")
+	badge := ""
 
 	if tag == "" {
 		empty := theme.NormalItem.Copy().Italic(true).Render(i18n.T("Selecciona un tag para ver sus notas...", "Select a tag to view its notes..."))
-		return borderStyle.Width(width).Height(height).Render(empty)
+		return theme.RenderBoxWithTitle(title, badge, empty, width, height, active)
 	}
+
+	badge = "#" + tag
 
 	filtered := NotesForTag(notes, tag)
 
@@ -168,5 +162,5 @@ func RenderTagPreview(notes []storage.Note, tag string, width, height int, activ
 	}
 
 	content := strings.Join(rows, "\n")
-	return borderStyle.Width(width).Height(height).Render(content)
+	return theme.RenderBoxWithTitle(title, badge, content, width, height, active)
 }

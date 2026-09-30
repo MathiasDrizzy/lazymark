@@ -66,29 +66,9 @@ func TaskFilterLabel(filter TaskFilter) string {
 func RenderTaskList(tasks []FlatTask, selectedIndex int, filter TaskFilter, width, height int, active bool, ht *mouse.HitTester, offsetY int) string {
 	var rows []string
 
-	// Cabecera con filtro actual
 	filterLabel := TaskFilterLabel(filter)
-	pendingCount := 0
-	doneCount := 0
-	for _, t := range tasks {
-		if t.Done {
-			doneCount++
-		} else {
-			pendingCount++
-		}
-	}
-
-	var headerText string
-	switch filter {
-	case TaskFilterPending:
-		headerText = fmt.Sprintf(" ☐ %s (%d)", filterLabel, len(tasks))
-	case TaskFilterDone:
-		headerText = fmt.Sprintf(" ☑ %s (%d)", filterLabel, len(tasks))
-	default:
-		headerText = fmt.Sprintf(" 📋 %s (%d)  ☐ %d  ☑ %d", filterLabel, len(tasks), pendingCount, doneCount)
-	}
-	header := theme.SelectedItem.Copy().Foreground(theme.ColorTeal).Render(headerText)
-	rows = append(rows, header)
+	title := i18n.T("[2] Tareas", "[2] Tasks")
+	badge := fmt.Sprintf("(%d) [%s]", len(tasks), filterLabel)
 
 	if len(tasks) == 0 {
 		var emptyText string
@@ -104,7 +84,7 @@ func RenderTaskList(tasks []FlatTask, selectedIndex int, filter TaskFilter, widt
 		rows = append(rows, emptyMsg)
 	}
 
-	usableHeight := height - 3 // -2 border -1 header
+	usableHeight := height - 2
 	if usableHeight < 1 {
 		usableHeight = 1
 	}
@@ -155,7 +135,7 @@ func RenderTaskList(tasks []FlatTask, selectedIndex int, filter TaskFilter, widt
 		// Nota origen en sutil
 		originLabel := theme.NormalItem.Copy().Foreground(theme.ColorOverlay0).Render(fmt.Sprintf("(%s)", task.NoteTitle))
 
-		contentWidth := width - 2
+		contentWidth := width - 4
 		if contentWidth < 4 {
 			contentWidth = 4
 		}
@@ -164,7 +144,7 @@ func RenderTaskList(tasks []FlatTask, selectedIndex int, filter TaskFilter, widt
 
 		// Registrar zona de clic
 		if ht != nil {
-			rowY := offsetY + (i - startIdx) + 2 // +1 border +1 header
+			rowY := offsetY + 1 + (i - startIdx)
 			ht.Register(fmt.Sprintf("task-%d", i), mouse.ZoneTask, 0, rowY, width, rowY, i, task.NotePath)
 		}
 
@@ -172,29 +152,20 @@ func RenderTaskList(tasks []FlatTask, selectedIndex int, filter TaskFilter, widt
 	}
 
 	content := strings.Join(rows, "\n")
-
-	borderStyle := theme.InactivePanelBorder
-	if active {
-		borderStyle = theme.ActivePanelBorder
-	}
-
-	return borderStyle.
-		Width(width).
-		Height(height).
-		Render(content)
+	return theme.RenderBoxWithTitle(title, badge, content, width, height, active)
 }
 
 // RenderTaskPreview muestra los detalles de la tarea seleccionada y su contexto
 func RenderTaskPreview(task *FlatTask, width, height int, active bool) string {
-	borderStyle := theme.InactivePanelBorder
-	if active {
-		borderStyle = theme.ActivePanelBorder
-	}
+	title := i18n.T("[4] Vista Previa", "[4] Preview")
+	badge := ""
 
 	if task == nil {
 		empty := theme.NormalItem.Copy().Italic(true).Render(i18n.T("Selecciona una tarea para ver detalles...", "Select a task to view details..."))
-		return borderStyle.Width(width).Height(height).Render(empty)
+		return theme.RenderBoxWithTitle(title, badge, empty, width, height, active)
 	}
+
+	badge = task.NoteTitle
 
 	var rows []string
 
@@ -231,5 +202,5 @@ func RenderTaskPreview(task *FlatTask, width, height int, active bool) string {
 	rows = append(rows, tipLabel)
 
 	content := strings.Join(rows, "\n")
-	return borderStyle.Width(width).Height(height).Render(content)
+	return theme.RenderBoxWithTitle(title, badge, content, width, height, active)
 }
