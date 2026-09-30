@@ -92,6 +92,7 @@ type AppModel struct {
 	// Proporción de ancho de paneles (Split ratio)
 	sidebarRatio      float64
 	isDraggingDivider bool
+	hasDraggedDivider bool
 
 	width     int
 	height    int
@@ -229,11 +230,16 @@ func (m *AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 		if msg.Action == tea.MouseActionMotion && m.isDraggingDivider {
+			m.hasDraggedDivider = true
 			m.updateSidebarRatioFromMouseX(msg.X)
 			return m, nil
 		}
 		if msg.Action == tea.MouseActionRelease {
+			if m.isDraggingDivider && !m.hasDraggedDivider {
+				m.cycleSidebarRatio()
+			}
 			m.isDraggingDivider = false
+			m.hasDraggedDivider = false
 			return m, nil
 		}
 		if msg.Action == tea.MouseActionPress {
@@ -255,10 +261,12 @@ func (m *AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					_, _, _, divX := m.calcLayout()
 					if msg.X >= divX-1 && msg.X <= divX+2 && msg.Y >= 1 && msg.Y < m.height-1 {
 						m.isDraggingDivider = true
-						m.updateSidebarRatioFromMouseX(msg.X)
+						m.hasDraggedDivider = false
 						return m, nil
 					}
 				}
+				m.isDraggingDivider = false
+				m.hasDraggedDivider = false
 				if zone, ok := m.hitTester.Check(msg.X, msg.Y); ok {
 					return m.handleZoneClick(zone)
 				}
@@ -804,11 +812,15 @@ func (m *AppModel) handleZoneClick(zone *mouse.Zone) (tea.Model, tea.Cmd) {
 		m.activeTab = zone.Index
 		m.activePanel = 0
 	case mouse.ZoneNote:
+		m.activePanel = 0
+		prevSelected := m.selectedEntry
 		m.selectedEntry = zone.Index
+		m.previewScrollY = 0
+		m.previewScrollX = 0
 		if zone.Index < len(m.entries) {
 			entry := m.entries[zone.Index]
 			if entry.Type == storage.EntryFolder {
-				if isDoubleClick {
+				if isDoubleClick || prevSelected == zone.Index {
 					m.toggleFolder(entry.Path)
 				}
 				return m, nil
@@ -818,13 +830,16 @@ func (m *AppModel) handleZoneClick(zone *mouse.Zone) (tea.Model, tea.Cmd) {
 			}
 		}
 	case mouse.ZoneTag:
+		m.activePanel = 0
 		m.selectedTag = zone.Index
 	case mouse.ZoneTask:
+		m.activePanel = 0
 		if isDoubleClick && m.selectedTask < len(m.tasks) {
 			return m, m.openEditorForPath(m.tasks[m.selectedTask].NotePath)
 		}
 		m.selectedTask = zone.Index
 	case mouse.ZoneGallery:
+		m.activePanel = 0
 		if isDoubleClick && m.selectedImage < len(m.images) {
 			return m, m.openEditorForPath(m.images[m.selectedImage].NotePath)
 		}
@@ -933,21 +948,7 @@ func (m *AppModel) handleActionClick(zone *mouse.Zone) (tea.Model, tea.Cmd) {
 		m.adjustSidebarRatio(0.04)
 		return m, nil
 	case "action-divider-click":
-		switch {
-		case m.sidebarRatio < 0.28:
-			m.sidebarRatio = 0.33
-		case m.sidebarRatio < 0.38:
-			m.sidebarRatio = 0.50
-		case m.sidebarRatio < 0.55:
-			m.sidebarRatio = 0.65
-		case m.sidebarRatio < 0.70:
-			m.sidebarRatio = 0.25
-		default:
-			m.sidebarRatio = 0.33
-		}
-		m.cfg.SidebarRatio = m.sidebarRatio
-		_ = m.cfg.Save()
-		m.statusMsg = fmt.Sprintf(i18n.T("Panel izquierdo: %d%%", "Left panel: %d%%"), int(m.sidebarRatio*100))
+		m.cycleSidebarRatio()
 		return m, nil
 	case "action-trash":
 		return m, m.openTrashModal()
@@ -1226,6 +1227,24 @@ func (m *AppModel) adjustSidebarRatio(delta float64) {
 	}
 	if m.sidebarRatio > 0.75 {
 		m.sidebarRatio = 0.75
+	}
+	m.cfg.SidebarRatio = m.sidebarRatio
+	_ = m.cfg.Save()
+	m.statusMsg = fmt.Sprintf(i18n.T("Panel izquierdo: %d%%", "Left panel: %d%%"), int(m.sidebarRatio*100))
+}
+
+func (m *AppModel) cycleSidebarRatio() {
+	switch {
+	case m.sidebarRatio < 0.28:
+		m.sidebarRatio = 0.33
+	case m.sidebarRatio < 0.38:
+		m.sidebarRatio = 0.50
+	case m.sidebarRatio < 0.55:
+		m.sidebarRatio = 0.65
+	case m.sidebarRatio < 0.70:
+		m.sidebarRatio = 0.25
+	default:
+		m.sidebarRatio = 0.33
 	}
 	m.cfg.SidebarRatio = m.sidebarRatio
 	_ = m.cfg.Save()
@@ -1592,9 +1611,6 @@ func (m *AppModel) View() string {
 
 	m.hitTester.Clear()
 
-	// 1. Renderizar pestañas
-	tabsView := views.RenderTabs(m.activeTab, m.width, m.hitTester, m.visibleTabs)
-
 	// Dimensiones de paneles
 	panelHeight := m.height - 4
 	if panelHeight < 5 {
@@ -1602,6 +1618,17 @@ func (m *AppModel) View() string {
 	}
 
 	_, leftWidth, rightWidth, divX := m.calcLayout()
+
+	// Zonas de fondo base: se registran PRIMERO (menor prioridad al evaluar en orden inverso).
+	// De este modo, cualquier clic sobre una nota, carpeta, tag, tarea o botón toma precedencia inmediata.
+	if m.hitTester != nil && !m.isModalOpen() {
+		m.hitTester.Register("panel-preview", mouse.ZoneAction, divX+2, 1, m.width, m.height-2, 0, "focus-preview")
+		m.hitTester.Register("panel-list", mouse.ZoneAction, 0, 1, divX-1, m.height-2, 0, "focus-list")
+		m.hitTester.Register("panel-divider", mouse.ZoneAction, divX, 1, divX+1, m.height-2, 0, "action-divider-click")
+	}
+
+	// 1. Renderizar pestañas
+	tabsView := views.RenderTabs(m.activeTab, m.width, m.hitTester, m.visibleTabs)
 
 	var leftView, rightView, footerView string
 
@@ -1641,13 +1668,6 @@ func (m *AppModel) View() string {
 		}
 		rightView = views.RenderGalleryPreview(currentImage, rightWidth, panelHeight, m.activePanel == 1, m.kitty)
 		footerView = views.RenderFooter(m.width, m.hitTester, m.height-1, m.statusMsg, m.storage.CountTrash(), views.GetGalleryActions())
-	}
-
-	// Registrar zonas de clic para alternar paneles y divisor
-	if m.hitTester != nil && !m.isModalOpen() {
-		m.hitTester.Register("panel-preview", mouse.ZoneAction, divX+2, 1, m.width, m.height-2, 0, "focus-preview")
-		m.hitTester.Register("panel-list", mouse.ZoneAction, 0, 1, divX-1, m.height-2, 0, "focus-list")
-		m.hitTester.Register("panel-divider", mouse.ZoneAction, divX, 1, divX+1, m.height-2, 0, "action-divider-click")
 	}
 
 	mainView := lipgloss.JoinHorizontal(lipgloss.Top, leftView, rightView)
