@@ -323,3 +323,37 @@ func TestNarrowNoteListNoWrap(t *testing.T) {
 		}
 	}
 }
+
+func TestFullTreeAcrossAllWidths(t *testing.T) {
+	entries := []storage.NoteEntry{
+		{Name: "folder-10", Type: storage.EntryFolder, Depth: 1, Expanded: true, Children: 0},
+		{Name: "folder-11", Type: storage.EntryFolder, Depth: 2, Expanded: true, Children: 0},
+		{Name: "folder-6", Type: storage.EntryFolder, Depth: 2, Expanded: true, Children: 1},
+		{Name: "new-note.md", Type: storage.EntryNote, Depth: 3},
+		{Name: "folder-8", Type: storage.EntryFolder, Depth: 2, Expanded: true, Children: 4},
+		{Name: "folder-13", Type: storage.EntryFolder, Depth: 3, Expanded: true, Children: 0},
+		{Name: "folder-14", Type: storage.EntryFolder, Depth: 3, Expanded: true, Children: 0},
+		{Name: "folder-15", Type: storage.EntryFolder, Depth: 3, Expanded: true, Children: 0},
+		{Name: "new-note-2.md", Type: storage.EntryNote, Depth: 3},
+		{Name: "00-Bienvenida.md", Type: storage.EntryNote, Depth: 3},
+		{Name: "Proyecto-Lazymark.md", Type: storage.EntryNote, Depth: 3},
+	}
+
+	ht := mouse.NewHitTester()
+	// Probar un amplio rango de anchos, desde 10 hasta 35
+	for width := 10; width <= 35; width++ {
+		rendered := RenderNoteList(entries, nil, 0, width, 20, true, ht, 1)
+		lines := strings.Split(rendered, "\n")
+		// Verificar que ninguna línea desborda hacia abajo ni contiene fragmentos partidos
+		for idx, l := range lines {
+			trimmed := strings.TrimSpace(l)
+			// Fragmentos partidos que vio el usuario en sus bugs:
+			if trimmed == "(0)" || trimmed == "(1)" || trimmed == "(4)" ||
+				trimmed == "13" || trimmed == "14" || trimmed == "15" ||
+				trimmed == "note..." || trimmed == "Bienven..." || trimmed == "L..." ||
+				trimmed == "Sep" || trimmed == "Jan" {
+				t.Fatalf("Para width=%d, la línea %d contiene fragmento partido desbordado: %q\nRender completo:\n%s", width, idx, l, rendered)
+			}
+		}
+	}
+}
