@@ -21,7 +21,6 @@ func GetNotesActions() []ActionBtn {
 		{Key: "c", Action: i18n.T("Nueva", "New"), ID: "action-new"},
 		{Key: "e", Action: i18n.T("Editar", "Edit"), ID: "action-edit"},
 		{Key: "d", Action: i18n.T("Borrar", "Delete"), ID: "action-delete"},
-		{Key: "p", Action: i18n.T("Pegar img", "Paste img"), ID: "action-paste"},
 		{Key: "?", Action: i18n.T("Config", "Settings"), ID: "action-config"},
 		{Key: "q", Action: i18n.T("Salir", "Quit"), ID: "action-quit"},
 	}

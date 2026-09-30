@@ -47,15 +47,23 @@ func RenderPreview(note *storage.Note, width, height int, active bool, kittyClie
 		renderedContent = note.Content
 	}
 
-	// Si la nota tiene imágenes adjuntas, añadir badges limpios sin secuencias de escape corruptoras
+	// Renderizar imágenes inline integradas directamente en la nota (estilo Apple Notes)
 	if len(note.Images) > 0 {
-		var imgBadges []string
+		var imgSections []string
 		for _, imgPath := range note.Images {
-			imgBadges = append(imgBadges, theme.TagBadge.Render("🖼️ "+filepath.Base(imgPath)))
+			resolvedImg := imgPath
+			if !filepath.IsAbs(resolvedImg) {
+				resolvedImg = filepath.Join(filepath.Dir(note.Path), resolvedImg)
+			}
+			if ansiImg, err := image.RenderInlineToAnsi(resolvedImg, contentWidth-4, 12); err == nil && ansiImg != "" {
+				caption := theme.NormalItem.Copy().Foreground(theme.ColorPeach).Bold(true).
+					Render(fmt.Sprintf("  🖼️ %s", filepath.Base(imgPath)))
+				imgSections = append(imgSections, fmt.Sprintf("%s\n%s", caption, ansiImg))
+			}
 		}
-		attachmentLabel := theme.NormalItem.Copy().Foreground(theme.ColorOverlay0).Italic(true).
-			Render(i18n.T("Adjuntos (ver en pestaña Galería):", "Attachments (view in Gallery tab):"))
-		renderedContent = fmt.Sprintf("%s\n\n  %s %s", renderedContent, attachmentLabel, strings.Join(imgBadges, " "))
+		if len(imgSections) > 0 {
+			renderedContent = fmt.Sprintf("%s\n\n%s", renderedContent, strings.Join(imgSections, "\n\n"))
+		}
 	}
 
 	return borderStyle.

@@ -165,11 +165,11 @@ func (m *AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.statusMsg = i18n.T("Nota actualizada", "Note updated")
 		}
 
-		// Re-habilitar tracking de ratón explícitamente tras suspender para el editor
+		cmds := []tea.Cmd{tea.ClearScreen}
 		if m.cfg.MouseClick {
-			return m, tea.EnableMouseCellMotion
+			cmds = append(cmds, tea.EnableMouseCellMotion)
 		}
-		return m, nil
+		return m, tea.Batch(cmds...)
 
 	case tea.MouseMsg:
 		if !m.cfg.MouseClick {
@@ -329,7 +329,7 @@ func (m *AppModel) updateNotesTab(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, m.openEditor()
 	case "c":
 		return m, m.createQuickNote()
-	case "p":
+	case "ctrl+v", "p":
 		return m, m.pasteImage()
 	case "d":
 		return m, m.deleteCurrentNote()
@@ -609,7 +609,7 @@ func (m *AppModel) toggleConfigItem(item views.SettingsItem) {
 }
 
 func (m *AppModel) cycleEditor() {
-	editors := views.AvailableEditors
+	editors := config.DetectInstalledEditors()
 	for i, ed := range editors {
 		if strings.Contains(strings.ToLower(m.cfg.Editor), ed) {
 			next := editors[(i+1)%len(editors)]
@@ -619,7 +619,11 @@ func (m *AppModel) cycleEditor() {
 			return
 		}
 	}
-	m.cfg.Editor = editors[0]
+	if len(editors) > 0 {
+		m.cfg.Editor = editors[0]
+	} else {
+		m.cfg.Editor = "micro"
+	}
 	_ = m.cfg.Save()
 	m.statusMsg = fmt.Sprintf("Editor: %s", m.cfg.Editor)
 }

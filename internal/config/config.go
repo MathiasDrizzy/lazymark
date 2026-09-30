@@ -62,7 +62,7 @@ func DefaultConfig(notesDir string) *Config {
 		Language:       "auto",
 		ShowTagsTab:    true,
 		ShowTasksTab:   true,
-		ShowGalleryTab: true,
+		ShowGalleryTab: false,
 	}
 }
 
@@ -114,7 +114,39 @@ func Load(customDir string) (*Config, error) {
 		}
 	}
 
+	// Validar que el editor configurado realmente exista; si no, hacer fallback a uno instalado
+	installed := DetectInstalledEditors()
+	editorValid := false
+	for _, ed := range installed {
+		if strings.Contains(strings.ToLower(cfg.Editor), ed) {
+			editorValid = true
+			break
+		}
+	}
+	if !editorValid && len(installed) > 0 {
+		cfg.Editor = installed[0]
+		_ = cfg.Save()
+	}
+
 	return cfg, nil
+}
+
+// DetectInstalledEditors devuelve la lista de editores presentes en el sistema
+func DetectInstalledEditors() []string {
+	var list []string
+	candidates := []string{"micro", "vim", "nano", "nvim"}
+	for _, c := range candidates {
+		bin := ResolveEditorBin(c)
+		if _, err := os.Stat(bin); err == nil {
+			list = append(list, c)
+		} else if _, err := exec.LookPath(c); err == nil {
+			list = append(list, c)
+		}
+	}
+	if len(list) == 0 {
+		list = append(list, "micro")
+	}
+	return list
 }
 
 // Save persiste la configuración actual en ~/.config/lazymark/config.json

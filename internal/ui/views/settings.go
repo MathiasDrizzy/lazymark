@@ -2,6 +2,7 @@ package views
 
 import (
 	"fmt"
+	"path/filepath"
 	"strings"
 
 	"github.com/MathiasDrizzy/lazymark/internal/config"
@@ -61,7 +62,7 @@ func RenderSettingsModal(cfg *config.Config, selectedItem SettingsItem, totalWid
 		{
 			id:    ItemEditor,
 			label: i18n.T("Editor de Texto", "Text Editor"),
-			val:   cfg.Editor,
+			val:   filepath.Base(cfg.Editor),
 		},
 		{
 			id:    ItemTheme,
