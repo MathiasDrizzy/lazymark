@@ -8,6 +8,7 @@ import (
 	"github.com/MathiasDrizzy/lazymark/internal/storage"
 	"github.com/MathiasDrizzy/lazymark/internal/ui/mouse"
 	"github.com/MathiasDrizzy/lazymark/internal/ui/theme"
+	"github.com/charmbracelet/x/ansi"
 )
 
 // TaskFilter define el tipo de filtro aplicado a las tareas
@@ -155,6 +156,7 @@ func RenderTaskList(tasks []FlatTask, selectedIndex int, filter TaskFilter, widt
 		originLabel := theme.NormalItem.Copy().Foreground(theme.ColorOverlay0).Render(fmt.Sprintf("(%s)", task.NoteTitle))
 
 		rowText := fmt.Sprintf("%s%s %s %s", cursor, checkbox, textStyle, originLabel)
+		rowText = ansi.Truncate(rowText, width, "")
 
 		// Registrar zona de clic
 		if ht != nil {

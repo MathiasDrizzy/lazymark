@@ -54,6 +54,7 @@ type Config struct {
 	ShowTasksTab   bool              `json:"show_tasks_tab"`
 	ShowGalleryTab bool              `json:"show_gallery_tab"`
 	ConfirmDelete  bool              `json:"confirm_delete"`
+	SidebarRatio   float64           `json:"sidebar_ratio"`
 	KeybindingMode string            `json:"keybinding_mode"`
 	Keybindings    KeybindingsConfig `json:"keybindings"`
 	configPath     string            `json:"-"`
@@ -97,6 +98,7 @@ func DefaultConfig(notesDir string) *Config {
 		ShowTasksTab:   true,
 		ShowGalleryTab: false,
 		ConfirmDelete:  true,
+		SidebarRatio:   0.33,
 		KeybindingMode: "dual",
 		Keybindings:    DefaultKeybindings(),
 	}
@@ -177,6 +179,9 @@ func Load(customDir string) (*Config, error) {
 			cfg.ShowTagsTab = diskCfg.ShowTagsTab
 			cfg.ShowTasksTab = diskCfg.ShowTasksTab
 			cfg.ShowGalleryTab = diskCfg.ShowGalleryTab
+			if diskCfg.SidebarRatio >= 0.15 && diskCfg.SidebarRatio <= 0.75 {
+				cfg.SidebarRatio = diskCfg.SidebarRatio
+			}
 			if customDir == "" && diskCfg.NotesDir != "" {
 				cfg.NotesDir = diskCfg.NotesDir
 			}

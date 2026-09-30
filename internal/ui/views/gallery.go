@@ -10,6 +10,7 @@ import (
 	"github.com/MathiasDrizzy/lazymark/internal/storage"
 	"github.com/MathiasDrizzy/lazymark/internal/ui/mouse"
 	"github.com/MathiasDrizzy/lazymark/internal/ui/theme"
+	"github.com/charmbracelet/x/ansi"
 )
 
 // ImageEntry representa una imagen aplanada con contexto de la nota padre
@@ -111,6 +112,7 @@ func RenderGalleryList(images []ImageEntry, selectedIndex int, width, height int
 		noteRef := theme.NormalItem.Copy().Foreground(theme.ColorOverlay0).Render(fmt.Sprintf("(%s)", img.NoteTitle))
 
 		rowText := fmt.Sprintf("%s%s %s %s", cursor, icon, fileStyle, noteRef)
+		rowText = ansi.Truncate(rowText, width, "")
 
 		// Registrar zona de clic
 		if ht != nil {

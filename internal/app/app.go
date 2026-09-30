@@ -89,6 +89,9 @@ type AppModel struct {
 	lastClickTime time.Time
 	lastClickZone string
 
+	// Proporción de ancho de paneles (Split ratio)
+	sidebarRatio float64
+
 	width     int
 	height    int
 	statusMsg string
@@ -126,7 +129,11 @@ func New(cfg *config.Config) (*AppModel, error) {
 		activeTab:       0,
 		activePanel:     0,
 		taskFilter:      views.TaskFilterAll,
+		sidebarRatio:    cfg.SidebarRatio,
 		statusMsg:       fmt.Sprintf(i18n.T("%d notas cargadas", "%d notes loaded"), len(notes)),
+	}
+	if m.sidebarRatio < 0.15 || m.sidebarRatio > 0.75 {
+		m.sidebarRatio = 0.33
 	}
 
 	// Aplicar el tema configurado
@@ -420,6 +427,14 @@ func (m *AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		case "x":
 			return m, m.openTrashModal()
+
+		case "[", "<", "-", "alt+left":
+			m.adjustSidebarRatio(-0.04)
+			return m, nil
+
+		case "]", ">", "+", "=", "alt+right":
+			m.adjustSidebarRatio(0.04)
+			return m, nil
 
 		case "h":
 			if m.cfg.KeybindingMode == "vim" && m.activePanel == 1 {
@@ -886,6 +901,29 @@ func (m *AppModel) handleActionClick(zone *mouse.Zone) (tea.Model, tea.Cmd) {
 	}
 
 	switch payload {
+	case "[", "action-shrink-panel":
+		m.adjustSidebarRatio(-0.04)
+		return m, nil
+	case "]", "action-expand-panel":
+		m.adjustSidebarRatio(0.04)
+		return m, nil
+	case "action-divider-click":
+		switch {
+		case m.sidebarRatio < 0.28:
+			m.sidebarRatio = 0.33
+		case m.sidebarRatio < 0.38:
+			m.sidebarRatio = 0.50
+		case m.sidebarRatio < 0.55:
+			m.sidebarRatio = 0.65
+		case m.sidebarRatio < 0.70:
+			m.sidebarRatio = 0.25
+		default:
+			m.sidebarRatio = 0.33
+		}
+		m.cfg.SidebarRatio = m.sidebarRatio
+		_ = m.cfg.Save()
+		m.statusMsg = fmt.Sprintf(i18n.T("Panel izquierdo: %d%%", "Left panel: %d%%"), int(m.sidebarRatio*100))
+		return m, nil
 	case "action-trash":
 		return m, m.openTrashModal()
 	case "focus-preview":
@@ -1061,6 +1099,23 @@ func (m *AppModel) toggleConfigItem(item views.SettingsItem) {
 		m.refreshVisibleTabs()
 		_ = m.cfg.Save()
 
+	case views.ItemSidebarRatio:
+		switch {
+		case m.cfg.SidebarRatio < 0.28:
+			m.cfg.SidebarRatio = 0.33
+		case m.cfg.SidebarRatio < 0.38:
+			m.cfg.SidebarRatio = 0.45
+		case m.cfg.SidebarRatio < 0.50:
+			m.cfg.SidebarRatio = 0.55
+		case m.cfg.SidebarRatio < 0.65:
+			m.cfg.SidebarRatio = 0.25
+		default:
+			m.cfg.SidebarRatio = 0.33
+		}
+		m.sidebarRatio = m.cfg.SidebarRatio
+		_ = m.cfg.Save()
+		m.statusMsg = fmt.Sprintf("%s: %d%%", i18n.T("Panel izquierdo", "Left panel"), int(m.sidebarRatio*100))
+
 	case views.ItemConfirmDelete:
 		m.cfg.ConfirmDelete = !m.cfg.ConfirmDelete
 		_ = m.cfg.Save()
@@ -1070,6 +1125,19 @@ func (m *AppModel) toggleConfigItem(item views.SettingsItem) {
 		}
 		m.statusMsg = fmt.Sprintf("%s: %s", i18n.T("Confirmar borrado", "Confirm deletion"), state)
 	}
+}
+
+func (m *AppModel) adjustSidebarRatio(delta float64) {
+	m.sidebarRatio += delta
+	if m.sidebarRatio < 0.15 {
+		m.sidebarRatio = 0.15
+	}
+	if m.sidebarRatio > 0.75 {
+		m.sidebarRatio = 0.75
+	}
+	m.cfg.SidebarRatio = m.sidebarRatio
+	_ = m.cfg.Save()
+	m.statusMsg = fmt.Sprintf(i18n.T("Panel izquierdo: %d%%", "Left panel: %d%%"), int(m.sidebarRatio*100))
 }
 
 func (m *AppModel) cycleEditor() {
@@ -1389,16 +1457,26 @@ func (m *AppModel) View() string {
 		availableWidth = 30
 	}
 
-	leftWidth := availableWidth / 3
-	if leftWidth < 20 {
-		leftWidth = 20
+	ratio := m.sidebarRatio
+	if ratio < 0.15 || ratio > 0.75 {
+		ratio = 0.33
+		m.sidebarRatio = ratio
+	}
+
+	leftWidth := int(float64(availableWidth) * ratio)
+	if leftWidth < 16 {
+		leftWidth = 16
+	}
+	if leftWidth > availableWidth-16 {
+		leftWidth = availableWidth - 16
 	}
 	rightWidth := availableWidth - leftWidth
-	if rightWidth < 20 {
-		rightWidth = 20
+	if rightWidth < 16 {
+		rightWidth = 16
 	}
 
 	var leftView, rightView, footerView string
+	divX := leftWidth + 4
 
 	switch m.currentTabID() {
 	case "notes":
@@ -1410,10 +1488,11 @@ func (m *AppModel) View() string {
 		rightView = views.RenderPreview(currentNote, rightWidth, panelHeight, m.activePanel == 1, m.kitty, m.previewScrollY, m.previewScrollX)
 		footerView = views.RenderFooter(m.width, m.hitTester, m.height-1, m.statusMsg, m.storage.CountTrash(), views.GetNotesActions())
 
-		// Registrar zonas de clic para alternar paneles
+		// Registrar zonas de clic para alternar paneles y divisor
 		if m.hitTester != nil {
-			m.hitTester.Register("panel-preview", mouse.ZoneAction, leftWidth+4, 1, m.width, m.height-2, 0, "focus-preview")
-			m.hitTester.Register("panel-list", mouse.ZoneAction, 0, 1, leftWidth+3, m.height-2, 0, "focus-list")
+			m.hitTester.Register("panel-preview", mouse.ZoneAction, divX+1, 1, m.width, m.height-2, 0, "focus-preview")
+			m.hitTester.Register("panel-list", mouse.ZoneAction, 0, 1, divX-2, m.height-2, 0, "focus-list")
+			m.hitTester.Register("panel-divider", mouse.ZoneAction, divX-1, 1, divX, m.height-2, 0, "action-divider-click")
 		}
 
 	case "tags":
@@ -1424,6 +1503,9 @@ func (m *AppModel) View() string {
 		}
 		rightView = views.RenderTagPreview(m.notes, selectedTagName, rightWidth, panelHeight, m.activePanel == 1)
 		footerView = views.RenderFooter(m.width, m.hitTester, m.height-1, m.statusMsg, m.storage.CountTrash(), views.GetTagActions())
+		if m.hitTester != nil {
+			m.hitTester.Register("panel-divider", mouse.ZoneAction, divX-1, 1, divX, m.height-2, 0, "action-divider-click")
+		}
 
 	case "tasks":
 		leftView = views.RenderTaskList(m.tasks, m.selectedTask, m.taskFilter, leftWidth, panelHeight, m.activePanel == 0, m.hitTester, 1)
@@ -1433,6 +1515,9 @@ func (m *AppModel) View() string {
 		}
 		rightView = views.RenderTaskPreview(currentTask, rightWidth, panelHeight, m.activePanel == 1)
 		footerView = views.RenderFooter(m.width, m.hitTester, m.height-1, m.statusMsg, m.storage.CountTrash(), views.GetTaskActions())
+		if m.hitTester != nil {
+			m.hitTester.Register("panel-divider", mouse.ZoneAction, divX-1, 1, divX, m.height-2, 0, "action-divider-click")
+		}
 
 	case "gallery":
 		leftView = views.RenderGalleryList(m.images, m.selectedImage, leftWidth, panelHeight, m.activePanel == 0, m.hitTester, 1)
@@ -1442,6 +1527,9 @@ func (m *AppModel) View() string {
 		}
 		rightView = views.RenderGalleryPreview(currentImage, rightWidth, panelHeight, m.activePanel == 1, m.kitty)
 		footerView = views.RenderFooter(m.width, m.hitTester, m.height-1, m.statusMsg, m.storage.CountTrash(), views.GetGalleryActions())
+		if m.hitTester != nil {
+			m.hitTester.Register("panel-divider", mouse.ZoneAction, divX-1, 1, divX, m.height-2, 0, "action-divider-click")
+		}
 	}
 
 	mainView := lipgloss.JoinHorizontal(lipgloss.Top, leftView, rightView)

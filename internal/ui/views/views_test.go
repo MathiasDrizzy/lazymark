@@ -265,3 +265,36 @@ func TestRenderTrashModal(t *testing.T) {
 		t.Errorf("RenderTrashModal no calculó los días restantes correctamente")
 	}
 }
+
+func TestNarrowNoteListNoWrap(t *testing.T) {
+	notes := []storage.Note{
+		{
+			Title:   "nueva-nota-con-nombre-largo.md",
+			Path:    "/notes/nueva-nota.md",
+			ModTime: time.Now(),
+		},
+	}
+	entries := []storage.NoteEntry{
+		{
+			Name:    "nueva-nota-con-nombre-largo.md",
+			Path:    "/notes/nueva-nota.md",
+			Type:    storage.EntryNote,
+			Note:    &notes[0],
+			Depth:   2,
+			ModTime: time.Now(),
+		},
+	}
+	ht := mouse.NewHitTester()
+	narrowOut := RenderNoteList(entries, nil, 0, 20, 10, true, ht, 1)
+	lines := strings.Split(narrowOut, "\n")
+	for idx, l := range lines {
+		w := ansi.StringWidth(l)
+		if w > 24 {
+			t.Errorf("Línea %d excede el ancho: w=%d, contenido: %q", idx, w, l)
+		}
+		trimmed := strings.TrimSpace(l)
+		if trimmed == "Sep" || trimmed == "Jan" {
+			t.Errorf("Se encontró mes desbordado en su propia línea: %q", l)
+		}
+	}
+}

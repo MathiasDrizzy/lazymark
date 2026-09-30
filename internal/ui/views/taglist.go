@@ -9,6 +9,7 @@ import (
 	"github.com/MathiasDrizzy/lazymark/internal/storage"
 	"github.com/MathiasDrizzy/lazymark/internal/ui/mouse"
 	"github.com/MathiasDrizzy/lazymark/internal/ui/theme"
+	"github.com/charmbracelet/x/ansi"
 )
 
 // TagInfo agrupa un tag con las notas que lo contienen
@@ -89,6 +90,7 @@ func RenderTagList(tags []TagInfo, selectedIndex int, width, height int, active 
 		countStr := theme.NormalItem.Copy().Foreground(theme.ColorOverlay0).Render(fmt.Sprintf("(%d)", tag.NoteCount))
 
 		rowText := fmt.Sprintf("%s%s %s", cursor, tagBadge, countStr)
+		rowText = ansi.Truncate(rowText, width, "")
 
 		// Registrar zona de clic para esta fila
 		if ht != nil {

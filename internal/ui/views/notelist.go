@@ -8,6 +8,7 @@ import (
 	"github.com/MathiasDrizzy/lazymark/internal/storage"
 	"github.com/MathiasDrizzy/lazymark/internal/ui/mouse"
 	"github.com/MathiasDrizzy/lazymark/internal/ui/theme"
+	"github.com/charmbracelet/x/ansi"
 )
 
 // RenderNoteList genera el panel izquierdo con el explorador de notas y carpetas en árbol (Tree View)
@@ -57,11 +58,6 @@ func RenderNoteList(entries []storage.NoteEntry, selectedPaths map[string]bool, 
 		// Sangría proporcional al nivel de profundidad del árbol
 		indent := strings.Repeat("  ", entry.Depth)
 
-		maxNameLen := width - len(indent) - 18
-		if maxNameLen < 5 {
-			maxNameLen = 5
-		}
-
 		var rowText string
 
 		if entry.Type == storage.EntryFolder {
@@ -72,14 +68,31 @@ func RenderNoteList(entries []storage.NoteEntry, selectedPaths map[string]bool, 
 			}
 			arrowStyled := theme.NormalItem.Copy().Foreground(theme.ColorPeach).Render(arrow)
 			folderIcon := theme.NormalItem.Copy().Foreground(theme.ColorPeach).Render(" ")
-			badge := theme.NormalItem.Copy().Foreground(theme.ColorOverlay0).Render(fmt.Sprintf("(%d)", entry.Children))
 
-			name := entry.Name
-			if len(name) > maxNameLen {
-				name = name[:maxNameLen-3] + "..."
+			badge := ""
+			badgeLen := 0
+			// Solo mostrar contador de carpeta si hay ancho suficiente
+			if width-len(indent) >= 18 {
+				cntStr := fmt.Sprintf("(%d)", entry.Children)
+				badge = theme.NormalItem.Copy().Foreground(theme.ColorOverlay0).Render(cntStr)
+				badgeLen = len(cntStr) + 1
 			}
 
-			rowText = fmt.Sprintf("%s%s%s%s%-*s %s", cursor, indent, arrowStyled, folderIcon, maxNameLen, itemStyle.Render(name), badge)
+			availName := width - len(indent) - 7 - badgeLen
+			if availName < 3 {
+				availName = 3
+			}
+
+			name := entry.Name
+			if len(name) > availName {
+				name = name[:availName-1] + "…"
+			}
+
+			if badge != "" {
+				rowText = fmt.Sprintf("%s%s%s%s%-*s %s", cursor, indent, arrowStyled, folderIcon, availName, itemStyle.Render(name), badge)
+			} else {
+				rowText = fmt.Sprintf("%s%s%s%s%s", cursor, indent, arrowStyled, folderIcon, itemStyle.Render(name))
+			}
 		} else {
 			// Indicador de selección múltiple
 			selBox := " "
@@ -89,16 +102,34 @@ func RenderNoteList(entries []storage.NoteEntry, selectedPaths map[string]bool, 
 
 			// Icono Markdown estilo nerd font en color teal
 			noteIcon := theme.NormalItem.Copy().Foreground(theme.ColorTeal).Bold(true).Render("󰍔 ")
-			timeStr := entry.ModTime.Format("02 Jan")
-			badge := theme.NormalItem.Copy().Foreground(theme.ColorOverlay0).Render(timeStr)
 
-			name := entry.Name
-			if len(name) > maxNameLen {
-				name = name[:maxNameLen-3] + "..."
+			badge := ""
+			badgeLen := 0
+			// Solo mostrar fecha si el panel tiene ancho suficiente para que no desborde hacia abajo
+			if width-len(indent) >= 25 {
+				timeStr := entry.ModTime.Format("02 Jan")
+				badge = theme.NormalItem.Copy().Foreground(theme.ColorOverlay0).Render(timeStr)
+				badgeLen = 7 // " " + "02 Jan"
 			}
 
-			rowText = fmt.Sprintf("%s%s %s%s%-*s %s", cursor, indent, selBox, noteIcon, maxNameLen, itemStyle.Render(name), badge)
+			availName := width - len(indent) - 7 - badgeLen
+			if availName < 3 {
+				availName = 3
+			}
+
+			name := entry.Name
+			if len(name) > availName {
+				name = name[:availName-1] + "…"
+			}
+
+			if badge != "" {
+				rowText = fmt.Sprintf("%s%s %s%s%-*s %s", cursor, indent, selBox, noteIcon, availName, itemStyle.Render(name), badge)
+			} else {
+				rowText = fmt.Sprintf("%s%s %s%s%s", cursor, indent, selBox, noteIcon, itemStyle.Render(name))
+			}
 		}
+
+		rowText = ansi.Truncate(rowText, width, "")
 
 		// Registrar zona de clic del mouse
 		if ht != nil {

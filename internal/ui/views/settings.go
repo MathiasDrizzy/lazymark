@@ -22,6 +22,7 @@ const (
 	ItemEditor
 	ItemTheme
 	ItemKeybindings
+	ItemSidebarRatio
 	ItemConfirmDelete
 	ItemTabTags
 	ItemTabTasks
@@ -88,6 +89,17 @@ func RenderSettingsModal(cfg *config.Config, selectedItem SettingsItem, totalWid
 			}(),
 		},
 		{
+			id:    ItemSidebarRatio,
+			label: i18n.T("Ancho Panel Izq", "Sidebar Width"),
+			val: func() string {
+				pct := int(cfg.SidebarRatio * 100)
+				if pct == 0 {
+					pct = 33
+				}
+				return fmt.Sprintf("%d%%", pct)
+			}(),
+		},
+		{
 			id:    ItemConfirmDelete,
 			label: i18n.T("Confirmar Borrado", "Confirm Delete"),
 			val: func() string {
@@ -131,7 +143,7 @@ func RenderSettingsModal(cfg *config.Config, selectedItem SettingsItem, totalWid
 
 	// Ancho total del modal con bordes y padding para cálculo exacto de posición
 	startX := totalWidth - (modalWidth + 4) - 1
-	startY := totalHeight - 17
+	startY := totalHeight - 18
 	if startX < 2 {
 		startX = 2
 	}
