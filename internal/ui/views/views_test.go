@@ -357,3 +357,22 @@ func TestFullTreeAcrossAllWidths(t *testing.T) {
 		}
 	}
 }
+
+func TestRenderPreviewPreservesNewLines(t *testing.T) {
+	note := &storage.Note{
+		Path:    "/notes/test.md",
+		Content: "Linea 1\nLinea 2\nLinea 3\nxxx\nx\nx\nx",
+	}
+
+	rendered := RenderPreview(note, 60, 20, false, nil, 0, 0)
+	clean := ansi.Strip(rendered)
+
+	// Verificar que cada línea no se haya colapsado en un solo renglón
+	if strings.Contains(clean, "xxx x x x") {
+		t.Fatalf("Los saltos de línea se colapsaron indebidamente en una sola línea: %s", clean)
+	}
+
+	if !strings.Contains(clean, "Linea 1") || !strings.Contains(clean, "Linea 2") || !strings.Contains(clean, "Linea 3") {
+		t.Fatalf("Faltan líneas esperadas en el render: %s", clean)
+	}
+}

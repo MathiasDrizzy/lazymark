@@ -36,6 +36,7 @@ func RenderPreview(note *storage.Note, width, height int, active bool, kittyClie
 	renderer, _ := glamour.NewTermRenderer(
 		glamour.WithStandardStyle("dark"),
 		glamour.WithWordWrap(contentWidth),
+		glamour.WithPreservedNewLines(),
 	)
 
 	// Intercalar texto Markdown e imágenes en la posición exacta donde aparecen en el documento
