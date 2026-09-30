@@ -8,6 +8,7 @@ import (
 	"github.com/MathiasDrizzy/lazymark/internal/config"
 	"github.com/MathiasDrizzy/lazymark/internal/storage"
 	"github.com/MathiasDrizzy/lazymark/internal/ui/mouse"
+	"github.com/charmbracelet/x/ansi"
 )
 
 func TestCollectTagsAndNotesForTag(t *testing.T) {
@@ -151,14 +152,17 @@ func TestRenderNoteListAndPreview(t *testing.T) {
 
 func TestRenderConfirmModal(t *testing.T) {
 	ht := mouse.NewHitTester()
-	modal := RenderConfirmModal("⚠️ Eliminar Carpeta", "La carpeta contiene 3 elementos", 80, 24, ht)
+	modal := RenderConfirmModal("󰀪  Eliminar Carpeta con Contenido", "La carpeta 'carpeta-8' contiene 2 elemento(s).\n¿Deseas eliminarla junto con todas sus notas?", 80, 24, ht)
 	if modal == "" {
 		t.Fatalf("RenderConfirmModal devolvió string vacío")
 	}
-	// Comprobar que los botones de confirmación se registraron en el HitTester
-	zoneYes, okYes := ht.Check(20, 12)
-	if okYes && zoneYes.Payload != "confirm-yes" {
-		t.Errorf("zona de confirm-yes incorrecta: %+v", zoneYes)
+	lines := strings.Split(modal, "\n")
+	w0 := ansi.StringWidth(lines[0])
+	for idx, l := range lines {
+		w := ansi.StringWidth(l)
+		if w != w0 {
+			t.Errorf("Línea %d tiene ancho %d, se esperaba %d: %q", idx, w, w0, l)
+		}
 	}
 }
 
@@ -223,5 +227,28 @@ func TestRenderMoveModal(t *testing.T) {
 	modal := RenderMoveModal(folders, "/tmp/notes", 0, "test.md", 80, 24, ht)
 	if modal == "" {
 		t.Fatalf("RenderMoveModal devolvió string vacío")
+	}
+}
+
+func TestRenderTrashModal(t *testing.T) {
+	ht := mouse.NewHitTester()
+	items := []storage.TrashItem{
+		{
+			ID:           "test-item-1",
+			OriginalPath: "/notes/test.md",
+			Name:         "test.md",
+			IsDir:        false,
+			DeletedAt:    time.Now().Add(-2 * 24 * time.Hour),
+		},
+	}
+	modal := RenderTrashModal(items, 0, 80, 24, ht)
+	if modal == "" {
+		t.Fatalf("RenderTrashModal devolvió string vacío")
+	}
+	if !strings.Contains(modal, "test.md") {
+		t.Errorf("RenderTrashModal no contiene el nombre de la nota")
+	}
+	if !strings.Contains(modal, "18d") {
+		t.Errorf("RenderTrashModal no calculó los días restantes correctamente")
 	}
 }

@@ -80,6 +80,11 @@ type AppModel struct {
 	confirmMsg       string
 	confirmAction    func() tea.Cmd
 
+	// Modal de papelera (Trash)
+	showTrashModal    bool
+	trashItems        []storage.TrashItem
+	selectedTrashItem int
+
 	// Control de doble clic con ratón
 	lastClickTime time.Time
 	lastClickZone string
@@ -265,6 +270,65 @@ func (m *AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 
+		// Si la ventana de la papelera está abierta
+		if m.showTrashModal {
+			switch key {
+			case "esc", "q":
+				m.showTrashModal = false
+				return m, nil
+			case "up", "k":
+				if m.selectedTrashItem > 0 {
+					m.selectedTrashItem--
+				} else if len(m.trashItems) > 0 {
+					m.selectedTrashItem = len(m.trashItems) - 1
+				}
+				return m, nil
+			case "down", "j":
+				if m.selectedTrashItem < len(m.trashItems)-1 {
+					m.selectedTrashItem++
+				} else {
+					m.selectedTrashItem = 0
+				}
+				return m, nil
+			case "r":
+				if len(m.trashItems) > 0 && m.selectedTrashItem < len(m.trashItems) {
+					item := m.trashItems[m.selectedTrashItem]
+					if err := m.storage.RestoreTrashItem(item.ID); err != nil {
+						m.statusMsg = fmt.Sprintf("%s: %v", i18n.T("Error al restaurar", "Error restoring"), err)
+					} else {
+						m.statusMsg = fmt.Sprintf("%s: %s", i18n.T("Restaurado", "Restored"), item.Name)
+					}
+					m.trashItems, _ = m.storage.ListTrash()
+					if m.selectedTrashItem >= len(m.trashItems) && len(m.trashItems) > 0 {
+						m.selectedTrashItem = len(m.trashItems) - 1
+					}
+					m.reloadEntries()
+				}
+				return m, nil
+			case "d":
+				if len(m.trashItems) > 0 && m.selectedTrashItem < len(m.trashItems) {
+					item := m.trashItems[m.selectedTrashItem]
+					_ = m.storage.DeleteTrashItem(item.ID)
+					m.trashItems, _ = m.storage.ListTrash()
+					if m.selectedTrashItem >= len(m.trashItems) && len(m.trashItems) > 0 {
+						m.selectedTrashItem = len(m.trashItems) - 1
+					}
+					m.statusMsg = fmt.Sprintf("%s: %s", i18n.T("Eliminado permanente", "Permanently deleted"), item.Name)
+				}
+				return m, nil
+			case "c":
+				count := len(m.trashItems)
+				if count > 0 {
+					_ = m.storage.EmptyTrash()
+					m.trashItems = nil
+					m.selectedTrashItem = 0
+					m.statusMsg = fmt.Sprintf(i18n.T("Papelera vaciada (%d elementos)", "Trash emptied (%d items)"), count)
+				}
+				return m, nil
+			}
+			return m, nil
+		}
+
 		// Si la pantalla de configuración está abierta
 		if m.showSettings {
 			switch key {
@@ -341,6 +405,9 @@ func (m *AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case "?", "F2":
 			m.showSettings = true
 			return m, nil
+
+		case "x":
+			return m, m.openTrashModal()
 
 		case "h":
 			if m.cfg.KeybindingMode == "vim" && m.activePanel == 1 {
@@ -529,7 +596,7 @@ func (m *AppModel) updateNotesTab(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			}
 		}
 		return m, nil
-	case "v", "x":
+	case "v":
 		if len(m.entries) > 0 && m.selectedEntry < len(m.entries) {
 			entry := m.entries[m.selectedEntry]
 			if entry.Type == storage.EntryNote {
@@ -798,7 +865,17 @@ func (m *AppModel) handleActionClick(zone *mouse.Zone) (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 
+	if strings.HasPrefix(payload, "select-trash:") {
+		var idx int
+		if _, err := fmt.Sscanf(payload, "select-trash:%d", &idx); err == nil {
+			m.selectedTrashItem = idx
+		}
+		return m, nil
+	}
+
 	switch payload {
+	case "action-trash":
+		return m, m.openTrashModal()
 	case "focus-preview":
 		m.activePanel = 1
 		return m, nil
@@ -971,6 +1048,15 @@ func (m *AppModel) toggleConfigItem(item views.SettingsItem) {
 		m.cfg.ShowGalleryTab = !m.cfg.ShowGalleryTab
 		m.refreshVisibleTabs()
 		_ = m.cfg.Save()
+
+	case views.ItemConfirmDelete:
+		m.cfg.ConfirmDelete = !m.cfg.ConfirmDelete
+		_ = m.cfg.Save()
+		state := i18n.T("Activa", "Active")
+		if !m.cfg.ConfirmDelete {
+			state = i18n.T("Desactivada", "Disabled")
+		}
+		m.statusMsg = fmt.Sprintf("%s: %s", i18n.T("Confirmar borrado", "Confirm deletion"), state)
 	}
 }
 
@@ -1111,18 +1197,30 @@ func (m *AppModel) promptDelete() (tea.Model, tea.Cmd) {
 	// Caso 1: Hay múltiples notas seleccionadas
 	if len(m.selectedPaths) > 0 {
 		count := len(m.selectedPaths)
-		m.confirmTitle = i18n.T("⚠️  Eliminar Notas Seleccionadas", "⚠️  Delete Selected Notes")
-		m.confirmMsg = fmt.Sprintf(i18n.T("¿Deseas eliminar las %d notas seleccionadas permanentemente?", "Do you want to permanently delete the %d selected notes?"), count)
-		m.confirmAction = func() tea.Cmd {
+		if !m.cfg.ConfirmDelete {
 			deleted := 0
 			for path := range m.selectedPaths {
-				if err := m.storage.DeleteNote(path); err == nil {
+				if _, err := m.storage.MoveToTrash(path); err == nil {
 					deleted++
 				}
 			}
 			m.selectedPaths = make(map[string]bool)
 			m.reloadEntries()
-			m.statusMsg = fmt.Sprintf(i18n.T("%d notas eliminadas", "%d notes deleted"), deleted)
+			m.statusMsg = fmt.Sprintf(i18n.T("%d notas movidas a la papelera", "%d notes moved to trash"), deleted)
+			return m, nil
+		}
+		m.confirmTitle = i18n.T("󰀪  Eliminar Notas Seleccionadas", "󰀪  Delete Selected Notes")
+		m.confirmMsg = fmt.Sprintf(i18n.T("¿Deseas mover las %d notas seleccionadas a la papelera?", "Do you want to move the %d selected notes to trash?"), count)
+		m.confirmAction = func() tea.Cmd {
+			deleted := 0
+			for path := range m.selectedPaths {
+				if _, err := m.storage.MoveToTrash(path); err == nil {
+					deleted++
+				}
+			}
+			m.selectedPaths = make(map[string]bool)
+			m.reloadEntries()
+			m.statusMsg = fmt.Sprintf(i18n.T("%d notas movidas a la papelera", "%d notes moved to trash"), deleted)
 			return nil
 		}
 		m.showConfirmModal = true
@@ -1140,15 +1238,15 @@ func (m *AppModel) promptDelete() (tea.Model, tea.Cmd) {
 	if entry.Type == storage.EntryFolder {
 		itemCount := m.storage.CountFolderItems(entry.Path)
 		if itemCount > 0 {
-			m.confirmTitle = i18n.T("⚠️  Eliminar Carpeta con Contenido", "⚠️  Delete Folder with Items")
-			m.confirmMsg = fmt.Sprintf(i18n.T("La carpeta '%s' contiene %d elemento(s).\n¿Deseas eliminarla junto con todas sus notas?", "The folder '%s' contains %d item(s).\nDo you want to delete it and all its notes?"), entry.Name, itemCount)
+			m.confirmTitle = i18n.T("󰀪  Eliminar Carpeta con Contenido", "󰀪  Delete Folder with Items")
+			m.confirmMsg = fmt.Sprintf(i18n.T("La carpeta '%s' contiene %d elemento(s).\n¿Deseas moverla a la papelera junto con sus notas?", "The folder '%s' contains %d item(s).\nDo you want to move it and all its notes to trash?"), entry.Name, itemCount)
 			folderPath := entry.Path
 			folderName := entry.Name
 			m.confirmAction = func() tea.Cmd {
-				_ = m.storage.DeleteNote(folderPath)
+				_, _ = m.storage.MoveToTrash(folderPath)
 				delete(m.expandedFolders, folderPath)
 				m.reloadEntries()
-				m.statusMsg = fmt.Sprintf(i18n.T("Carpeta '%s' y su contenido eliminados", "Folder '%s' and contents deleted"), folderName)
+				m.statusMsg = fmt.Sprintf(i18n.T("Carpeta '%s' movida a la papelera", "Folder '%s' moved to trash"), folderName)
 				return nil
 			}
 			m.showConfirmModal = true
@@ -1156,19 +1254,48 @@ func (m *AppModel) promptDelete() (tea.Model, tea.Cmd) {
 		}
 
 		// Carpeta vacía
-		_ = m.storage.DeleteNote(entry.Path)
+		_, _ = m.storage.MoveToTrash(entry.Path)
 		delete(m.expandedFolders, entry.Path)
 		m.reloadEntries()
-		m.statusMsg = fmt.Sprintf("%s: %s", i18n.T("Carpeta eliminada", "Folder deleted"), entry.Name)
+		m.statusMsg = fmt.Sprintf("%s: %s", i18n.T("Carpeta movida a la papelera", "Folder moved to trash"), entry.Name)
 		return m, nil
 	}
 
 	// Caso 4: Nota individual
-	_ = m.storage.DeleteNote(entry.Path)
+	if m.cfg.ConfirmDelete {
+		m.confirmTitle = i18n.T("󰀪  Eliminar Nota", "󰀪  Delete Note")
+		m.confirmMsg = fmt.Sprintf(i18n.T("¿Deseas mover '%s' a la papelera?", "Do you want to move '%s' to trash?"), entry.Name)
+		notePath := entry.Path
+		noteName := entry.Name
+		m.confirmAction = func() tea.Cmd {
+			_, _ = m.storage.MoveToTrash(notePath)
+			delete(m.selectedPaths, notePath)
+			m.reloadEntries()
+			m.statusMsg = fmt.Sprintf("%s: %s", i18n.T("Movido a papelera", "Moved to trash"), noteName)
+			return nil
+		}
+		m.showConfirmModal = true
+		return m, nil
+	}
+
+	// Nota individual sin modal de confirmación
+	_, _ = m.storage.MoveToTrash(entry.Path)
 	delete(m.selectedPaths, entry.Path)
 	m.reloadEntries()
-	m.statusMsg = fmt.Sprintf("%s: %s", i18n.T("Eliminado", "Deleted"), entry.Name)
+	m.statusMsg = fmt.Sprintf("%s: %s", i18n.T("Movido a papelera", "Moved to trash"), entry.Name)
 	return m, nil
+}
+
+func (m *AppModel) openTrashModal() tea.Cmd {
+	items, err := m.storage.ListTrash()
+	if err != nil {
+		m.statusMsg = fmt.Sprintf("%s: %v", i18n.T("Error al abrir papelera", "Error opening trash"), err)
+		return nil
+	}
+	m.trashItems = items
+	m.selectedTrashItem = 0
+	m.showTrashModal = true
+	return nil
 }
 
 func (m *AppModel) pasteImage() tea.Cmd {
@@ -1269,7 +1396,7 @@ func (m *AppModel) View() string {
 			currentNote = m.entries[m.selectedEntry].Note
 		}
 		rightView = views.RenderPreview(currentNote, rightWidth, panelHeight, m.activePanel == 1, m.kitty, m.previewScrollY, m.previewScrollX)
-		footerView = views.RenderFooter(m.width, m.hitTester, m.height-1, m.statusMsg, views.GetNotesActions())
+		footerView = views.RenderFooter(m.width, m.hitTester, m.height-1, m.statusMsg, m.storage.CountTrash(), views.GetNotesActions())
 
 		// Registrar zonas de clic para alternar paneles
 		if m.hitTester != nil {
@@ -1284,7 +1411,7 @@ func (m *AppModel) View() string {
 			selectedTagName = m.tags[m.selectedTag].Name
 		}
 		rightView = views.RenderTagPreview(m.notes, selectedTagName, rightWidth, panelHeight, m.activePanel == 1)
-		footerView = views.RenderFooter(m.width, m.hitTester, m.height-1, m.statusMsg, views.GetTagActions())
+		footerView = views.RenderFooter(m.width, m.hitTester, m.height-1, m.statusMsg, m.storage.CountTrash(), views.GetTagActions())
 
 	case "tasks":
 		leftView = views.RenderTaskList(m.tasks, m.selectedTask, m.taskFilter, leftWidth, panelHeight, m.activePanel == 0, m.hitTester, 1)
@@ -1293,7 +1420,7 @@ func (m *AppModel) View() string {
 			currentTask = &m.tasks[m.selectedTask]
 		}
 		rightView = views.RenderTaskPreview(currentTask, rightWidth, panelHeight, m.activePanel == 1)
-		footerView = views.RenderFooter(m.width, m.hitTester, m.height-1, m.statusMsg, views.GetTaskActions())
+		footerView = views.RenderFooter(m.width, m.hitTester, m.height-1, m.statusMsg, m.storage.CountTrash(), views.GetTaskActions())
 
 	case "gallery":
 		leftView = views.RenderGalleryList(m.images, m.selectedImage, leftWidth, panelHeight, m.activePanel == 0, m.hitTester, 1)
@@ -1302,7 +1429,7 @@ func (m *AppModel) View() string {
 			currentImage = &m.images[m.selectedImage]
 		}
 		rightView = views.RenderGalleryPreview(currentImage, rightWidth, panelHeight, m.activePanel == 1, m.kitty)
-		footerView = views.RenderFooter(m.width, m.hitTester, m.height-1, m.statusMsg, views.GetGalleryActions())
+		footerView = views.RenderFooter(m.width, m.hitTester, m.height-1, m.statusMsg, m.storage.CountTrash(), views.GetGalleryActions())
 	}
 
 	mainView := lipgloss.JoinHorizontal(lipgloss.Top, leftView, rightView)
@@ -1312,6 +1439,12 @@ func (m *AppModel) View() string {
 		mainView,
 		footerView,
 	)
+
+	// Si la papelera está activa, mostrar modal superpuesto centrado
+	if m.showTrashModal {
+		trashModal := views.RenderTrashModal(m.trashItems, m.selectedTrashItem, m.width, m.height, m.hitTester)
+		return views.OverlayLayers(fullView, trashModal, m.width, m.height, false)
+	}
 
 	// Si la ventana de confirmación está activa, mostrarla superpuesta centrada
 	if m.showConfirmModal {

@@ -63,10 +63,23 @@ func GetGalleryActions() []ActionBtn {
 	}
 }
 
-// RenderFooter renderiza la barra inferior de atajos y registra los botones clickeables
-func RenderFooter(width int, ht *mouse.HitTester, posY int, statusMsg string, actions ...[]ActionBtn) string {
+// RenderFooter renderiza la barra inferior de atajos con acceso a papelera y registra los botones clickeables
+func RenderFooter(width int, ht *mouse.HitTester, posY int, statusMsg string, trashCount int, actions ...[]ActionBtn) string {
 	var elements []string
 	currentX := 1
+
+	// Botón interactivo de papelera en la esquina inferior izquierda
+	trashLabel := fmt.Sprintf("󰩹 (%d)", trashCount)
+	trashKey := theme.FooterKey.Render("[x]")
+	trashText := theme.NormalItem.Copy().Foreground(theme.ColorPeach).Render(trashLabel)
+	trashBtn := fmt.Sprintf("%s %s", trashKey, trashText)
+	trashBtnLen := 3 + len(trashLabel) + 2
+
+	if ht != nil {
+		ht.Register("action-trash", mouse.ZoneAction, currentX, posY, currentX+trashBtnLen, posY, 0, "action-trash")
+	}
+	currentX += trashBtnLen + 2
+	elements = append(elements, trashBtn)
 
 	actionsToRender := GetNotesActions()
 	if len(actions) > 0 && actions[0] != nil {

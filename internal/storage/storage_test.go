@@ -137,3 +137,52 @@ func TestTreeHierarchyAndFolderOperations(t *testing.T) {
 		t.Fatalf("Se esperaban 2 entries en árbol colapsado, obtenidos %d", len(entriesCollapsed))
 	}
 }
+
+func TestTrashLifecycle(t *testing.T) {
+	tempDir, err := os.MkdirTemp("", "lazymark-trash-test-*")
+	if err != nil {
+		t.Fatalf("Fallo al crear temp dir: %v", err)
+	}
+	defer os.RemoveAll(tempDir)
+
+	s := New(tempDir)
+
+	// Crear una nota
+	note, err := s.CreateNote("Nota Para Papelera")
+	if err != nil {
+		t.Fatalf("Error al crear nota: %v", err)
+	}
+
+	// 1. Mover a papelera
+	item, err := s.MoveToTrash(note.Path)
+	if err != nil {
+		t.Fatalf("Error al mover nota a papelera: %v", err)
+	}
+	if item.Name != "nota-para-papelera.md" {
+		t.Errorf("Nombre esperado 'nota-para-papelera.md', obtenido '%s'", item.Name)
+	}
+
+	// Comprobar que ya no está en la ubicación original
+	if _, err := os.Stat(note.Path); !os.IsNotExist(err) {
+		t.Errorf("El archivo original aún existe después de moverlo a la papelera")
+	}
+
+	// Comprobar contador de papelera
+	count := s.CountTrash()
+	if count != 1 {
+		t.Errorf("Se esperaba 1 elemento en papelera, obtenidos %d", count)
+	}
+
+	// 2. Restaurar elemento
+	if err := s.RestoreTrashItem(item.ID); err != nil {
+		t.Fatalf("Error al restaurar nota: %v", err)
+	}
+	if _, err := os.Stat(note.Path); err != nil {
+		t.Errorf("El archivo restaurado no existe en su ubicación original")
+	}
+
+	// Comprobar que la papelera quedó vacía
+	if s.CountTrash() != 0 {
+		t.Errorf("La papelera debería estar vacía tras restaurar")
+	}
+}

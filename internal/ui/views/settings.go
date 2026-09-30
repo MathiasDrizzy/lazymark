@@ -22,6 +22,7 @@ const (
 	ItemEditor
 	ItemTheme
 	ItemKeybindings
+	ItemConfirmDelete
 	ItemTabTags
 	ItemTabTasks
 	ItemTabGallery
@@ -87,6 +88,16 @@ func RenderSettingsModal(cfg *config.Config, selectedItem SettingsItem, totalWid
 			}(),
 		},
 		{
+			id:    ItemConfirmDelete,
+			label: i18n.T("Confirmar Borrado", "Confirm Delete"),
+			val: func() string {
+				if cfg.ConfirmDelete {
+					return "[✓] " + i18n.T("Activa", "Enabled")
+				}
+				return "[ ] " + i18n.T("Desactivada", "Disabled")
+			}(),
+		},
+		{
 			id:    ItemTabTags,
 			label: i18n.T("Pestaña Categorías", "Tags Tab"),
 			val: func() string {
@@ -120,7 +131,7 @@ func RenderSettingsModal(cfg *config.Config, selectedItem SettingsItem, totalWid
 
 	// Ancho total del modal con bordes y padding para cálculo exacto de posición
 	startX := totalWidth - (modalWidth + 4) - 1
-	startY := totalHeight - 16
+	startY := totalHeight - 17
 	if startX < 2 {
 		startX = 2
 	}
@@ -231,6 +242,12 @@ func OverlayLayers(base, overlay string, totalWidth, totalHeight int, alignBotto
 			if lw < startX {
 				left += strings.Repeat(" ", startX-lw)
 			}
+		}
+
+		// Normalizar ancho del overlay: garantizar que mida exactamente overlayW
+		oLen := ansi.StringWidth(oLine)
+		if oLen < overlayW {
+			oLine = oLine + strings.Repeat(" ", overlayW-oLen)
 		}
 
 		// Recortar derecha con soporte ANSI:

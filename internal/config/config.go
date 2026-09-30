@@ -53,6 +53,7 @@ type Config struct {
 	ShowTagsTab    bool              `json:"show_tags_tab"`
 	ShowTasksTab   bool              `json:"show_tasks_tab"`
 	ShowGalleryTab bool              `json:"show_gallery_tab"`
+	ConfirmDelete  bool              `json:"confirm_delete"`
 	KeybindingMode string            `json:"keybinding_mode"`
 	Keybindings    KeybindingsConfig `json:"keybindings"`
 	configPath     string            `json:"-"`
@@ -95,6 +96,7 @@ func DefaultConfig(notesDir string) *Config {
 		ShowTagsTab:    true,
 		ShowTasksTab:   true,
 		ShowGalleryTab: false,
+		ConfirmDelete:  true,
 		KeybindingMode: "dual",
 		Keybindings:    DefaultKeybindings(),
 	}
