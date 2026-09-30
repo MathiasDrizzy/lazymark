@@ -142,7 +142,7 @@ func TestRenderNoteListAndPreview(t *testing.T) {
 		t.Errorf("RenderNoteList devolvió string vacío")
 	}
 
-	prevOut := RenderPreview(&notes[0], 60, 20, false, nil)
+	prevOut := RenderPreview(&notes[0], 60, 20, false, nil, 0, 0)
 	if prevOut == "" {
 		t.Errorf("RenderPreview devolvió string vacío")
 	}
@@ -180,5 +180,14 @@ func TestRenderCheatsheetAndOverlay(t *testing.T) {
 	over := OverlayLayers(base, sheet, 80, 24, true)
 	if over == "" {
 		t.Fatalf("OverlayLayers devolvió string vacío")
+	}
+}
+
+func TestRenderMoveModal(t *testing.T) {
+	ht := mouse.NewHitTester()
+	folders := []string{"/tmp/notes", "/tmp/notes/sub"}
+	modal := RenderMoveModal(folders, "/tmp/notes", 0, "test.md", 80, 24, ht)
+	if modal == "" {
+		t.Fatalf("RenderMoveModal devolvió string vacío")
 	}
 }

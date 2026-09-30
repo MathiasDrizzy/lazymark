@@ -155,20 +155,20 @@ func RenderGalleryPreview(entry *ImageEntry, width, height int, active bool, kit
 
 	// Metadatos del archivo
 	headerStyle := theme.SelectedItem.Copy().Foreground(theme.ColorBlue)
-	rows = append(rows, headerStyle.Render(fmt.Sprintf("  🖼️ %s", filepath.Base(entry.Path))))
+	rows = append(rows, headerStyle.Render(fmt.Sprintf("  󰋩  %s", filepath.Base(entry.Path))))
 	rows = append(rows, "")
 
 	// Información
-	noteRef := fmt.Sprintf("  📝 %s %s", i18n.T("Nota:", "Note:"), theme.NormalItem.Render(entry.NoteTitle))
+	noteRef := fmt.Sprintf("    %s %s", i18n.T("Nota:", "Note:"), theme.NormalItem.Render(entry.NoteTitle))
 	rows = append(rows, noteRef)
 
-	pathRef := fmt.Sprintf("  📂 %s %s",
+	pathRef := fmt.Sprintf("    %s %s",
 		i18n.T("Ruta:", "Path:"),
 		theme.NormalItem.Copy().Foreground(theme.ColorOverlay0).Render(entry.Path))
 	rows = append(rows, pathRef)
 
 	ext := strings.ToLower(filepath.Ext(entry.Path))
-	formatRef := fmt.Sprintf("  📐 %s %s",
+	formatRef := fmt.Sprintf("    %s %s",
 		i18n.T("Formato:", "Format:"),
 		theme.NormalItem.Copy().Foreground(theme.ColorTeal).Render(strings.ToUpper(strings.TrimPrefix(ext, "."))))
 	rows = append(rows, formatRef)

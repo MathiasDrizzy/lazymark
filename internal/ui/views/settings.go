@@ -9,7 +9,7 @@ import (
 	"github.com/MathiasDrizzy/lazymark/internal/i18n"
 	"github.com/MathiasDrizzy/lazymark/internal/ui/mouse"
 	"github.com/MathiasDrizzy/lazymark/internal/ui/theme"
-	"github.com/charmbracelet/lipgloss"
+	"github.com/charmbracelet/x/ansi"
 )
 
 var AvailableEditors = []string{"micro", "vim", "nvim", "nano"}
@@ -38,7 +38,7 @@ func RenderSettingsModal(cfg *config.Config, selectedItem SettingsItem, totalWid
 		modalWidth = 30
 	}
 
-	title := theme.SelectedItem.Copy().Bold(true).Render(i18n.T("⚙️  Configuración", "⚙️  Settings"))
+	title := theme.SelectedItem.Copy().Bold(true).Render(i18n.T("  Configuración", "  Settings"))
 	divider := theme.NormalItem.Copy().Foreground(theme.ColorSurface1).Render(strings.Repeat("─", modalWidth-4))
 
 	var rows []string
@@ -180,7 +180,7 @@ func RenderSettingsModal(cfg *config.Config, selectedItem SettingsItem, totalWid
 		Render(body)
 }
 
-// OverlayLayers superpone un bloque flotante sobre la vista base preservando el fondo visible
+// OverlayLayers superpone un bloque flotante sobre la vista base preservando el fondo visible sin romper secuencias ANSI
 func OverlayLayers(base, overlay string, totalWidth, totalHeight int, alignBottomRight bool) string {
 	baseLines := strings.Split(base, "\n")
 	overlayLines := strings.Split(overlay, "\n")
@@ -193,7 +193,7 @@ func OverlayLayers(base, overlay string, totalWidth, totalHeight int, alignBotto
 	overlayH := len(overlayLines)
 	overlayW := 0
 	for _, l := range overlayLines {
-		w := lipgloss.Width(l)
+		w := ansi.StringWidth(l)
 		if w > overlayW {
 			overlayW = w
 		}
@@ -221,30 +221,29 @@ func OverlayLayers(base, overlay string, totalWidth, totalHeight int, alignBotto
 		}
 
 		bLine := baseLines[targetY]
-		bLen := lipgloss.Width(bLine)
+		bLen := ansi.StringWidth(bLine)
 		if bLen < totalWidth {
 			bLine = bLine + strings.Repeat(" ", totalWidth-bLen)
 		}
 
-		// Combinar línea: fondo hasta startX + overlay + fondo después de startX+overlayW
+		// Truncar izquierda con soporte ANSI
 		left := ""
 		if startX > 0 {
-			left = lipgloss.NewStyle().MaxWidth(startX).Render(bLine)
-			if lipgloss.Width(left) < startX {
-				left += strings.Repeat(" ", startX-lipgloss.Width(left))
+			left = ansi.Truncate(bLine, startX, "")
+			lw := ansi.StringWidth(left)
+			if lw < startX {
+				left += strings.Repeat(" ", startX-lw)
 			}
 		}
 
+		// Recortar derecha con soporte ANSI
 		right := ""
 		remainingStart := startX + overlayW
 		if remainingStart < totalWidth {
-			rightRunes := []rune(bLine)
-			if len(rightRunes) > remainingStart {
-				right = string(rightRunes[remainingStart:])
-			}
+			right = ansi.CutWc(bLine, remainingStart, totalWidth)
 		}
 
-		baseLines[targetY] = left + oLine + right
+		baseLines[targetY] = left + "\x1b[0m" + oLine + "\x1b[0m" + right
 	}
 
 	return strings.Join(baseLines, "\n")

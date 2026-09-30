@@ -323,3 +323,36 @@ func (s *Storage) CreateFolder(name string) error {
 func (s *Storage) DeleteNote(path string) error {
 	return os.RemoveAll(path)
 }
+
+// MoveNote traslada una nota a la carpeta de destino especificada
+func (s *Storage) MoveNote(notePath, targetFolderPath string) error {
+	baseName := filepath.Base(notePath)
+	destPath := filepath.Join(targetFolderPath, baseName)
+	if destPath == notePath {
+		return nil
+	}
+	return os.Rename(notePath, destPath)
+}
+
+// ListFolders lista todas las carpetas disponibles en BaseDir (incluyendo la raíz)
+func (s *Storage) ListFolders() ([]string, error) {
+	var folders []string
+	folders = append(folders, s.BaseDir)
+
+	err := filepath.Walk(s.BaseDir, func(path string, info os.FileInfo, err error) error {
+		if err != nil {
+			return nil
+		}
+		if info.IsDir() {
+			name := info.Name()
+			if strings.HasPrefix(name, ".") || strings.EqualFold(name, "assets") {
+				return filepath.SkipDir
+			}
+			if path != s.BaseDir {
+				folders = append(folders, path)
+			}
+		}
+		return nil
+	})
+	return folders, err
+}

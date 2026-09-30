@@ -13,18 +13,49 @@ const (
 	AppName = "lazymark"
 )
 
+// KeybindingsConfig almacena los atajos de teclado configurables
+type KeybindingsConfig struct {
+	NewNote     string `json:"new_note"`
+	NewFolder   string `json:"new_folder"`
+	Edit        string `json:"edit"`
+	Delete      string `json:"delete"`
+	Move        string `json:"move"`
+	PasteImage  string `json:"paste_image"`
+	TogglePanel string `json:"toggle_panel"`
+	Settings    string `json:"settings"`
+	Cheatsheet  string `json:"cheatsheet"`
+	Quit        string `json:"quit"`
+}
+
+// DefaultKeybindings devuelve los atajos predeterminados del sistema
+func DefaultKeybindings() KeybindingsConfig {
+	return KeybindingsConfig{
+		NewNote:     "c",
+		NewFolder:   "F",
+		Edit:        "e",
+		Delete:      "d",
+		Move:        "m",
+		PasteImage:  "ctrl+v",
+		TogglePanel: "tab",
+		Settings:    "?",
+		Cheatsheet:  "h",
+		Quit:        "q",
+	}
+}
+
 // Config almacena las preferencias de ejecución de la aplicación.
 type Config struct {
-	NotesDir       string   `json:"notes_dir"`
-	Editor         string   `json:"editor"`
-	MouseClick     bool     `json:"mouse_click"`
-	Theme          string   `json:"theme"`
-	Language       string   `json:"language"`
-	ShowTagsTab    bool     `json:"show_tags_tab"`
-	ShowTasksTab   bool     `json:"show_tasks_tab"`
-	ShowGalleryTab bool     `json:"show_gallery_tab"`
-	KeybindingMode string   `json:"keybinding_mode"`
-	configPath     string   `json:"-"`
+	NotesDir       string            `json:"notes_dir"`
+	Editor         string            `json:"editor"`
+	MouseClick     bool              `json:"mouse_click"`
+	Theme          string            `json:"theme"`
+	Language       string            `json:"language"`
+	ShowTagsTab    bool              `json:"show_tags_tab"`
+	ShowTasksTab   bool              `json:"show_tasks_tab"`
+	ShowGalleryTab bool              `json:"show_gallery_tab"`
+	KeybindingMode string            `json:"keybinding_mode"`
+	Keybindings    KeybindingsConfig `json:"keybindings"`
+	configPath     string            `json:"-"`
 }
 
 func configFilePath() string {
@@ -65,6 +96,7 @@ func DefaultConfig(notesDir string) *Config {
 		ShowTasksTab:   true,
 		ShowGalleryTab: false,
 		KeybindingMode: "dual",
+		Keybindings:    DefaultKeybindings(),
 	}
 }
 
@@ -108,6 +140,36 @@ func Load(customDir string) (*Config, error) {
 			}
 			if diskCfg.KeybindingMode != "" {
 				cfg.KeybindingMode = diskCfg.KeybindingMode
+			}
+			if diskCfg.Keybindings.NewNote != "" {
+				cfg.Keybindings.NewNote = diskCfg.Keybindings.NewNote
+			}
+			if diskCfg.Keybindings.NewFolder != "" {
+				cfg.Keybindings.NewFolder = diskCfg.Keybindings.NewFolder
+			}
+			if diskCfg.Keybindings.Edit != "" {
+				cfg.Keybindings.Edit = diskCfg.Keybindings.Edit
+			}
+			if diskCfg.Keybindings.Delete != "" {
+				cfg.Keybindings.Delete = diskCfg.Keybindings.Delete
+			}
+			if diskCfg.Keybindings.Move != "" {
+				cfg.Keybindings.Move = diskCfg.Keybindings.Move
+			}
+			if diskCfg.Keybindings.PasteImage != "" {
+				cfg.Keybindings.PasteImage = diskCfg.Keybindings.PasteImage
+			}
+			if diskCfg.Keybindings.TogglePanel != "" {
+				cfg.Keybindings.TogglePanel = diskCfg.Keybindings.TogglePanel
+			}
+			if diskCfg.Keybindings.Settings != "" {
+				cfg.Keybindings.Settings = diskCfg.Keybindings.Settings
+			}
+			if diskCfg.Keybindings.Cheatsheet != "" {
+				cfg.Keybindings.Cheatsheet = diskCfg.Keybindings.Cheatsheet
+			}
+			if diskCfg.Keybindings.Quit != "" {
+				cfg.Keybindings.Quit = diskCfg.Keybindings.Quit
 			}
 			cfg.MouseClick = diskCfg.MouseClick
 			cfg.ShowTagsTab = diskCfg.ShowTagsTab

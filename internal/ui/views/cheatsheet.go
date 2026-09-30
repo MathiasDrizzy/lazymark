@@ -15,23 +15,24 @@ func RenderCheatsheetPopup(width, height int) string {
 		boxWidth = width - 4
 	}
 
-	title := theme.SelectedItem.Copy().Bold(true).Render(i18n.T(" ⌨️  Cheatsheet & Atajos ", " ⌨️  Cheatsheet & Keys "))
+	title := theme.SelectedItem.Copy().Bold(true).Render(i18n.T(" 󰌌  Cheatsheet & Atajos ", " 󰌌  Cheatsheet & Keys "))
 	divider := theme.NormalItem.Copy().Foreground(theme.ColorSurface1).Render(strings.Repeat("─", boxWidth-4))
 
 	shortcuts := []struct {
 		key  string
 		desc string
 	}{
-		{"↑/↓  •  j/k", i18n.T("Navegar lista", "Navigate list")},
+		{"↑/↓ • j/k", i18n.T("Navegar lista / Scroll nota", "Navigate list / Scroll note")},
 		{"Enter", i18n.T("Abrir nota / Entrar carpeta", "Open note / Enter folder")},
 		{"c", i18n.T("Crear nueva nota", "Create new note")},
 		{"F", i18n.T("Crear nueva carpeta", "Create new folder")},
+		{"m", i18n.T("Mover nota a carpeta", "Move note to folder")},
 		{"d", i18n.T("Eliminar nota / carpeta", "Delete note / folder")},
 		{"Ctrl+V", i18n.T("Pegar imagen del portapapeles", "Paste clipboard image")},
-		{"Tab  •  h/l", i18n.T("Alternar foco lista/preview", "Toggle list/preview focus")},
+		{"Tab • h/l", i18n.T("Alternar foco lista/preview", "Toggle list/preview focus")},
 		{"1, 2, 3", i18n.T("Cambiar de pestaña", "Switch tabs")},
 		{"?", i18n.T("Configuración en vivo", "Live settings")},
-		{"q  •  Esc", i18n.T("Cerrar / Salir", "Close / Quit")},
+		{"q • Esc", i18n.T("Cerrar / Salir", "Close / Quit")},
 	}
 
 	var rows []string

@@ -11,12 +11,13 @@ import (
 	"github.com/MathiasDrizzy/lazymark/internal/storage"
 	"github.com/MathiasDrizzy/lazymark/internal/ui/theme"
 	"github.com/charmbracelet/glamour"
+	"github.com/charmbracelet/x/ansi"
 )
 
 var mdImageRegex = regexp.MustCompile(`!\[(.*?)\]\((.*?)\)`)
 
-// RenderPreview renderiza el panel derecho de vista previa con Glamour (Markdown) e imágenes inline estilo Apple Notes
-func RenderPreview(note *storage.Note, width, height int, active bool, kittyClient *image.Client) string {
+// RenderPreview renderiza el panel derecho de vista previa con Glamour (Markdown), imágenes inline y scroll vertical/horizontal
+func RenderPreview(note *storage.Note, width, height int, active bool, kittyClient *image.Client, scrollY, scrollX int) string {
 	borderStyle := theme.InactivePanelBorder
 	if active {
 		borderStyle = theme.ActivePanelBorder
@@ -97,8 +98,47 @@ func RenderPreview(note *storage.Note, width, height int, active bool, kittyClie
 		finalContent = content
 	}
 
+	lines := strings.Split(finalContent, "\n")
+	totalLines := len(lines)
+	usableHeight := height - 2
+	if usableHeight < 1 {
+		usableHeight = 1
+	}
+
+	if scrollY > totalLines-usableHeight {
+		scrollY = totalLines - usableHeight
+	}
+	if scrollY < 0 {
+		scrollY = 0
+	}
+
+	endLine := scrollY + usableHeight
+	if endLine > totalLines {
+		endLine = totalLines
+	}
+
+	var visibleLines []string
+	for i := scrollY; i < endLine; i++ {
+		line := lines[i]
+		if scrollX > 0 {
+			line = ansi.CutWc(line, scrollX, scrollX+contentWidth)
+		}
+		visibleLines = append(visibleLines, line)
+	}
+
+	// Si hay más contenido que el alto disponible, añadir indicador de posición
+	if totalLines > usableHeight && len(visibleLines) > 0 {
+		pct := (scrollY * 100) / (totalLines - usableHeight)
+		scrollBadge := theme.NormalItem.Copy().Foreground(theme.ColorPeach).Bold(true).
+			Render(fmt.Sprintf(" [ %d%% • %d/%d]", pct, scrollY+1, totalLines))
+		lastIdx := len(visibleLines) - 1
+		visibleLines[lastIdx] = visibleLines[lastIdx] + " " + scrollBadge
+	}
+
+	viewContent := strings.Join(visibleLines, "\n")
+
 	return borderStyle.
 		Width(width).
 		Height(height).
-		Render(finalContent)
+		Render(viewContent)
 }

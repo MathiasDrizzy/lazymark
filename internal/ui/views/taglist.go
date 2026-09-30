@@ -145,7 +145,7 @@ func RenderTagPreview(notes []storage.Note, tag string, width, height int, activ
 			title = title[:maxLen-3] + "..."
 		}
 
-		noteRow := fmt.Sprintf("  📝 %s  %s",
+		noteRow := fmt.Sprintf("    %s  %s",
 			theme.NormalItem.Render(title),
 			theme.NormalItem.Copy().Foreground(theme.ColorOverlay0).Render(timeStr),
 		)

@@ -61,6 +61,15 @@ type AppModel struct {
 	settingsItem   views.SettingsItem
 	showCheatsheet bool
 
+	// Scroll del preview derecho
+	previewScrollY int
+	previewScrollX int
+
+	// Modal para mover notas a carpetas
+	showMoveModal      bool
+	moveFolders        []string
+	selectedMoveFolder int
+
 	// Control de doble clic con ratón
 	lastClickTime time.Time
 	lastClickZone string
@@ -182,9 +191,24 @@ func (m *AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if !m.cfg.MouseClick {
 			return m, nil
 		}
-		if msg.Action == tea.MouseActionPress && msg.Button == tea.MouseButtonLeft {
-			if zone, ok := m.hitTester.Check(msg.X, msg.Y); ok {
-				return m.handleZoneClick(zone)
+		if msg.Action == tea.MouseActionPress {
+			if msg.Button == tea.MouseButtonWheelUp {
+				if m.previewScrollY > 0 {
+					m.previewScrollY -= 3
+					if m.previewScrollY < 0 {
+						m.previewScrollY = 0
+					}
+				}
+				return m, nil
+			}
+			if msg.Button == tea.MouseButtonWheelDown {
+				m.previewScrollY += 3
+				return m, nil
+			}
+			if msg.Button == tea.MouseButtonLeft {
+				if zone, ok := m.hitTester.Check(msg.X, msg.Y); ok {
+					return m.handleZoneClick(zone)
+				}
 			}
 		}
 
@@ -224,6 +248,32 @@ func (m *AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			case "enter", " ", "left", "right":
 				m.toggleConfigItem(m.settingsItem)
 				return m, nil
+			}
+			return m, nil
+		}
+
+		// Si la ventana para mover nota está abierta
+		if m.showMoveModal {
+			switch key {
+			case "esc", "q":
+				m.showMoveModal = false
+				return m, nil
+			case "up", "k":
+				if m.selectedMoveFolder > 0 {
+					m.selectedMoveFolder--
+				} else if len(m.moveFolders) > 0 {
+					m.selectedMoveFolder = len(m.moveFolders) - 1
+				}
+				return m, nil
+			case "down", "j":
+				if m.selectedMoveFolder < len(m.moveFolders)-1 {
+					m.selectedMoveFolder++
+				} else {
+					m.selectedMoveFolder = 0
+				}
+				return m, nil
+			case "enter":
+				return m, m.confirmMoveNote()
 			}
 			return m, nil
 		}
@@ -331,23 +381,85 @@ func (m *AppModel) updateForCurrentTab(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 // ─── Pestaña [1] Notas ─────────────────────────────────────────────
 
 func (m *AppModel) updateNotesTab(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	// Si el foco está en el panel derecho (Preview de la nota)
+	if m.activePanel == 1 {
+		switch msg.String() {
+		case "up", "k":
+			if m.previewScrollY > 0 {
+				m.previewScrollY--
+			}
+			return m, nil
+		case "down", "j":
+			m.previewScrollY++
+			return m, nil
+		case "left", "h":
+			if m.previewScrollX > 0 {
+				m.previewScrollX -= 4
+				if m.previewScrollX < 0 {
+					m.previewScrollX = 0
+				}
+			} else {
+				m.activePanel = 0
+			}
+			return m, nil
+		case "right", "l":
+			m.previewScrollX += 4
+			return m, nil
+		case "pageup", "ctrl+u":
+			m.previewScrollY -= 8
+			if m.previewScrollY < 0 {
+				m.previewScrollY = 0
+			}
+			return m, nil
+		case "pagedown", "ctrl+d":
+			m.previewScrollY += 8
+			return m, nil
+		case "g":
+			m.previewScrollY = 0
+			return m, nil
+		case "G":
+			m.previewScrollY = 9999
+			return m, nil
+		case "enter", "e":
+			return m, m.openEditor()
+		case "m":
+			return m, m.openMoveModal()
+		case "c":
+			return m, m.createQuickNote()
+		case "F":
+			return m, m.createQuickFolder()
+		case "d":
+			return m, m.deleteCurrentEntry()
+		}
+		return m, nil
+	}
+
+	// Panel izquierdo (Explorador de Notas y Carpetas)
 	switch msg.String() {
 	case "up", "k":
 		if m.selectedEntry > 0 {
 			m.selectedEntry--
+			m.previewScrollY = 0
+			m.previewScrollX = 0
 		}
 		return m, nil
 	case "down", "j":
 		if m.selectedEntry < len(m.entries)-1 {
 			m.selectedEntry++
+			m.previewScrollY = 0
+			m.previewScrollX = 0
 		}
 		return m, nil
 	case "g":
 		m.selectedEntry = 0
+		m.previewScrollY = 0
+		m.previewScrollX = 0
 		return m, nil
 	case "G":
 		if len(m.entries) > 0 {
 			m.selectedEntry = len(m.entries) - 1
+			m.previewScrollY = 0
+			m.previewScrollX = 0
 		}
 		return m, nil
 	case "enter", "e":
@@ -366,10 +478,14 @@ func (m *AppModel) updateNotesTab(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 				m.storage.CurrentSubDir = filepath.Join(m.storage.CurrentSubDir, entry.Name)
 			}
 			m.selectedEntry = 0
+			m.previewScrollY = 0
+			m.previewScrollX = 0
 			m.reloadEntries()
 			return m, nil
 		}
 		return m, m.openEditorForPath(entry.Path)
+	case "m":
+		return m, m.openMoveModal()
 	case "c":
 		return m, m.createQuickNote()
 	case "F":
@@ -590,14 +706,33 @@ func (m *AppModel) handleActionClick(zone *mouse.Zone) (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 
+	if strings.HasPrefix(payload, "move-to:") {
+		var idx int
+		if _, err := fmt.Sscanf(payload, "move-to:%d", &idx); err == nil {
+			m.selectedMoveFolder = idx
+			return m, m.confirmMoveNote()
+		}
+		return m, nil
+	}
+
 	switch payload {
-	case "c":
+	case "focus-preview":
+		m.activePanel = 1
+		return m, nil
+	case "focus-list":
+		m.activePanel = 0
+		return m, nil
+	case "c", "action-new":
 		return m, m.createQuickNote()
-	case "e/Enter", "Enter", "e":
+	case "F", "action-folder":
+		return m, m.createQuickFolder()
+	case "m", "action-move":
+		return m, m.openMoveModal()
+	case "e/Enter", "Enter", "e", "action-edit":
 		return m, m.openEditor()
-	case "d":
+	case "d", "action-delete":
 		return m, m.deleteCurrentEntry()
-	case "p":
+	case "p", "action-paste":
 		return m, m.pasteImage()
 	case "h", "action-cheatsheet":
 		m.showCheatsheet = !m.showCheatsheet
@@ -613,18 +748,61 @@ func (m *AppModel) handleActionClick(zone *mouse.Zone) (tea.Model, tea.Cmd) {
 		m.selectedTask = 0
 		m.tasks = views.CollectTasks(m.notes, m.taskFilter)
 		m.statusMsg = fmt.Sprintf("%s: %s", i18n.T("Filtro", "Filter"), views.TaskFilterLabel(m.taskFilter))
-	case "?":
+	case "?", "action-config":
 		m.showSettings = !m.showSettings
 	case "t":
 		newTheme := theme.NextTheme()
 		m.cfg.Theme = newTheme
 		_ = m.cfg.Save()
 		m.statusMsg = fmt.Sprintf("%s: %s", i18n.T("Tema", "Theme"), newTheme)
-	case "q":
+	case "q", "action-quit":
 		m.quitting = true
 		return m, tea.Quit
 	}
 	return m, nil
+}
+
+func (m *AppModel) openMoveModal() tea.Cmd {
+	if len(m.entries) == 0 {
+		return nil
+	}
+	entry := m.entries[m.selectedEntry]
+	if entry.Type != storage.EntryNote {
+		m.statusMsg = i18n.T("Solo se pueden mover notas", "Only notes can be moved")
+		return nil
+	}
+	folders, err := m.storage.ListFolders()
+	if err != nil || len(folders) == 0 {
+		m.statusMsg = i18n.T("No hay carpetas disponibles", "No folders available")
+		return nil
+	}
+	m.moveFolders = folders
+	m.selectedMoveFolder = 0
+	m.showMoveModal = true
+	return nil
+}
+
+func (m *AppModel) confirmMoveNote() tea.Cmd {
+	if !m.showMoveModal || len(m.entries) == 0 || m.selectedMoveFolder >= len(m.moveFolders) {
+		m.showMoveModal = false
+		return nil
+	}
+	entry := m.entries[m.selectedEntry]
+	targetFolder := m.moveFolders[m.selectedMoveFolder]
+	m.showMoveModal = false
+
+	err := m.storage.MoveNote(entry.Path, targetFolder)
+	if err != nil {
+		m.statusMsg = fmt.Sprintf("%s: %v", i18n.T("Error al mover nota", "Error moving note"), err)
+		return nil
+	}
+	m.reloadEntries()
+	rel, _ := filepath.Rel(m.storage.BaseDir, targetFolder)
+	if rel == "." || rel == "" {
+		rel = "/"
+	}
+	m.statusMsg = fmt.Sprintf("%s '%s'  '%s'", i18n.T("Nota movida", "Note moved"), entry.Name, rel)
+	return nil
 }
 
 func (m *AppModel) clearKittyIfNecessary() {
@@ -835,13 +1013,21 @@ func (m *AppModel) View() string {
 		panelHeight = 5
 	}
 
-	leftWidth := m.width / 3
-	if leftWidth < 25 {
-		leftWidth = 25
+	// Cada panel con RoundedBorder y Padding(0,1) ocupa 4 columnas extra (2 borde + 2 padding)
+	// Para que la suma total sea exactamente m.width sin desbordar ni provocar saltos de línea:
+	totalDecorations := 8
+	availableWidth := m.width - totalDecorations
+	if availableWidth < 30 {
+		availableWidth = 30
 	}
-	rightWidth := m.width - leftWidth - 3
-	if rightWidth < 30 {
-		rightWidth = 30
+
+	leftWidth := availableWidth / 3
+	if leftWidth < 20 {
+		leftWidth = 20
+	}
+	rightWidth := availableWidth - leftWidth
+	if rightWidth < 20 {
+		rightWidth = 20
 	}
 
 	var leftView, rightView, footerView string
@@ -853,8 +1039,14 @@ func (m *AppModel) View() string {
 		if len(m.entries) > 0 && m.selectedEntry < len(m.entries) {
 			currentNote = m.entries[m.selectedEntry].Note
 		}
-		rightView = views.RenderPreview(currentNote, rightWidth, panelHeight, m.activePanel == 1, m.kitty)
+		rightView = views.RenderPreview(currentNote, rightWidth, panelHeight, m.activePanel == 1, m.kitty, m.previewScrollY, m.previewScrollX)
 		footerView = views.RenderFooter(m.width, m.hitTester, m.height-1, m.statusMsg, views.GetNotesActions())
+
+		// Registrar zonas de clic para alternar paneles
+		if m.hitTester != nil {
+			m.hitTester.Register("panel-preview", mouse.ZoneAction, leftWidth+4, 1, m.width, m.height-2, 0, "focus-preview")
+			m.hitTester.Register("panel-list", mouse.ZoneAction, 0, 1, leftWidth+3, m.height-2, 0, "focus-list")
+		}
 
 	case "tags":
 		leftView = views.RenderTagList(m.tags, m.selectedTag, leftWidth, panelHeight, m.activePanel == 0, m.hitTester, 1)
@@ -891,6 +1083,16 @@ func (m *AppModel) View() string {
 		mainView,
 		footerView,
 	)
+
+	// Si la ventana para mover nota está activa, mostrar modal superpuesto
+	if m.showMoveModal {
+		noteName := ""
+		if len(m.entries) > 0 && m.selectedEntry < len(m.entries) {
+			noteName = m.entries[m.selectedEntry].Name
+		}
+		moveModal := views.RenderMoveModal(m.moveFolders, m.storage.BaseDir, m.selectedMoveFolder, noteName, m.width, m.height, m.hitTester)
+		return views.OverlayLayers(fullView, moveModal, m.width, m.height, false)
+	}
 
 	// Si la pantalla de configuración está activa, mostrar modal superpuesto en vivo
 	if m.showSettings {

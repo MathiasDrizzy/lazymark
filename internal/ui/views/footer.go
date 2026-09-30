@@ -18,11 +18,13 @@ type ActionBtn struct {
 // GetNotesActions devuelve los atajos para la pestaña Notas
 func GetNotesActions() []ActionBtn {
 	return []ActionBtn{
-		{Key: "c", Action: i18n.T("Nueva", "New"), ID: "action-new"},
+		{Key: "c", Action: i18n.T("+Nota", "+Note"), ID: "action-new"},
+		{Key: "F", Action: i18n.T("+Carpeta", "+Folder"), ID: "action-folder"},
+		{Key: "m", Action: i18n.T("Mover", "Move"), ID: "action-move"},
 		{Key: "e", Action: i18n.T("Editar", "Edit"), ID: "action-edit"},
 		{Key: "d", Action: i18n.T("Borrar", "Delete"), ID: "action-delete"},
 		{Key: "h", Action: i18n.T("Atajos", "Keys"), ID: "action-cheatsheet"},
-		{Key: "?", Action: i18n.T("Config", "Settings"), ID: "action-config"},
+		{Key: "?", Action: i18n.T("Ajustes", "Settings"), ID: "action-config"},
 		{Key: "q", Action: i18n.T("Salir", "Quit"), ID: "action-quit"},
 	}
 }
@@ -33,7 +35,7 @@ func GetTagActions() []ActionBtn {
 		{Key: "Enter", Action: i18n.T("Ver notas", "View notes"), ID: "action-view-tag"},
 		{Key: "e", Action: i18n.T("Editar", "Edit"), ID: "action-edit"},
 		{Key: "h", Action: i18n.T("Atajos", "Keys"), ID: "action-cheatsheet"},
-		{Key: "?", Action: i18n.T("Config", "Settings"), ID: "action-config"},
+		{Key: "?", Action: i18n.T("Ajustes", "Settings"), ID: "action-config"},
 		{Key: "q", Action: i18n.T("Salir", "Quit"), ID: "action-quit"},
 	}
 }
@@ -44,7 +46,7 @@ func GetTaskActions() []ActionBtn {
 		{Key: "f", Action: i18n.T("Filtro", "Filter"), ID: "action-filter"},
 		{Key: "Enter", Action: i18n.T("Abrir nota", "Open note"), ID: "action-open-task"},
 		{Key: "h", Action: i18n.T("Atajos", "Keys"), ID: "action-cheatsheet"},
-		{Key: "?", Action: i18n.T("Config", "Settings"), ID: "action-config"},
+		{Key: "?", Action: i18n.T("Ajustes", "Settings"), ID: "action-config"},
 		{Key: "q", Action: i18n.T("Salir", "Quit"), ID: "action-quit"},
 	}
 }
@@ -55,7 +57,7 @@ func GetGalleryActions() []ActionBtn {
 		{Key: "p", Action: i18n.T("Pegar img", "Paste img"), ID: "action-paste"},
 		{Key: "Enter", Action: i18n.T("Abrir nota", "Open note"), ID: "action-open-gallery"},
 		{Key: "h", Action: i18n.T("Atajos", "Keys"), ID: "action-cheatsheet"},
-		{Key: "?", Action: i18n.T("Config", "Settings"), ID: "action-config"},
+		{Key: "?", Action: i18n.T("Ajustes", "Settings"), ID: "action-config"},
 		{Key: "q", Action: i18n.T("Salir", "Quit"), ID: "action-quit"},
 	}
 }
@@ -86,7 +88,7 @@ func RenderFooter(width int, ht *mouse.HitTester, posY int, statusMsg string, ac
 	actionsLine := strings.Join(elements, "  ")
 
 	if statusMsg != "" {
-		statusBadge := theme.SelectedItem.Render(fmt.Sprintf(" ℹ️  %s", statusMsg))
+		statusBadge := theme.SelectedItem.Render(fmt.Sprintf("  %s", statusMsg))
 		actionsLine = fmt.Sprintf("%s  |  %s", actionsLine, statusBadge)
 	}
 

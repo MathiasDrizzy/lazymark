@@ -211,7 +211,7 @@ func RenderTaskPreview(task *FlatTask, width, height int, active bool) string {
 	// Nota de origen
 	noteLabel := theme.NormalItem.Copy().Foreground(theme.ColorBlue).Bold(true).Render("  " + i18n.T("Nota:", "Note:"))
 	rows = append(rows, noteLabel)
-	rows = append(rows, fmt.Sprintf("  📝 %s", theme.NormalItem.Render(task.NoteTitle)))
+	rows = append(rows, fmt.Sprintf("    %s", theme.NormalItem.Render(task.NoteTitle)))
 	rows = append(rows, "")
 
 	// Línea en el archivo
