@@ -10,17 +10,18 @@ import (
 	"github.com/MathiasDrizzy/lazymark/internal/ui/theme"
 )
 
-// RenderNoteList genera el panel izquierdo con carpetas y notas, usando iconos NerdFont
-func RenderNoteList(entries []storage.NoteEntry, currentSubDir string, selectedIndex int, width, height int, active bool, ht *mouse.HitTester, offsetY int) string {
+// RenderNoteList genera el panel izquierdo con el explorador de notas y carpetas en árbol (Tree View)
+func RenderNoteList(entries []storage.NoteEntry, selectedPaths map[string]bool, selectedIndex int, width, height int, active bool, ht *mouse.HitTester, offsetY int) string {
 	var rows []string
 
-	// Cabecera con ruta actual
-	headerPath := "notes"
-	if currentSubDir != "" {
-		headerPath = fmt.Sprintf("notes/%s", currentSubDir)
+	// Cabecera con título de sección y contador de selección múltiple
+	headerTitle := "   notes"
+	selCount := len(selectedPaths)
+	if selCount > 0 {
+		selBadge := theme.SelectedItem.Copy().Foreground(theme.ColorTeal).Render(fmt.Sprintf(" [%d %s]", selCount, i18n.T("sel", "sel")))
+		headerTitle += selBadge
 	}
-	header := theme.SelectedItem.Copy().Foreground(theme.ColorPeach).Bold(true).
-		Render(fmt.Sprintf("   %s", headerPath))
+	header := theme.SelectedItem.Copy().Foreground(theme.ColorPeach).Bold(true).Render(headerTitle)
 	rows = append(rows, header)
 
 	if len(entries) == 0 {
@@ -53,36 +54,53 @@ func RenderNoteList(entries []storage.NoteEntry, currentSubDir string, selectedI
 			itemStyle = theme.SelectedItem
 		}
 
-		maxNameLen := width - 15
+		// Sangría proporcional al nivel de profundidad del árbol
+		indent := strings.Repeat("  ", entry.Depth)
+
+		maxNameLen := width - len(indent) - 18
 		if maxNameLen < 5 {
 			maxNameLen = 5
 		}
 
-		var icon string
-		var badge string
-		var name string
+		var rowText string
 
 		if entry.Type == storage.EntryFolder {
-			icon = theme.NormalItem.Copy().Foreground(theme.ColorPeach).Render(" ")
-			name = entry.Name + "/"
-			if entry.Name == ".." {
-				name = ".."
+			// Flecha indicadora de árbol
+			arrow := "▾ "
+			if !entry.Expanded {
+				arrow = "▸ "
 			}
-			badge = theme.NormalItem.Copy().Foreground(theme.ColorOverlay0).Render("[DIR]")
+			arrowStyled := theme.NormalItem.Copy().Foreground(theme.ColorPeach).Render(arrow)
+			folderIcon := theme.NormalItem.Copy().Foreground(theme.ColorPeach).Render(" ")
+			badge := theme.NormalItem.Copy().Foreground(theme.ColorOverlay0).Render(fmt.Sprintf("(%d)", entry.Children))
+
+			name := entry.Name
+			if len(name) > maxNameLen {
+				name = name[:maxNameLen-3] + "..."
+			}
+
+			rowText = fmt.Sprintf("%s%s%s%s%-*s %s", cursor, indent, arrowStyled, folderIcon, maxNameLen, itemStyle.Render(name), badge)
 		} else {
-			icon = theme.NormalItem.Copy().Foreground(theme.ColorSubtext0).Render(" ")
-			name = entry.Name
+			// Indicador de selección múltiple
+			selBox := " "
+			if selectedPaths != nil && selectedPaths[entry.Path] {
+				selBox = theme.SelectedItem.Copy().Foreground(theme.ColorGreen).Bold(true).Render("✓ ")
+			}
+
+			// Icono Markdown estilo nerd font en color teal
+			noteIcon := theme.NormalItem.Copy().Foreground(theme.ColorTeal).Bold(true).Render("󰍔 ")
 			timeStr := entry.ModTime.Format("02 Jan")
-			badge = theme.NormalItem.Copy().Foreground(theme.ColorOverlay0).Render(timeStr)
+			badge := theme.NormalItem.Copy().Foreground(theme.ColorOverlay0).Render(timeStr)
+
+			name := entry.Name
+			if len(name) > maxNameLen {
+				name = name[:maxNameLen-3] + "..."
+			}
+
+			rowText = fmt.Sprintf("%s%s %s%s%-*s %s", cursor, indent, selBox, noteIcon, maxNameLen, itemStyle.Render(name), badge)
 		}
 
-		if len(name) > maxNameLen {
-			name = name[:maxNameLen-3] + "..."
-		}
-
-		rowText := fmt.Sprintf("%s%s%-*s %s", cursor, icon, maxNameLen, itemStyle.Render(name), badge)
-
-		// Registrar zona de clic
+		// Registrar zona de clic del mouse
 		if ht != nil {
 			rowY := offsetY + (i - startIdx) + 2
 			ht.Register(fmt.Sprintf("entry-%d", i), mouse.ZoneNote, 0, rowY, width, rowY, i, entry.Path)

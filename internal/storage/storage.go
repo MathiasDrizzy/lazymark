@@ -45,13 +45,16 @@ const (
 	EntryFolder
 )
 
-// NoteEntry representa una fila en el navegador de notas (carpeta o archivo)
+// NoteEntry representa una fila en el explorador de notas en árbol (carpeta o archivo)
 type NoteEntry struct {
-	Type    EntryType
-	Name    string
-	Path    string
-	Note    *Note
-	ModTime time.Time
+	Type     EntryType
+	Name     string
+	Path     string
+	Note     *Note
+	ModTime  time.Time
+	Depth    int  // Nivel de anidamiento en el árbol (0 para raíz, 1 para hijos, etc.)
+	Expanded bool // Si es carpeta, indica si sus hijos están visibles
+	Children int  // Cantidad de elementos dentro de la carpeta
 }
 
 // Storage maneja el acceso y persistencia en el sistema de archivos
@@ -79,98 +82,128 @@ func (s *Storage) CurrentDir() string {
 	return filepath.Join(s.BaseDir, s.CurrentSubDir)
 }
 
-// ListEntries lista carpetas y notas del subdirectorio actual para el explorador
-func (s *Storage) ListEntries() ([]NoteEntry, error) {
-	currentPath := s.CurrentDir()
-	entries, err := os.ReadDir(currentPath)
+// CountFolderItems cuenta cuántos elementos directos (carpetas o archivos .md) contiene una carpeta
+func (s *Storage) CountFolderItems(folderPath string) int {
+	entries, err := os.ReadDir(folderPath)
 	if err != nil {
-		return nil, err
+		return 0
 	}
-
-	var folderEntries []NoteEntry
-	var noteEntries []NoteEntry
-
-	// Si no estamos en la raíz, agregar opción para subir (..)
-	if s.CurrentSubDir != "" {
-		parentDir := filepath.Dir(s.CurrentSubDir)
-		if parentDir == "." {
-			parentDir = ""
-		}
-		folderEntries = append(folderEntries, NoteEntry{
-			Type: EntryFolder,
-			Name: "..",
-			Path: filepath.Join(s.BaseDir, parentDir),
-		})
-	}
-
-	for _, entry := range entries {
-		name := entry.Name()
+	count := 0
+	for _, e := range entries {
+		name := e.Name()
 		if strings.HasPrefix(name, ".") || strings.EqualFold(name, "assets") {
 			continue
 		}
+		if e.IsDir() || strings.HasSuffix(strings.ToLower(name), ".md") {
+			count++
+		}
+	}
+	return count
+}
 
-		fullPath := filepath.Join(currentPath, name)
-		info, err := entry.Info()
+// ListTreeEntries devuelve la estructura jerárquica de carpetas y notas en árbol, respetando carpetas expandidas
+func (s *Storage) ListTreeEntries(expanded map[string]bool) ([]NoteEntry, error) {
+	var result []NoteEntry
+
+	var walk func(dirPath string, depth int) error
+	walk = func(dirPath string, depth int) error {
+		dirEntries, err := os.ReadDir(dirPath)
 		if err != nil {
-			continue
+			return err
 		}
 
-		if entry.IsDir() {
-			folderEntries = append(folderEntries, NoteEntry{
-				Type:    EntryFolder,
-				Name:    name,
-				Path:    fullPath,
-				ModTime: info.ModTime(),
-			})
-		} else if strings.HasSuffix(strings.ToLower(name), ".md") {
-			contentBytes, err := os.ReadFile(fullPath)
+		var folderEntries []NoteEntry
+		var noteEntries []NoteEntry
+
+		for _, de := range dirEntries {
+			name := de.Name()
+			if strings.HasPrefix(name, ".") || strings.EqualFold(name, "assets") {
+				continue
+			}
+
+			fullPath := filepath.Join(dirPath, name)
+			info, err := de.Info()
 			if err != nil {
 				continue
 			}
-			content := string(contentBytes)
-			title := strings.TrimSuffix(name, filepath.Ext(name))
-			title = strings.ReplaceAll(title, "-", " ")
-			title = strings.ReplaceAll(title, "_", " ")
 
-			note := Note{
-				ID:      name,
-				Title:   title,
-				Path:    fullPath,
-				Content: content,
-				ModTime: info.ModTime(),
-				Size:    info.Size(),
+			if de.IsDir() {
+				childrenCount := s.CountFolderItems(fullPath)
+				isExpanded := true
+				if expanded != nil {
+					if val, ok := expanded[fullPath]; ok {
+						isExpanded = val
+					}
+				}
+
+				folderEntries = append(folderEntries, NoteEntry{
+					Type:     EntryFolder,
+					Name:     name,
+					Path:     fullPath,
+					ModTime:  info.ModTime(),
+					Depth:    depth,
+					Expanded: isExpanded,
+					Children: childrenCount,
+				})
+			} else if strings.HasSuffix(strings.ToLower(name), ".md") {
+				contentBytes, err := os.ReadFile(fullPath)
+				if err != nil {
+					continue
+				}
+				content := string(contentBytes)
+				title := strings.TrimSuffix(name, filepath.Ext(name))
+				title = strings.ReplaceAll(title, "-", " ")
+				title = strings.ReplaceAll(title, "_", " ")
+
+				note := Note{
+					ID:      name,
+					Title:   title,
+					Path:    fullPath,
+					Content: content,
+					ModTime: info.ModTime(),
+					Size:    info.Size(),
+				}
+				note.Tags = s.extractTags(content)
+				note.Tasks = s.extractTasks(note.Title, fullPath, content)
+				note.Images = s.extractImages(content)
+
+				noteEntries = append(noteEntries, NoteEntry{
+					Type:    EntryNote,
+					Name:    name,
+					Path:    fullPath,
+					Note:    &note,
+					ModTime: info.ModTime(),
+					Depth:   depth,
+				})
 			}
-			note.Tags = s.extractTags(content)
-			note.Tasks = s.extractTasks(note.Title, fullPath, content)
-			note.Images = s.extractImages(content)
-
-			noteEntries = append(noteEntries, NoteEntry{
-				Type:    EntryNote,
-				Name:    title,
-				Path:    fullPath,
-				Note:    &note,
-				ModTime: info.ModTime(),
-			})
 		}
-	}
 
-	// Ordenar carpetas alfabéticamente (manteniendo '..' primero)
-	if len(folderEntries) > 1 {
-		start := 0
-		if s.CurrentSubDir != "" {
-			start = 1
-		}
-		sort.Slice(folderEntries[start:], func(i, j int) bool {
-			return strings.ToLower(folderEntries[start+i].Name) < strings.ToLower(folderEntries[start+j].Name)
+		sort.Slice(folderEntries, func(i, j int) bool {
+			return strings.ToLower(folderEntries[i].Name) < strings.ToLower(folderEntries[j].Name)
 		})
+
+		sort.Slice(noteEntries, func(i, j int) bool {
+			return strings.ToLower(noteEntries[i].Name) < strings.ToLower(noteEntries[j].Name)
+		})
+
+		for _, f := range folderEntries {
+			result = append(result, f)
+			if f.Expanded {
+				_ = walk(f.Path, depth+1)
+			}
+		}
+
+		result = append(result, noteEntries...)
+		return nil
 	}
 
-	// Ordenar notas por fecha de modificación descendente
-	sort.Slice(noteEntries, func(i, j int) bool {
-		return noteEntries[i].ModTime.After(noteEntries[j].ModTime)
-	})
+	err := walk(s.BaseDir, 0)
+	return result, err
+}
 
-	return append(folderEntries, noteEntries...), nil
+// ListEntries lista carpetas y notas en árbol para el explorador
+func (s *Storage) ListEntries() ([]NoteEntry, error) {
+	return s.ListTreeEntries(nil)
 }
 
 // ListNotes escanea recursivamente todas las notas .md del BaseDir para tags y tareas globales
@@ -281,13 +314,16 @@ func (s *Storage) extractImages(content string) []string {
 	return images
 }
 
-// CreateNote crea una nueva nota en blanco o con plantilla en el directorio actual
-func (s *Storage) CreateNote(title string) (*Note, error) {
+// CreateNoteInDir crea una nueva nota en blanco en el directorio indicado
+func (s *Storage) CreateNoteInDir(dir, title string) (*Note, error) {
+	if dir == "" {
+		dir = s.BaseDir
+	}
 	cleanName := strings.ToLower(title)
 	cleanName = strings.ReplaceAll(cleanName, " ", "-")
 	cleanName = unsafeChars.ReplaceAllString(cleanName, "")
 	fileName := fmt.Sprintf("%s.md", cleanName)
-	fullPath := filepath.Join(s.CurrentDir(), fileName)
+	fullPath := filepath.Join(dir, fileName)
 
 	if _, err := os.Stat(fullPath); err == nil {
 		return nil, fmt.Errorf("ya existe una nota con el nombre: %s", fileName)
@@ -310,13 +346,27 @@ func (s *Storage) CreateNote(title string) (*Note, error) {
 	}, nil
 }
 
-// CreateFolder crea una subcarpeta dentro del directorio actual
-func (s *Storage) CreateFolder(name string) error {
+// CreateNote crea una nueva nota en blanco o con plantilla en el directorio actual o raíz
+func (s *Storage) CreateNote(title string) (*Note, error) {
+	return s.CreateNoteInDir(s.CurrentDir(), title)
+}
+
+// CreateFolderInDir crea una subcarpeta dentro del directorio padre indicado
+func (s *Storage) CreateFolderInDir(parentDir, name string) (string, error) {
+	if parentDir == "" {
+		parentDir = s.BaseDir
+	}
 	cleanName := strings.ToLower(name)
 	cleanName = strings.ReplaceAll(cleanName, " ", "-")
 	cleanName = unsafeChars.ReplaceAllString(cleanName, "")
-	fullPath := filepath.Join(s.CurrentDir(), cleanName)
-	return os.MkdirAll(fullPath, 0755)
+	fullPath := filepath.Join(parentDir, cleanName)
+	return fullPath, os.MkdirAll(fullPath, 0755)
+}
+
+// CreateFolder crea una subcarpeta dentro del directorio actual o raíz
+func (s *Storage) CreateFolder(name string) error {
+	_, err := s.CreateFolderInDir(s.CurrentDir(), name)
+	return err
 }
 
 // DeleteNote elimina una nota o carpeta del disco

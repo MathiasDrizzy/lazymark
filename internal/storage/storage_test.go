@@ -73,3 +73,67 @@ func TestStorageLifecycle(t *testing.T) {
 		t.Errorf("Se esperaba 1 nota restante, hay %d", len(remaining))
 	}
 }
+
+func TestTreeHierarchyAndFolderOperations(t *testing.T) {
+	tempDir, err := os.MkdirTemp("", "lazymark-tree-test-*")
+	if err != nil {
+		t.Fatalf("Fallo al crear temp dir: %v", err)
+	}
+	defer os.RemoveAll(tempDir)
+
+	s := New(tempDir)
+
+	// Crear carpeta docs y notas dentro
+	folderPath, err := s.CreateFolderInDir(tempDir, "docs")
+	if err != nil {
+		t.Fatalf("Error al crear carpeta docs: %v", err)
+	}
+
+	_, err = s.CreateNoteInDir(folderPath, "DEVELOPMENT_PLAN")
+	if err != nil {
+		t.Fatalf("Error al crear nota en docs: %v", err)
+	}
+	_, err = s.CreateNoteInDir(folderPath, "STATUS_AND_TODO")
+	if err != nil {
+		t.Fatalf("Error al crear segunda nota en docs: %v", err)
+	}
+
+	// Crear nota en raíz
+	_, err = s.CreateNoteInDir(tempDir, "Root Note")
+	if err != nil {
+		t.Fatalf("Error al crear nota en raíz: %v", err)
+	}
+
+	// 1. Probar conteo de elementos en carpeta
+	count := s.CountFolderItems(folderPath)
+	if count != 2 {
+		t.Errorf("Se esperaban 2 elementos en 'docs', obtenidos %d", count)
+	}
+
+	// 2. Probar ListTreeEntries con docs expandida (por defecto)
+	entriesExpanded, err := s.ListTreeEntries(nil)
+	if err != nil {
+		t.Fatalf("Error al listar árbol expandido: %v", err)
+	}
+	// Deben ser: docs (depth 0), 2 notas hijas (depth 1), 1 nota en raíz (depth 0) = 4 entries
+	if len(entriesExpanded) != 4 {
+		t.Fatalf("Se esperaban 4 entries en árbol expandido, obtenidos %d", len(entriesExpanded))
+	}
+	if entriesExpanded[0].Name != "docs" || entriesExpanded[0].Depth != 0 {
+		t.Errorf("La primera entry debería ser la carpeta 'docs' con depth 0, obtenida: %+v", entriesExpanded[0])
+	}
+	if entriesExpanded[1].Depth != 1 || entriesExpanded[2].Depth != 1 {
+		t.Errorf("Las notas hijas en docs deben tener depth 1")
+	}
+
+	// 3. Probar ListTreeEntries con docs colapsada
+	expandedMap := map[string]bool{folderPath: false}
+	entriesCollapsed, err := s.ListTreeEntries(expandedMap)
+	if err != nil {
+		t.Fatalf("Error al listar árbol colapsado: %v", err)
+	}
+	// Deben ser: docs (depth 0, colapsada) y Root Note (depth 0) = 2 entries
+	if len(entriesCollapsed) != 2 {
+		t.Fatalf("Se esperaban 2 entries en árbol colapsado, obtenidos %d", len(entriesCollapsed))
+	}
+}

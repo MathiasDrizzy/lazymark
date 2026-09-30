@@ -23,11 +23,12 @@ func RenderCheatsheetPopup(width, height int) string {
 		desc string
 	}{
 		{"↑/↓ • j/k", i18n.T("Navegar lista / Scroll nota", "Navigate list / Scroll note")},
-		{"Enter", i18n.T("Abrir nota / Entrar carpeta", "Open note / Enter folder")},
+		{"Enter", i18n.T("Abrir nota / Toggle carpeta", "Open note / Toggle folder")},
 		{"c", i18n.T("Crear nueva nota", "Create new note")},
 		{"F", i18n.T("Crear nueva carpeta", "Create new folder")},
-		{"m", i18n.T("Mover nota a carpeta", "Move note to folder")},
-		{"d", i18n.T("Eliminar nota / carpeta", "Delete note / folder")},
+		{"v", i18n.T("Seleccionar / multi-selección", "Multi-select note")},
+		{"m", i18n.T("Mover nota(s) a carpeta", "Move note(s) to folder")},
+		{"d", i18n.T("Eliminar nota(s) / carpeta", "Delete note(s) / folder")},
 		{"Ctrl+V", i18n.T("Pegar imagen del portapapeles", "Paste clipboard image")},
 		{"Tab • h/l", i18n.T("Alternar foco lista/preview", "Toggle list/preview focus")},
 		{"1, 2, 3", i18n.T("Cambiar de pestaña", "Switch tabs")},

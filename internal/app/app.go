@@ -70,6 +70,16 @@ type AppModel struct {
 	moveFolders        []string
 	selectedMoveFolder int
 
+	// Árbol de carpetas y selección múltiple
+	expandedFolders map[string]bool
+	selectedPaths   map[string]bool
+
+	// Modal de confirmación para acciones críticas
+	showConfirmModal bool
+	confirmTitle     string
+	confirmMsg       string
+	confirmAction    func() tea.Cmd
+
 	// Control de doble clic con ratón
 	lastClickTime time.Time
 	lastClickZone string
@@ -97,19 +107,21 @@ func New(cfg *config.Config) (*AppModel, error) {
 
 	assetsDir := filepath.Join(cfg.NotesDir, "assets")
 	m := &AppModel{
-		cfg:           cfg,
-		storage:       st,
-		kitty:         image.New(),
-		clipSaver:     clipboard.New(assetsDir),
-		hitTester:     mouse.NewHitTester(),
-		notes:         notes,
-		entries:       entries,
-		selectedNote:  0,
-		selectedEntry: 0,
-		activeTab:     0,
-		activePanel:   0,
-		taskFilter:    views.TaskFilterAll,
-		statusMsg:     fmt.Sprintf(i18n.T("%d notas cargadas", "%d notes loaded"), len(notes)),
+		cfg:             cfg,
+		storage:         st,
+		kitty:           image.New(),
+		clipSaver:       clipboard.New(assetsDir),
+		hitTester:       mouse.NewHitTester(),
+		notes:           notes,
+		entries:         entries,
+		expandedFolders: make(map[string]bool),
+		selectedPaths:   make(map[string]bool),
+		selectedNote:    0,
+		selectedEntry:   0,
+		activeTab:       0,
+		activePanel:     0,
+		taskFilter:      views.TaskFilterAll,
+		statusMsg:       fmt.Sprintf(i18n.T("%d notas cargadas", "%d notes loaded"), len(notes)),
 	}
 
 	// Aplicar el tema configurado
@@ -174,7 +186,19 @@ func (m *AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case EditorFinishedMsg:
-		m.reloadNotes()
+		prevPath := ""
+		if len(m.entries) > 0 && m.selectedEntry < len(m.entries) {
+			prevPath = m.entries[m.selectedEntry].Path
+		}
+		m.reloadEntries()
+		if prevPath != "" {
+			for idx, ent := range m.entries {
+				if ent.Path == prevPath {
+					m.selectedEntry = idx
+					break
+				}
+			}
+		}
 		if msg.Err != nil {
 			m.statusMsg = fmt.Sprintf("%s: %v", i18n.T("Error en editor", "Editor error"), msg.Err)
 		} else {
@@ -222,6 +246,23 @@ func (m *AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				fmt.Print(m.kitty.ClearAllCommand())
 			}
 			return m, tea.Quit
+		}
+
+		// Si la ventana de confirmación para eliminar está abierta
+		if m.showConfirmModal {
+			switch key {
+			case "y", "Y", "enter":
+				m.showConfirmModal = false
+				if m.confirmAction != nil {
+					return m, m.confirmAction()
+				}
+				return m, nil
+			case "n", "N", "esc", "q":
+				m.showConfirmModal = false
+				m.statusMsg = i18n.T("Acción cancelada", "Action cancelled")
+				return m, nil
+			}
+			return m, nil
 		}
 
 		// Si la pantalla de configuración está abierta
@@ -429,12 +470,12 @@ func (m *AppModel) updateNotesTab(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		case "f", "F":
 			return m, m.createQuickFolder()
 		case "d":
-			return m, m.deleteCurrentEntry()
+			return m.promptDelete()
 		}
 		return m, nil
 	}
 
-	// Panel izquierdo (Explorador de Notas y Carpetas)
+	// Panel izquierdo (Explorador de Notas y Carpetas en Árbol)
 	switch msg.String() {
 	case "up", "k":
 		if m.selectedEntry > 0 {
@@ -462,28 +503,62 @@ func (m *AppModel) updateNotesTab(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.previewScrollX = 0
 		}
 		return m, nil
-	case "enter", "e":
+	case "enter":
 		if len(m.entries) == 0 {
 			return m, m.createQuickNote()
 		}
 		entry := m.entries[m.selectedEntry]
 		if entry.Type == storage.EntryFolder {
-			if entry.Name == ".." {
-				parent := filepath.Dir(m.storage.CurrentSubDir)
-				if parent == "." {
-					parent = ""
-				}
-				m.storage.CurrentSubDir = parent
-			} else {
-				m.storage.CurrentSubDir = filepath.Join(m.storage.CurrentSubDir, entry.Name)
-			}
-			m.selectedEntry = 0
-			m.previewScrollY = 0
-			m.previewScrollX = 0
-			m.reloadEntries()
+			m.toggleFolder(entry.Path)
 			return m, nil
 		}
 		return m, m.openEditorForPath(entry.Path)
+	case "e":
+		return m, m.openEditor()
+	case " ":
+		if len(m.entries) > 0 && m.selectedEntry < len(m.entries) {
+			entry := m.entries[m.selectedEntry]
+			if entry.Type == storage.EntryFolder {
+				m.toggleFolder(entry.Path)
+			} else {
+				if m.selectedPaths[entry.Path] {
+					delete(m.selectedPaths, entry.Path)
+				} else {
+					m.selectedPaths[entry.Path] = true
+				}
+			}
+		}
+		return m, nil
+	case "v", "x":
+		if len(m.entries) > 0 && m.selectedEntry < len(m.entries) {
+			entry := m.entries[m.selectedEntry]
+			if entry.Type == storage.EntryNote {
+				if m.selectedPaths[entry.Path] {
+					delete(m.selectedPaths, entry.Path)
+				} else {
+					m.selectedPaths[entry.Path] = true
+				}
+			}
+		}
+		return m, nil
+	case "V":
+		allSelected := true
+		for _, ent := range m.entries {
+			if ent.Type == storage.EntryNote && !m.selectedPaths[ent.Path] {
+				allSelected = false
+				break
+			}
+		}
+		if allSelected {
+			m.selectedPaths = make(map[string]bool)
+		} else {
+			for _, ent := range m.entries {
+				if ent.Type == storage.EntryNote {
+					m.selectedPaths[ent.Path] = true
+				}
+			}
+		}
+		return m, nil
 	case "m":
 		return m, m.openMoveModal()
 	case "c":
@@ -493,7 +568,7 @@ func (m *AppModel) updateNotesTab(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case "ctrl+v", "p":
 		return m, m.pasteImage()
 	case "d":
-		return m, m.deleteCurrentEntry()
+		return m.promptDelete()
 	}
 	return m, nil
 }
@@ -626,23 +701,17 @@ func (m *AppModel) handleZoneClick(zone *mouse.Zone) (tea.Model, tea.Cmd) {
 		m.activePanel = 0
 	case mouse.ZoneNote:
 		m.selectedEntry = zone.Index
-		if isDoubleClick && zone.Index < len(m.entries) {
+		if zone.Index < len(m.entries) {
 			entry := m.entries[zone.Index]
 			if entry.Type == storage.EntryFolder {
-				if entry.Name == ".." {
-					parent := filepath.Dir(m.storage.CurrentSubDir)
-					if parent == "." {
-						parent = ""
-					}
-					m.storage.CurrentSubDir = parent
-				} else {
-					m.storage.CurrentSubDir = filepath.Join(m.storage.CurrentSubDir, entry.Name)
+				if isDoubleClick {
+					m.toggleFolder(entry.Path)
 				}
-				m.selectedEntry = 0
-				m.reloadEntries()
 				return m, nil
 			}
-			return m, m.openEditorForPath(entry.Path)
+			if isDoubleClick {
+				return m, m.openEditorForPath(entry.Path)
+			}
 		}
 	case mouse.ZoneTag:
 		m.selectedTag = zone.Index
@@ -665,6 +734,20 @@ func (m *AppModel) handleZoneClick(zone *mouse.Zone) (tea.Model, tea.Cmd) {
 // handleActionClick procesa clics en los botones de acción
 func (m *AppModel) handleActionClick(zone *mouse.Zone) (tea.Model, tea.Cmd) {
 	payload := zone.Payload
+
+	// Comandos de confirmación modal
+	if payload == "confirm-yes" {
+		m.showConfirmModal = false
+		if m.confirmAction != nil {
+			return m, m.confirmAction()
+		}
+		return m, nil
+	}
+	if payload == "confirm-no" {
+		m.showConfirmModal = false
+		m.statusMsg = i18n.T("Acción cancelada", "Action cancelled")
+		return m, nil
+	}
 
 	// Comandos de configuración
 	if strings.HasPrefix(payload, "select-config:") {
@@ -726,12 +809,24 @@ func (m *AppModel) handleActionClick(zone *mouse.Zone) (tea.Model, tea.Cmd) {
 		return m, m.createQuickNote()
 	case "F", "action-folder":
 		return m, m.createQuickFolder()
+	case "action-select":
+		if len(m.entries) > 0 && m.selectedEntry < len(m.entries) {
+			entry := m.entries[m.selectedEntry]
+			if entry.Type == storage.EntryNote {
+				if m.selectedPaths[entry.Path] {
+					delete(m.selectedPaths, entry.Path)
+				} else {
+					m.selectedPaths[entry.Path] = true
+				}
+			}
+		}
+		return m, nil
 	case "m", "action-move":
 		return m, m.openMoveModal()
 	case "e/Enter", "Enter", "e", "action-edit":
 		return m, m.openEditor()
 	case "d", "action-delete":
-		return m, m.deleteCurrentEntry()
+		return m.promptDelete()
 	case "p", "action-paste":
 		return m, m.pasteImage()
 	case "h", "action-cheatsheet":
@@ -763,13 +858,15 @@ func (m *AppModel) handleActionClick(zone *mouse.Zone) (tea.Model, tea.Cmd) {
 }
 
 func (m *AppModel) openMoveModal() tea.Cmd {
-	if len(m.entries) == 0 {
-		return nil
-	}
-	entry := m.entries[m.selectedEntry]
-	if entry.Type != storage.EntryNote {
-		m.statusMsg = i18n.T("Solo se pueden mover notas", "Only notes can be moved")
-		return nil
+	if len(m.selectedPaths) == 0 {
+		if len(m.entries) == 0 {
+			return nil
+		}
+		entry := m.entries[m.selectedEntry]
+		if entry.Type != storage.EntryNote {
+			m.statusMsg = i18n.T("Solo se pueden mover notas", "Only notes can be moved")
+			return nil
+		}
 	}
 	folders, err := m.storage.ListFolders()
 	if err != nil || len(folders) == 0 {
@@ -783,24 +880,43 @@ func (m *AppModel) openMoveModal() tea.Cmd {
 }
 
 func (m *AppModel) confirmMoveNote() tea.Cmd {
-	if !m.showMoveModal || len(m.entries) == 0 || m.selectedMoveFolder >= len(m.moveFolders) {
+	if !m.showMoveModal || m.selectedMoveFolder >= len(m.moveFolders) {
 		m.showMoveModal = false
 		return nil
 	}
-	entry := m.entries[m.selectedEntry]
 	targetFolder := m.moveFolders[m.selectedMoveFolder]
 	m.showMoveModal = false
 
+	rel, _ := filepath.Rel(m.storage.BaseDir, targetFolder)
+	if rel == "." || rel == "" {
+		rel = "/"
+	}
+
+	// Caso de selección múltiple
+	if len(m.selectedPaths) > 0 {
+		count := 0
+		for path := range m.selectedPaths {
+			if err := m.storage.MoveNote(path, targetFolder); err == nil {
+				count++
+			}
+		}
+		m.selectedPaths = make(map[string]bool)
+		m.reloadEntries()
+		m.statusMsg = fmt.Sprintf(i18n.T("%d notas movidas a '%s'", "%d notes moved to '%s'"), count, rel)
+		return nil
+	}
+
+	// Caso de nota individual
+	if len(m.entries) == 0 || m.selectedEntry >= len(m.entries) {
+		return nil
+	}
+	entry := m.entries[m.selectedEntry]
 	err := m.storage.MoveNote(entry.Path, targetFolder)
 	if err != nil {
 		m.statusMsg = fmt.Sprintf("%s: %v", i18n.T("Error al mover nota", "Error moving note"), err)
 		return nil
 	}
 	m.reloadEntries()
-	rel, _ := filepath.Rel(m.storage.BaseDir, targetFolder)
-	if rel == "." || rel == "" {
-		rel = "/"
-	}
 	m.statusMsg = fmt.Sprintf("%s '%s'  '%s'", i18n.T("Nota movida", "Note moved"), entry.Name, rel)
 	return nil
 }
@@ -906,36 +1022,153 @@ func (m *AppModel) openEditorForPath(filePath string) tea.Cmd {
 }
 
 func (m *AppModel) createQuickNote() tea.Cmd {
+	targetDir := m.storage.BaseDir
+	if len(m.entries) > 0 && m.selectedEntry < len(m.entries) {
+		current := m.entries[m.selectedEntry]
+		if current.Type == storage.EntryFolder {
+			targetDir = current.Path
+			m.expandedFolders[current.Path] = true
+		} else {
+			targetDir = filepath.Dir(current.Path)
+		}
+	}
+
 	title := fmt.Sprintf("%s %d", i18n.T("Nueva Nota", "New Note"), len(m.notes)+1)
-	_, err := m.storage.CreateNote(title)
+	note, err := m.storage.CreateNoteInDir(targetDir, title)
 	if err != nil {
 		m.statusMsg = fmt.Sprintf("%s: %v", i18n.T("Error", "Error"), err)
 		return nil
 	}
+
 	m.reloadEntries()
-	m.selectedEntry = 0
+
+	// Posicionar el cursor sobre la nota recién creada
+	for idx, ent := range m.entries {
+		if ent.Path == note.Path {
+			m.selectedEntry = idx
+			break
+		}
+	}
+
+	m.previewScrollY = 0
+	m.previewScrollX = 0
 	m.statusMsg = fmt.Sprintf("%s ' %s'", i18n.T("Creada", "Created"), title)
 	return m.openEditor()
 }
 
 func (m *AppModel) createQuickFolder() tea.Cmd {
+	parentDir := m.storage.BaseDir
+	if len(m.entries) > 0 && m.selectedEntry < len(m.entries) {
+		current := m.entries[m.selectedEntry]
+		if current.Type == storage.EntryFolder {
+			parentDir = current.Path
+			m.expandedFolders[current.Path] = true
+		} else {
+			parentDir = filepath.Dir(current.Path)
+		}
+	}
+
 	name := fmt.Sprintf("%s-%d", i18n.T("carpeta", "folder"), len(m.entries)+1)
-	err := m.storage.CreateFolder(name)
+	createdPath, err := m.storage.CreateFolderInDir(parentDir, name)
 	if err != nil {
 		m.statusMsg = fmt.Sprintf("%s: %v", i18n.T("Error", "Error"), err)
 		return nil
 	}
+
+	m.expandedFolders[createdPath] = true
 	m.reloadEntries()
+
+	// Posicionar el cursor sobre la carpeta recién creada
 	for idx, ent := range m.entries {
-		if ent.Type == storage.EntryFolder && ent.Name == name {
+		if ent.Path == createdPath {
 			m.selectedEntry = idx
 			break
 		}
 	}
+
 	m.previewScrollY = 0
 	m.previewScrollX = 0
 	m.statusMsg = fmt.Sprintf("%s ' %s'", i18n.T("Carpeta creada", "Folder created"), name)
 	return nil
+}
+
+func (m *AppModel) toggleFolder(path string) {
+	current := true
+	if val, ok := m.expandedFolders[path]; ok {
+		current = val
+	}
+	m.expandedFolders[path] = !current
+	m.reloadEntries()
+	for idx, ent := range m.entries {
+		if ent.Path == path {
+			m.selectedEntry = idx
+			break
+		}
+	}
+}
+
+func (m *AppModel) promptDelete() (tea.Model, tea.Cmd) {
+	// Caso 1: Hay múltiples notas seleccionadas
+	if len(m.selectedPaths) > 0 {
+		count := len(m.selectedPaths)
+		m.confirmTitle = i18n.T("⚠️  Eliminar Notas Seleccionadas", "⚠️  Delete Selected Notes")
+		m.confirmMsg = fmt.Sprintf(i18n.T("¿Deseas eliminar las %d notas seleccionadas permanentemente?", "Do you want to permanently delete the %d selected notes?"), count)
+		m.confirmAction = func() tea.Cmd {
+			deleted := 0
+			for path := range m.selectedPaths {
+				if err := m.storage.DeleteNote(path); err == nil {
+					deleted++
+				}
+			}
+			m.selectedPaths = make(map[string]bool)
+			m.reloadEntries()
+			m.statusMsg = fmt.Sprintf(i18n.T("%d notas eliminadas", "%d notes deleted"), deleted)
+			return nil
+		}
+		m.showConfirmModal = true
+		return m, nil
+	}
+
+	// Caso 2: Sin elementos en la lista
+	if len(m.entries) == 0 || m.selectedEntry >= len(m.entries) {
+		return m, nil
+	}
+
+	entry := m.entries[m.selectedEntry]
+
+	// Caso 3: Es una carpeta
+	if entry.Type == storage.EntryFolder {
+		itemCount := m.storage.CountFolderItems(entry.Path)
+		if itemCount > 0 {
+			m.confirmTitle = i18n.T("⚠️  Eliminar Carpeta con Contenido", "⚠️  Delete Folder with Items")
+			m.confirmMsg = fmt.Sprintf(i18n.T("La carpeta '%s' contiene %d elemento(s).\n¿Deseas eliminarla junto con todas sus notas?", "The folder '%s' contains %d item(s).\nDo you want to delete it and all its notes?"), entry.Name, itemCount)
+			folderPath := entry.Path
+			folderName := entry.Name
+			m.confirmAction = func() tea.Cmd {
+				_ = m.storage.DeleteNote(folderPath)
+				delete(m.expandedFolders, folderPath)
+				m.reloadEntries()
+				m.statusMsg = fmt.Sprintf(i18n.T("Carpeta '%s' y su contenido eliminados", "Folder '%s' and contents deleted"), folderName)
+				return nil
+			}
+			m.showConfirmModal = true
+			return m, nil
+		}
+
+		// Carpeta vacía
+		_ = m.storage.DeleteNote(entry.Path)
+		delete(m.expandedFolders, entry.Path)
+		m.reloadEntries()
+		m.statusMsg = fmt.Sprintf("%s: %s", i18n.T("Carpeta eliminada", "Folder deleted"), entry.Name)
+		return m, nil
+	}
+
+	// Caso 4: Nota individual
+	_ = m.storage.DeleteNote(entry.Path)
+	delete(m.selectedPaths, entry.Path)
+	m.reloadEntries()
+	m.statusMsg = fmt.Sprintf("%s: %s", i18n.T("Eliminado", "Deleted"), entry.Name)
+	return m, nil
 }
 
 func (m *AppModel) pasteImage() tea.Cmd {
@@ -968,24 +1201,12 @@ func (m *AppModel) pasteImage() tea.Cmd {
 }
 
 func (m *AppModel) deleteCurrentEntry() tea.Cmd {
-	if len(m.entries) == 0 {
-		return nil
-	}
-	entry := m.entries[m.selectedEntry]
-	if entry.Name == ".." {
-		return nil
-	}
-	_ = m.storage.DeleteNote(entry.Path)
-	m.reloadEntries()
-	if m.selectedEntry >= len(m.entries) && len(m.entries) > 0 {
-		m.selectedEntry = len(m.entries) - 1
-	}
-	m.statusMsg = fmt.Sprintf("%s: %s", i18n.T("Eliminado", "Deleted"), entry.Name)
-	return nil
+	_, cmd := m.promptDelete()
+	return cmd
 }
 
 func (m *AppModel) reloadEntries() {
-	entries, err := m.storage.ListEntries()
+	entries, err := m.storage.ListTreeEntries(m.expandedFolders)
 	if err == nil {
 		m.entries = entries
 	}
@@ -1042,7 +1263,7 @@ func (m *AppModel) View() string {
 
 	switch m.currentTabID() {
 	case "notes":
-		leftView = views.RenderNoteList(m.entries, m.storage.CurrentSubDir, m.selectedEntry, leftWidth, panelHeight, m.activePanel == 0, m.hitTester, 1)
+		leftView = views.RenderNoteList(m.entries, m.selectedPaths, m.selectedEntry, leftWidth, panelHeight, m.activePanel == 0, m.hitTester, 1)
 		var currentNote *storage.Note
 		if len(m.entries) > 0 && m.selectedEntry < len(m.entries) {
 			currentNote = m.entries[m.selectedEntry].Note
@@ -1092,10 +1313,18 @@ func (m *AppModel) View() string {
 		footerView,
 	)
 
+	// Si la ventana de confirmación está activa, mostrarla superpuesta centrada
+	if m.showConfirmModal {
+		confirmModal := views.RenderConfirmModal(m.confirmTitle, m.confirmMsg, m.width, m.height, m.hitTester)
+		return views.OverlayLayers(fullView, confirmModal, m.width, m.height, false)
+	}
+
 	// Si la ventana para mover nota está activa, mostrar modal superpuesto
 	if m.showMoveModal {
 		noteName := ""
-		if len(m.entries) > 0 && m.selectedEntry < len(m.entries) {
+		if len(m.selectedPaths) > 1 {
+			noteName = fmt.Sprintf(i18n.T("%d notas seleccionadas", "%d selected notes"), len(m.selectedPaths))
+		} else if len(m.entries) > 0 && m.selectedEntry < len(m.entries) {
 			noteName = m.entries[m.selectedEntry].Name
 		}
 		moveModal := views.RenderMoveModal(m.moveFolders, m.storage.BaseDir, m.selectedMoveFolder, noteName, m.width, m.height, m.hitTester)

@@ -20,6 +20,7 @@ func GetNotesActions() []ActionBtn {
 	return []ActionBtn{
 		{Key: "c", Action: i18n.T("+Nota", "+Note"), ID: "action-new"},
 		{Key: "F", Action: i18n.T("+Carpeta", "+Folder"), ID: "action-folder"},
+		{Key: "v", Action: i18n.T("Sel", "Sel"), ID: "action-select"},
 		{Key: "m", Action: i18n.T("Mover", "Move"), ID: "action-move"},
 		{Key: "e", Action: i18n.T("Editar", "Edit"), ID: "action-edit"},
 		{Key: "d", Action: i18n.T("Borrar", "Delete"), ID: "action-delete"},

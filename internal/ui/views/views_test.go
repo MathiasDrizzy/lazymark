@@ -138,7 +138,7 @@ func TestRenderNoteListAndPreview(t *testing.T) {
 		},
 	}
 	ht := mouse.NewHitTester()
-	listOut := RenderNoteList(entries, "", 0, 40, 20, true, ht, 1)
+	listOut := RenderNoteList(entries, nil, 0, 40, 20, true, ht, 1)
 	if listOut == "" {
 		t.Errorf("RenderNoteList devolvió string vacío")
 	}
@@ -146,6 +146,19 @@ func TestRenderNoteListAndPreview(t *testing.T) {
 	prevOut := RenderPreview(&notes[0], 60, 20, false, nil, 0, 0)
 	if prevOut == "" {
 		t.Errorf("RenderPreview devolvió string vacío")
+	}
+}
+
+func TestRenderConfirmModal(t *testing.T) {
+	ht := mouse.NewHitTester()
+	modal := RenderConfirmModal("⚠️ Eliminar Carpeta", "La carpeta contiene 3 elementos", 80, 24, ht)
+	if modal == "" {
+		t.Fatalf("RenderConfirmModal devolvió string vacío")
+	}
+	// Comprobar que los botones de confirmación se registraron en el HitTester
+	zoneYes, okYes := ht.Check(20, 12)
+	if okYes && zoneYes.Payload != "confirm-yes" {
+		t.Errorf("zona de confirm-yes incorrecta: %+v", zoneYes)
 	}
 }
 
