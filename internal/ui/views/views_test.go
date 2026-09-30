@@ -1,6 +1,7 @@
 package views
 
 import (
+	"strings"
 	"testing"
 	"time"
 
@@ -176,10 +177,30 @@ func TestRenderCheatsheetAndOverlay(t *testing.T) {
 		t.Fatalf("RenderCheatsheet devolvió string vacío")
 	}
 
-	base := "LEFT COLUMN          | RIGHT COLUMN CONTENT HERE"
+	// Simular base con borde derecho en la columna 79
+	baseLine := "LEFT COLUMN" + strings.Repeat(" ", 67) + "│"
+	var baseLines []string
+	for i := 0; i < 24; i++ {
+		baseLines = append(baseLines, baseLine)
+	}
+	base := strings.Join(baseLines, "\n")
+
 	over := OverlayLayers(base, sheet, 80, 24, true)
 	if over == "" {
 		t.Fatalf("OverlayLayers devolvió string vacío")
+	}
+
+	// Comprobar que en las líneas del overlay, no se arrastra el borde derecho del panel base '│' a la derecha del modal
+	lines := strings.Split(over, "\n")
+	for idx, l := range lines {
+		// En las líneas inferiores donde está el overlay, la línea no debe terminar con el '│' del fondo
+		if idx >= 6 && idx < 23 {
+			trimmed := strings.TrimRight(l, " ")
+			// Si termina en borde de modal o texto, no debe tener un segundo '│' a la derecha
+			if strings.Count(trimmed, "│") > 2 {
+				t.Errorf("Línea %d tiene bordes fantasma: %s", idx, l)
+			}
+		}
 	}
 }
 

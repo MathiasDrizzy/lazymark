@@ -68,6 +68,5 @@ func RenderMoveModal(folders []string, baseDir string, selectedIdx int, noteName
 	body := strings.Join(rows, "\n")
 	return theme.ActivePanelBorder.
 		Width(modalWidth).
-		Background(theme.ColorBase).
 		Render(body)
 }

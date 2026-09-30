@@ -118,7 +118,8 @@ func RenderSettingsModal(cfg *config.Config, selectedItem SettingsItem, totalWid
 		},
 	}
 
-	startX := totalWidth - modalWidth - 3
+	// Ancho total del modal con bordes y padding para cálculo exacto de posición
+	startX := totalWidth - (modalWidth + 4) - 1
 	startY := totalHeight - 16
 	if startX < 2 {
 		startX = 2
@@ -200,7 +201,7 @@ func OverlayLayers(base, overlay string, totalWidth, totalHeight int, alignBotto
 
 	if alignBottomRight {
 		startY = totalHeight - overlayH - 2
-		startX = totalWidth - overlayW - 3
+		startX = totalWidth - overlayW - 1
 	}
 
 	if startY < 0 {
@@ -232,11 +233,18 @@ func OverlayLayers(base, overlay string, totalWidth, totalHeight int, alignBotto
 			}
 		}
 
-		// Recortar derecha con soporte ANSI
+		// Recortar derecha con soporte ANSI:
+		// Si está anclado abajo a la derecha, rellenar con espacios para no arrastrar bordes fantasma del panel de fondo
 		right := ""
-		remainingStart := startX + overlayW
-		if remainingStart < totalWidth {
-			right = ansi.CutWc(bLine, remainingStart, totalWidth)
+		if alignBottomRight {
+			if remaining := totalWidth - (startX + overlayW); remaining > 0 {
+				right = strings.Repeat(" ", remaining)
+			}
+		} else {
+			remainingStart := startX + overlayW
+			if remainingStart < totalWidth {
+				right = ansi.CutWc(bLine, remainingStart, totalWidth)
+			}
 		}
 
 		baseLines[targetY] = left + "\x1b[0m" + oLine + "\x1b[0m" + right
