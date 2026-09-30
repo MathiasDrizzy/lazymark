@@ -30,12 +30,9 @@ const (
 
 // RenderSettingsModal renderiza un popup modal flotante, minimalista y centrado
 func RenderSettingsModal(cfg *config.Config, selectedItem SettingsItem, totalWidth, totalHeight int, ht *mouse.HitTester) string {
-	modalWidth := 56
-	if totalWidth < 60 {
+	modalWidth := 50
+	if totalWidth < 54 {
 		modalWidth = totalWidth - 4
-	}
-	if modalWidth < 30 {
-		modalWidth = 30
 	}
 
 	title := theme.SelectedItem.Copy().Bold(true).Render(i18n.T("  Configuración", "  Settings"))
@@ -121,25 +118,25 @@ func RenderSettingsModal(cfg *config.Config, selectedItem SettingsItem, totalWid
 		},
 	}
 
-	startY := (totalHeight - 18) / 2
-	if startY < 2 {
-		startY = 2
-	}
-	startX := (totalWidth - modalWidth) / 2
+	startX := totalWidth - modalWidth - 3
+	startY := totalHeight - 16
 	if startX < 2 {
 		startX = 2
+	}
+	if startY < 2 {
+		startY = 2
 	}
 
 	for idx, item := range items {
 		isSelected := selectedItem == item.id
 		cursor := "  "
-		labelStyle := theme.NormalItem
-		valStyle := theme.TagBadge
+		labelStyle := theme.NormalItem.Copy().Foreground(theme.ColorText)
+		valStyle := theme.NormalItem.Copy().Foreground(theme.ColorTeal)
 
 		if isSelected {
 			cursor = theme.SelectedItem.Render("❯ ")
-			labelStyle = theme.SelectedItem
-			valStyle = theme.TabActive
+			labelStyle = theme.SelectedItem.Copy().Foreground(theme.ColorPeach).Bold(true)
+			valStyle = theme.SelectedItem.Copy().Foreground(theme.ColorPeach).Bold(true)
 		}
 
 		maxLabelLen := modalWidth - 24
@@ -176,7 +173,6 @@ func RenderSettingsModal(cfg *config.Config, selectedItem SettingsItem, totalWid
 
 	return theme.ActivePanelBorder.
 		Width(modalWidth).
-		Background(theme.ColorBase).
 		Render(body)
 }
 

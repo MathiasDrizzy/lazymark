@@ -88,9 +88,9 @@ func RenderFooter(width int, ht *mouse.HitTester, posY int, statusMsg string, ac
 	actionsLine := strings.Join(elements, "  ")
 
 	if statusMsg != "" {
-		statusBadge := theme.SelectedItem.Render(fmt.Sprintf("  %s", statusMsg))
-		actionsLine = fmt.Sprintf("%s  |  %s", actionsLine, statusBadge)
+		statusBadge := theme.SelectedItem.Render(fmt.Sprintf(" %s", statusMsg))
+		actionsLine = fmt.Sprintf("%s   │   %s", actionsLine, statusBadge)
 	}
 
-	return theme.FooterBar.Width(width).Render(actionsLine)
+	return theme.FooterBar.Render(actionsLine)
 }

@@ -426,7 +426,7 @@ func (m *AppModel) updateNotesTab(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			return m, m.openMoveModal()
 		case "c":
 			return m, m.createQuickNote()
-		case "F":
+		case "f", "F":
 			return m, m.createQuickFolder()
 		case "d":
 			return m, m.deleteCurrentEntry()
@@ -488,7 +488,7 @@ func (m *AppModel) updateNotesTab(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, m.openMoveModal()
 	case "c":
 		return m, m.createQuickNote()
-	case "F":
+	case "f", "F":
 		return m, m.createQuickFolder()
 	case "ctrl+v", "p":
 		return m, m.pasteImage()
@@ -926,6 +926,14 @@ func (m *AppModel) createQuickFolder() tea.Cmd {
 		return nil
 	}
 	m.reloadEntries()
+	for idx, ent := range m.entries {
+		if ent.Type == storage.EntryFolder && ent.Name == name {
+			m.selectedEntry = idx
+			break
+		}
+	}
+	m.previewScrollY = 0
+	m.previewScrollX = 0
 	m.statusMsg = fmt.Sprintf("%s ' %s'", i18n.T("Carpeta creada", "Folder created"), name)
 	return nil
 }
@@ -1094,10 +1102,10 @@ func (m *AppModel) View() string {
 		return views.OverlayLayers(fullView, moveModal, m.width, m.height, false)
 	}
 
-	// Si la pantalla de configuración está activa, mostrar modal superpuesto en vivo
+	// Si la pantalla de configuración está activa, mostrar modal superpuesto en vivo abajo a la derecha
 	if m.showSettings {
 		modal := views.RenderSettingsModal(m.cfg, views.SettingsItem(m.settingsItem), m.width, m.height, m.hitTester)
-		return views.OverlayLayers(fullView, modal, m.width, m.height, false)
+		return views.OverlayLayers(fullView, modal, m.width, m.height, true)
 	}
 
 	// Si la ventana de atajos está activa, mostrarla superpuesta abajo a la derecha

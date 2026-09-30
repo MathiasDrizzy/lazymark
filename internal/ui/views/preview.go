@@ -126,13 +126,30 @@ func RenderPreview(note *storage.Note, width, height int, active bool, kittyClie
 		visibleLines = append(visibleLines, line)
 	}
 
-	// Si hay más contenido que el alto disponible, añadir indicador de posición
+	// Asegurar que el panel tenga usableHeight líneas para fijar el indicador en la esquina inferior
+	for len(visibleLines) < usableHeight {
+		visibleLines = append(visibleLines, "")
+	}
+
+	// Indicador de posición fijo en la esquina inferior derecha del panel
 	if totalLines > usableHeight && len(visibleLines) > 0 {
 		pct := (scrollY * 100) / (totalLines - usableHeight)
-		scrollBadge := theme.NormalItem.Copy().Foreground(theme.ColorPeach).Bold(true).
-			Render(fmt.Sprintf(" [ %d%% • %d/%d]", pct, scrollY+1, totalLines))
-		lastIdx := len(visibleLines) - 1
-		visibleLines[lastIdx] = visibleLines[lastIdx] + " " + scrollBadge
+		badgeStr := fmt.Sprintf("[%d%% • %d/%d]", pct, scrollY+1, totalLines)
+		badge := theme.NormalItem.Copy().Foreground(theme.ColorPeach).Bold(true).Render(badgeStr)
+		badgeW := ansi.StringWidth(badgeStr)
+
+		lastIdx := usableHeight - 1
+		lastLine := visibleLines[lastIdx]
+		lastLineWidth := ansi.StringWidth(lastLine)
+
+		if lastLineWidth+badgeW+1 <= contentWidth {
+			padding := strings.Repeat(" ", contentWidth-lastLineWidth-badgeW)
+			visibleLines[lastIdx] = lastLine + padding + badge
+		} else {
+			truncated := ansi.Truncate(lastLine, contentWidth-badgeW-2, "")
+			padding := strings.Repeat(" ", contentWidth-ansi.StringWidth(truncated)-badgeW)
+			visibleLines[lastIdx] = truncated + padding + badge
+		}
 	}
 
 	viewContent := strings.Join(visibleLines, "\n")

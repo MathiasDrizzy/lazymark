@@ -163,8 +163,8 @@ func TestRenderSettingsModal(t *testing.T) {
 		t.Errorf("RenderSettingsModal devolvió string vacío")
 	}
 
-	// Comprobar que los ítems del modal se registraron (X=20, Y=7)
-	zone, ok := ht.Check(20, 7)
+	// Comprobar que los ítems del modal se registraron en la esquina inferior derecha
+	zone, ok := ht.Check(30, 11)
 	if !ok || zone.Type != mouse.ZoneAction {
 		t.Errorf("hit-test en modal de configuración falló: %+v", zone)
 	}
@@ -176,7 +176,7 @@ func TestRenderCheatsheetAndOverlay(t *testing.T) {
 		t.Fatalf("RenderCheatsheet devolvió string vacío")
 	}
 
-	base := "Base Content\nLine 2\nLine 3"
+	base := "LEFT COLUMN          | RIGHT COLUMN CONTENT HERE"
 	over := OverlayLayers(base, sheet, 80, 24, true)
 	if over == "" {
 		t.Fatalf("OverlayLayers devolvió string vacío")
