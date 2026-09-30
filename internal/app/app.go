@@ -35,6 +35,8 @@ type AppModel struct {
 
 	notes        []storage.Note
 	selectedNote int
+	entries      []storage.NoteEntry // Carpetas y notas navegables
+	selectedEntry int
 	activeTab    int
 	activePanel  int // 0: Lista izquierda, 1: Preview derecho
 
@@ -54,9 +56,10 @@ type AppModel struct {
 	images        []views.ImageEntry
 	selectedImage int
 
-	// Pantalla de configuración y keybindings
-	showSettings bool
-	settingsItem views.SettingsItem
+	// Pantalla de configuración y cheatsheet
+	showSettings   bool
+	settingsItem   views.SettingsItem
+	showCheatsheet bool
 
 	// Control de doble clic con ratón
 	lastClickTime time.Time
@@ -76,6 +79,8 @@ func New(cfg *config.Config) (*AppModel, error) {
 		return nil, err
 	}
 
+	entries, _ := st.ListEntries()
+
 	// Configurar idioma si está definido
 	if cfg.Language != "" && cfg.Language != "auto" {
 		i18n.SetLanguage(cfg.Language)
@@ -83,17 +88,19 @@ func New(cfg *config.Config) (*AppModel, error) {
 
 	assetsDir := filepath.Join(cfg.NotesDir, "assets")
 	m := &AppModel{
-		cfg:          cfg,
-		storage:      st,
-		kitty:        image.New(),
-		clipSaver:    clipboard.New(assetsDir),
-		hitTester:    mouse.NewHitTester(),
-		notes:        notes,
-		selectedNote: 0,
-		activeTab:    0,
-		activePanel:  0,
-		taskFilter:   views.TaskFilterAll,
-		statusMsg:    fmt.Sprintf(i18n.T("%d notas cargadas", "%d notes loaded"), len(notes)),
+		cfg:           cfg,
+		storage:       st,
+		kitty:         image.New(),
+		clipSaver:     clipboard.New(assetsDir),
+		hitTester:     mouse.NewHitTester(),
+		notes:         notes,
+		entries:       entries,
+		selectedNote:  0,
+		selectedEntry: 0,
+		activeTab:     0,
+		activePanel:   0,
+		taskFilter:    views.TaskFilterAll,
+		statusMsg:     fmt.Sprintf(i18n.T("%d notas cargadas", "%d notes loaded"), len(notes)),
 	}
 
 	// Aplicar el tema configurado
@@ -221,6 +228,16 @@ func (m *AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 
+		// Si la ventana flotante de atajos (cheatsheet) está abierta
+		if m.showCheatsheet {
+			switch key {
+			case "esc", "q", "h", "enter", "?":
+				m.showCheatsheet = false
+				return m, nil
+			}
+			return m, nil
+		}
+
 		// Atajos globales fuera de configuración
 		switch key {
 		case "q", "esc":
@@ -232,6 +249,14 @@ func (m *AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		case "?", "F2":
 			m.showSettings = true
+			return m, nil
+
+		case "h":
+			if m.cfg.KeybindingMode == "vim" && m.activePanel == 1 {
+				m.activePanel = 0
+				return m, nil
+			}
+			m.showCheatsheet = !m.showCheatsheet
 			return m, nil
 
 		// Navegación de pestañas [1..N]
@@ -264,11 +289,11 @@ func (m *AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 			return m, nil
 
-		// Alternar panel activo con Tab, Flechas o Vim h/l
+		// Alternar panel activo con Tab o Flechas
 		case "tab", "right", "l":
 			m.activePanel = 1
 			return m, nil
-		case "shift+tab", "left", "h":
+		case "shift+tab", "left":
 			m.activePanel = 0
 			return m, nil
 		}
@@ -308,31 +333,51 @@ func (m *AppModel) updateForCurrentTab(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 func (m *AppModel) updateNotesTab(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	switch msg.String() {
 	case "up", "k":
-		if m.selectedNote > 0 {
-			m.selectedNote--
+		if m.selectedEntry > 0 {
+			m.selectedEntry--
 		}
 		return m, nil
 	case "down", "j":
-		if m.selectedNote < len(m.notes)-1 {
-			m.selectedNote++
+		if m.selectedEntry < len(m.entries)-1 {
+			m.selectedEntry++
 		}
 		return m, nil
 	case "g":
-		m.selectedNote = 0
+		m.selectedEntry = 0
 		return m, nil
 	case "G":
-		if len(m.notes) > 0 {
-			m.selectedNote = len(m.notes) - 1
+		if len(m.entries) > 0 {
+			m.selectedEntry = len(m.entries) - 1
 		}
 		return m, nil
 	case "enter", "e":
-		return m, m.openEditor()
+		if len(m.entries) == 0 {
+			return m, m.createQuickNote()
+		}
+		entry := m.entries[m.selectedEntry]
+		if entry.Type == storage.EntryFolder {
+			if entry.Name == ".." {
+				parent := filepath.Dir(m.storage.CurrentSubDir)
+				if parent == "." {
+					parent = ""
+				}
+				m.storage.CurrentSubDir = parent
+			} else {
+				m.storage.CurrentSubDir = filepath.Join(m.storage.CurrentSubDir, entry.Name)
+			}
+			m.selectedEntry = 0
+			m.reloadEntries()
+			return m, nil
+		}
+		return m, m.openEditorForPath(entry.Path)
 	case "c":
 		return m, m.createQuickNote()
+	case "F":
+		return m, m.createQuickFolder()
 	case "ctrl+v", "p":
 		return m, m.pasteImage()
 	case "d":
-		return m, m.deleteCurrentNote()
+		return m, m.deleteCurrentEntry()
 	}
 	return m, nil
 }
@@ -464,12 +509,25 @@ func (m *AppModel) handleZoneClick(zone *mouse.Zone) (tea.Model, tea.Cmd) {
 		m.activeTab = zone.Index
 		m.activePanel = 0
 	case mouse.ZoneNote:
-		if isDoubleClick {
-			// Doble clic abre el editor
-			return m, m.openEditor()
+		m.selectedEntry = zone.Index
+		if isDoubleClick && zone.Index < len(m.entries) {
+			entry := m.entries[zone.Index]
+			if entry.Type == storage.EntryFolder {
+				if entry.Name == ".." {
+					parent := filepath.Dir(m.storage.CurrentSubDir)
+					if parent == "." {
+						parent = ""
+					}
+					m.storage.CurrentSubDir = parent
+				} else {
+					m.storage.CurrentSubDir = filepath.Join(m.storage.CurrentSubDir, entry.Name)
+				}
+				m.selectedEntry = 0
+				m.reloadEntries()
+				return m, nil
+			}
+			return m, m.openEditorForPath(entry.Path)
 		}
-		// Clic simple solo selecciona la nota
-		m.selectedNote = zone.Index
 	case mouse.ZoneTag:
 		m.selectedTag = zone.Index
 	case mouse.ZoneTask:
@@ -538,9 +596,11 @@ func (m *AppModel) handleActionClick(zone *mouse.Zone) (tea.Model, tea.Cmd) {
 	case "e/Enter", "Enter", "e":
 		return m, m.openEditor()
 	case "d":
-		return m, m.deleteCurrentNote()
+		return m, m.deleteCurrentEntry()
 	case "p":
 		return m, m.pasteImage()
+	case "h", "action-cheatsheet":
+		m.showCheatsheet = !m.showCheatsheet
 	case "f":
 		switch m.taskFilter {
 		case views.TaskFilterAll:
@@ -591,6 +651,18 @@ func (m *AppModel) toggleConfigItem(item views.SettingsItem) {
 		_ = m.cfg.Save()
 		m.statusMsg = fmt.Sprintf("%s: %s", i18n.T("Tema", "Theme"), newTheme)
 
+	case views.ItemKeybindings:
+		switch strings.ToLower(m.cfg.KeybindingMode) {
+		case "dual":
+			m.cfg.KeybindingMode = "lazygit"
+		case "lazygit":
+			m.cfg.KeybindingMode = "vim"
+		default:
+			m.cfg.KeybindingMode = "dual"
+		}
+		_ = m.cfg.Save()
+		m.statusMsg = fmt.Sprintf("%s: %s", i18n.T("Atajos", "Keys"), m.cfg.KeybindingMode)
+
 	case views.ItemTabTags:
 		m.cfg.ShowTagsTab = !m.cfg.ShowTagsTab
 		m.refreshVisibleTabs()
@@ -631,11 +703,14 @@ func (m *AppModel) cycleEditor() {
 // ─── Acciones ──────────────────────────────────────────────────────
 
 func (m *AppModel) openEditor() tea.Cmd {
-	if len(m.notes) == 0 {
+	if len(m.entries) == 0 {
 		return nil
 	}
-	note := m.notes[m.selectedNote]
-	return m.openEditorForPath(note.Path)
+	entry := m.entries[m.selectedEntry]
+	if entry.Type == storage.EntryNote {
+		return m.openEditorForPath(entry.Path)
+	}
+	return nil
 }
 
 func (m *AppModel) openEditorForPath(filePath string) tea.Cmd {
@@ -659,48 +734,79 @@ func (m *AppModel) createQuickNote() tea.Cmd {
 		m.statusMsg = fmt.Sprintf("%s: %v", i18n.T("Error", "Error"), err)
 		return nil
 	}
-	m.reloadNotes()
-	m.selectedNote = 0
-	m.statusMsg = fmt.Sprintf("%s '%s'", i18n.T("Creada", "Created"), title)
+	m.reloadEntries()
+	m.selectedEntry = 0
+	m.statusMsg = fmt.Sprintf("%s ' %s'", i18n.T("Creada", "Created"), title)
 	return m.openEditor()
 }
 
+func (m *AppModel) createQuickFolder() tea.Cmd {
+	name := fmt.Sprintf("%s-%d", i18n.T("carpeta", "folder"), len(m.entries)+1)
+	err := m.storage.CreateFolder(name)
+	if err != nil {
+		m.statusMsg = fmt.Sprintf("%s: %v", i18n.T("Error", "Error"), err)
+		return nil
+	}
+	m.reloadEntries()
+	m.statusMsg = fmt.Sprintf("%s ' %s'", i18n.T("Carpeta creada", "Folder created"), name)
+	return nil
+}
+
 func (m *AppModel) pasteImage() tea.Cmd {
-	if len(m.notes) == 0 {
+	if len(m.entries) == 0 {
 		m.statusMsg = i18n.T("Crea una nota primero para adjuntar imágenes", "Create a note first to attach images")
 		return nil
 	}
-	note := m.notes[m.selectedNote]
-	imgRef, err := m.clipSaver.PasteImage(note.ID)
+	entry := m.entries[m.selectedEntry]
+	if entry.Type != storage.EntryNote {
+		m.statusMsg = i18n.T("Selecciona una nota para pegar la imagen", "Select a note to paste image")
+		return nil
+	}
+	noteID := filepath.Base(entry.Path)
+	imgRef, err := m.clipSaver.PasteImage(noteID)
 	if err != nil {
 		m.statusMsg = fmt.Sprintf("%s: %v", i18n.T("Portapapeles", "Clipboard"), err)
 		return nil
 	}
 
 	appendContent := fmt.Sprintf("\n\n![%s](%s)\n", i18n.T("Imagen", "Image"), imgRef)
-	f, err := os.OpenFile(note.Path, os.O_APPEND|os.O_WRONLY, 0644)
+	f, err := os.OpenFile(entry.Path, os.O_APPEND|os.O_WRONLY, 0644)
 	if err == nil {
 		_, _ = f.WriteString(appendContent)
 		_ = f.Close()
 	}
 
-	m.reloadNotes()
+	m.reloadEntries()
 	m.statusMsg = fmt.Sprintf("%s: %s", i18n.T("Imagen guardada en", "Image saved to"), imgRef)
 	return nil
 }
 
-func (m *AppModel) deleteCurrentNote() tea.Cmd {
-	if len(m.notes) == 0 {
+func (m *AppModel) deleteCurrentEntry() tea.Cmd {
+	if len(m.entries) == 0 {
 		return nil
 	}
-	note := m.notes[m.selectedNote]
-	_ = m.storage.DeleteNote(note.Path)
-	m.reloadNotes()
-	if m.selectedNote >= len(m.notes) && len(m.notes) > 0 {
-		m.selectedNote = len(m.notes) - 1
+	entry := m.entries[m.selectedEntry]
+	if entry.Name == ".." {
+		return nil
 	}
-	m.statusMsg = fmt.Sprintf("%s: %s", i18n.T("Borrada", "Deleted"), note.Title)
+	_ = m.storage.DeleteNote(entry.Path)
+	m.reloadEntries()
+	if m.selectedEntry >= len(m.entries) && len(m.entries) > 0 {
+		m.selectedEntry = len(m.entries) - 1
+	}
+	m.statusMsg = fmt.Sprintf("%s: %s", i18n.T("Eliminado", "Deleted"), entry.Name)
 	return nil
+}
+
+func (m *AppModel) reloadEntries() {
+	entries, err := m.storage.ListEntries()
+	if err == nil {
+		m.entries = entries
+	}
+	if m.selectedEntry >= len(m.entries) && len(m.entries) > 0 {
+		m.selectedEntry = len(m.entries) - 1
+	}
+	m.reloadNotes()
 }
 
 func (m *AppModel) reloadNotes() {
@@ -738,19 +844,14 @@ func (m *AppModel) View() string {
 		rightWidth = 30
 	}
 
-	// Si la pantalla de configuración está activa, mostrar el modal centrado
-	if m.showSettings {
-		return views.RenderSettingsModal(m.cfg, views.SettingsItem(m.settingsItem), m.width, m.height, m.hitTester)
-	}
-
 	var leftView, rightView, footerView string
 
 	switch m.currentTabID() {
 	case "notes":
-		leftView = views.RenderNoteList(m.notes, m.selectedNote, leftWidth, panelHeight, m.activePanel == 0, m.hitTester, 1)
+		leftView = views.RenderNoteList(m.entries, m.storage.CurrentSubDir, m.selectedEntry, leftWidth, panelHeight, m.activePanel == 0, m.hitTester, 1)
 		var currentNote *storage.Note
-		if len(m.notes) > 0 && m.selectedNote < len(m.notes) {
-			currentNote = &m.notes[m.selectedNote]
+		if len(m.entries) > 0 && m.selectedEntry < len(m.entries) {
+			currentNote = m.entries[m.selectedEntry].Note
 		}
 		rightView = views.RenderPreview(currentNote, rightWidth, panelHeight, m.activePanel == 1, m.kitty)
 		footerView = views.RenderFooter(m.width, m.hitTester, m.height-1, m.statusMsg, views.GetNotesActions())
@@ -785,9 +886,23 @@ func (m *AppModel) View() string {
 
 	mainView := lipgloss.JoinHorizontal(lipgloss.Top, leftView, rightView)
 
-	return lipgloss.JoinVertical(lipgloss.Left,
+	fullView := lipgloss.JoinVertical(lipgloss.Left,
 		tabsView,
 		mainView,
 		footerView,
 	)
+
+	// Si la pantalla de configuración está activa, mostrar modal superpuesto en vivo
+	if m.showSettings {
+		modal := views.RenderSettingsModal(m.cfg, views.SettingsItem(m.settingsItem), m.width, m.height, m.hitTester)
+		return views.OverlayLayers(fullView, modal, m.width, m.height, false)
+	}
+
+	// Si la ventana de atajos está activa, mostrarla superpuesta abajo a la derecha
+	if m.showCheatsheet {
+		cheatsheet := views.RenderCheatsheet(m.width, m.height)
+		return views.OverlayLayers(fullView, cheatsheet, m.width, m.height, true)
+	}
+
+	return fullView
 }

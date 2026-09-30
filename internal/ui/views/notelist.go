@@ -10,16 +10,25 @@ import (
 	"github.com/MathiasDrizzy/lazymark/internal/ui/theme"
 )
 
-// RenderNoteList genera el panel izquierdo con la lista de notas y registra los clics
-func RenderNoteList(notes []storage.Note, selectedIndex int, width, height int, active bool, ht *mouse.HitTester, offsetY int) string {
+// RenderNoteList genera el panel izquierdo con carpetas y notas, usando iconos NerdFont
+func RenderNoteList(entries []storage.NoteEntry, currentSubDir string, selectedIndex int, width, height int, active bool, ht *mouse.HitTester, offsetY int) string {
 	var rows []string
 
-	if len(notes) == 0 {
-		emptyMsg := theme.NormalItem.Copy().Italic(true).Render(i18n.T("  (No hay notas aún. Presiona 'c' para crear una)", "  (No notes yet. Press 'c' to create one)"))
+	// Cabecera con ruta actual
+	headerPath := "notes"
+	if currentSubDir != "" {
+		headerPath = fmt.Sprintf("notes/%s", currentSubDir)
+	}
+	header := theme.SelectedItem.Copy().Foreground(theme.ColorPeach).Bold(true).
+		Render(fmt.Sprintf("   %s", headerPath))
+	rows = append(rows, header)
+
+	if len(entries) == 0 {
+		emptyMsg := theme.NormalItem.Copy().Italic(true).Render(i18n.T("  (Carpeta vacía. 'c': nueva nota, 'F': carpeta)", "  (Empty folder. 'c': new note, 'F': folder)"))
 		rows = append(rows, emptyMsg)
 	}
 
-	usableHeight := height - 2
+	usableHeight := height - 3
 	if usableHeight < 1 {
 		usableHeight = 1
 	}
@@ -29,12 +38,12 @@ func RenderNoteList(notes []storage.Note, selectedIndex int, width, height int, 
 		startIdx = selectedIndex - usableHeight + 1
 	}
 	endIdx := startIdx + usableHeight
-	if endIdx > len(notes) {
-		endIdx = len(notes)
+	if endIdx > len(entries) {
+		endIdx = len(entries)
 	}
 
 	for i := startIdx; i < endIdx; i++ {
-		note := notes[i]
+		entry := entries[i]
 		isSelected := i == selectedIndex
 
 		cursor := "  "
@@ -44,25 +53,39 @@ func RenderNoteList(notes []storage.Note, selectedIndex int, width, height int, 
 			itemStyle = theme.SelectedItem
 		}
 
-		// Título truncado
-		maxTitleLen := width - 14
-		if maxTitleLen < 5 {
-			maxTitleLen = 5
-		}
-		title := note.Title
-		if len(title) > maxTitleLen {
-			title = title[:maxTitleLen-3] + "..."
+		maxNameLen := width - 15
+		if maxNameLen < 5 {
+			maxNameLen = 5
 		}
 
-		timeStr := note.ModTime.Format("02 Jan")
-		timeBadge := theme.NormalItem.Copy().Foreground(theme.ColorOverlay0).Render(timeStr)
+		var icon string
+		var badge string
+		var name string
 
-		rowText := fmt.Sprintf("%s%-*s %s", cursor, maxTitleLen, itemStyle.Render(title), timeBadge)
+		if entry.Type == storage.EntryFolder {
+			icon = theme.NormalItem.Copy().Foreground(theme.ColorPeach).Render(" ")
+			name = entry.Name + "/"
+			if entry.Name == ".." {
+				name = ".."
+			}
+			badge = theme.NormalItem.Copy().Foreground(theme.ColorOverlay0).Render("[DIR]")
+		} else {
+			icon = theme.NormalItem.Copy().Foreground(theme.ColorSubtext0).Render(" ")
+			name = entry.Name
+			timeStr := entry.ModTime.Format("02 Jan")
+			badge = theme.NormalItem.Copy().Foreground(theme.ColorOverlay0).Render(timeStr)
+		}
 
-		// Registrar zona de clic para esta fila
+		if len(name) > maxNameLen {
+			name = name[:maxNameLen-3] + "..."
+		}
+
+		rowText := fmt.Sprintf("%s%s%-*s %s", cursor, icon, maxNameLen, itemStyle.Render(name), badge)
+
+		// Registrar zona de clic
 		if ht != nil {
-			rowY := offsetY + (i - startIdx) + 1 // +1 por el borde superior
-			ht.Register(fmt.Sprintf("note-%d", i), mouse.ZoneNote, 0, rowY, width, rowY, i, note.Path)
+			rowY := offsetY + (i - startIdx) + 2
+			ht.Register(fmt.Sprintf("entry-%d", i), mouse.ZoneNote, 0, rowY, width, rowY, i, entry.Path)
 		}
 
 		rows = append(rows, rowText)

@@ -3,6 +3,7 @@ package storage
 import (
 	"bufio"
 	"fmt"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -16,6 +17,7 @@ import (
 // Task representa un ítem de tarea de markdown (- [ ] o - [x])
 type Task struct {
 	NoteTitle string
+	NotePath  string
 	Line      int
 	Text      string
 	Done      bool
@@ -23,82 +25,207 @@ type Task struct {
 
 // Note representa un documento de Markdown
 type Note struct {
-	ID        string
-	Title     string
-	Path      string
-	Content   string
-	Tags      []string
-	Category  string
-	ModTime   time.Time
-	Size      int64
-	Tasks     []Task
-	Images    []string
+	ID       string
+	Title    string
+	Path     string
+	Content  string
+	Tags     []string
+	Category string
+	ModTime  time.Time
+	Size     int64
+	Tasks    []Task
+	Images   []string
+}
+
+// EntryType define si es una nota o una carpeta
+type EntryType int
+
+const (
+	EntryNote EntryType = iota
+	EntryFolder
+)
+
+// NoteEntry representa una fila en el navegador de notas (carpeta o archivo)
+type NoteEntry struct {
+	Type    EntryType
+	Name    string
+	Path    string
+	Note    *Note
+	ModTime time.Time
 }
 
 // Storage maneja el acceso y persistencia en el sistema de archivos
 type Storage struct {
-	BaseDir string
+	BaseDir       string
+	CurrentSubDir string
 }
 
 func New(baseDir string) *Storage {
-	return &Storage{BaseDir: baseDir}
+	return &Storage{BaseDir: baseDir, CurrentSubDir: ""}
 }
 
 var (
-	taskRegex     = regexp.MustCompile(`^[-*]\s+\[([ xX])\]\s+(.*)$`)
-	imageRegex    = regexp.MustCompile(`!\[(.*?)\]\((.*?)\)`)
-	tagRegex      = regexp.MustCompile(`#([a-zA-Z0-9_-]+)`)
-	unsafeChars   = regexp.MustCompile(`[\\/:*?"<>|]`)
+	taskRegex   = regexp.MustCompile(`^[-*]\s+\[([ xX])\]\s+(.*)$`)
+	imageRegex  = regexp.MustCompile(`!\[(.*?)\]\((.*?)\)`)
+	tagRegex    = regexp.MustCompile(`#([a-zA-Z0-9_-]+)`)
+	unsafeChars = regexp.MustCompile(`[\\/:*?"<>|]`)
 )
 
-// ListNotes escanea el directorio y devuelve todas las notas .md ordenadas por fecha de modificación
-func (s *Storage) ListNotes() ([]Note, error) {
-	var notes []Note
+// CurrentDir devuelve la ruta absoluta del directorio actualmente navegado
+func (s *Storage) CurrentDir() string {
+	if s.CurrentSubDir == "" {
+		return s.BaseDir
+	}
+	return filepath.Join(s.BaseDir, s.CurrentSubDir)
+}
 
-	entries, err := os.ReadDir(s.BaseDir)
+// ListEntries lista carpetas y notas del subdirectorio actual para el explorador
+func (s *Storage) ListEntries() ([]NoteEntry, error) {
+	currentPath := s.CurrentDir()
+	entries, err := os.ReadDir(currentPath)
 	if err != nil {
 		return nil, err
 	}
 
+	var folderEntries []NoteEntry
+	var noteEntries []NoteEntry
+
+	// Si no estamos en la raíz, agregar opción para subir (..)
+	if s.CurrentSubDir != "" {
+		parentDir := filepath.Dir(s.CurrentSubDir)
+		if parentDir == "." {
+			parentDir = ""
+		}
+		folderEntries = append(folderEntries, NoteEntry{
+			Type: EntryFolder,
+			Name: "..",
+			Path: filepath.Join(s.BaseDir, parentDir),
+		})
+	}
+
 	for _, entry := range entries {
-		if entry.IsDir() || !strings.HasSuffix(strings.ToLower(entry.Name()), ".md") {
+		name := entry.Name()
+		if strings.HasPrefix(name, ".") || strings.EqualFold(name, "assets") {
 			continue
 		}
 
-		fullPath := filepath.Join(s.BaseDir, entry.Name())
+		fullPath := filepath.Join(currentPath, name)
 		info, err := entry.Info()
 		if err != nil {
 			continue
 		}
 
-		contentBytes, err := os.ReadFile(fullPath)
+		if entry.IsDir() {
+			folderEntries = append(folderEntries, NoteEntry{
+				Type:    EntryFolder,
+				Name:    name,
+				Path:    fullPath,
+				ModTime: info.ModTime(),
+			})
+		} else if strings.HasSuffix(strings.ToLower(name), ".md") {
+			contentBytes, err := os.ReadFile(fullPath)
+			if err != nil {
+				continue
+			}
+			content := string(contentBytes)
+			title := strings.TrimSuffix(name, filepath.Ext(name))
+			title = strings.ReplaceAll(title, "-", " ")
+			title = strings.ReplaceAll(title, "_", " ")
+
+			note := Note{
+				ID:      name,
+				Title:   title,
+				Path:    fullPath,
+				Content: content,
+				ModTime: info.ModTime(),
+				Size:    info.Size(),
+			}
+			note.Tags = s.extractTags(content)
+			note.Tasks = s.extractTasks(note.Title, fullPath, content)
+			note.Images = s.extractImages(content)
+
+			noteEntries = append(noteEntries, NoteEntry{
+				Type:    EntryNote,
+				Name:    title,
+				Path:    fullPath,
+				Note:    &note,
+				ModTime: info.ModTime(),
+			})
+		}
+	}
+
+	// Ordenar carpetas alfabéticamente (manteniendo '..' primero)
+	if len(folderEntries) > 1 {
+		start := 0
+		if s.CurrentSubDir != "" {
+			start = 1
+		}
+		sort.Slice(folderEntries[start:], func(i, j int) bool {
+			return strings.ToLower(folderEntries[start+i].Name) < strings.ToLower(folderEntries[start+j].Name)
+		})
+	}
+
+	// Ordenar notas por fecha de modificación descendente
+	sort.Slice(noteEntries, func(i, j int) bool {
+		return noteEntries[i].ModTime.After(noteEntries[j].ModTime)
+	})
+
+	return append(folderEntries, noteEntries...), nil
+}
+
+// ListNotes escanea recursivamente todas las notas .md del BaseDir para tags y tareas globales
+func (s *Storage) ListNotes() ([]Note, error) {
+	var notes []Note
+
+	err := filepath.WalkDir(s.BaseDir, func(path string, d fs.DirEntry, err error) error {
 		if err != nil {
-			continue
+			return nil
+		}
+		if d.IsDir() {
+			name := d.Name()
+			if (strings.HasPrefix(name, ".") && name != ".") || strings.EqualFold(name, "assets") {
+				return filepath.SkipDir
+			}
+			return nil
+		}
+		if !strings.HasSuffix(strings.ToLower(d.Name()), ".md") {
+			return nil
+		}
+
+		info, err := d.Info()
+		if err != nil {
+			return nil
+		}
+
+		contentBytes, err := os.ReadFile(path)
+		if err != nil {
+			return nil
 		}
 		content := string(contentBytes)
-
-		title := strings.TrimSuffix(entry.Name(), filepath.Ext(entry.Name()))
+		title := strings.TrimSuffix(d.Name(), filepath.Ext(d.Name()))
 		title = strings.ReplaceAll(title, "-", " ")
 		title = strings.ReplaceAll(title, "_", " ")
 
 		note := Note{
-			ID:      entry.Name(),
+			ID:      d.Name(),
 			Title:   title,
-			Path:    fullPath,
+			Path:    path,
 			Content: content,
 			ModTime: info.ModTime(),
 			Size:    info.Size(),
 		}
-
-		// Extraer tags, tareas e imágenes
 		note.Tags = s.extractTags(content)
-		note.Tasks = s.extractTasks(note.Title, content)
+		note.Tasks = s.extractTasks(note.Title, path, content)
 		note.Images = s.extractImages(content)
 
 		notes = append(notes, note)
+		return nil
+	})
+
+	if err != nil {
+		return nil, err
 	}
 
-	// Ordenar por fecha de modificación descendente (la más reciente primero)
 	sort.Slice(notes, func(i, j int) bool {
 		return notes[i].ModTime.After(notes[j].ModTime)
 	})
@@ -122,7 +249,7 @@ func (s *Storage) extractTags(content string) []string {
 	return tags
 }
 
-func (s *Storage) extractTasks(title, content string) []Task {
+func (s *Storage) extractTasks(title, path, content string) []Task {
 	var tasks []Task
 	scanner := bufio.NewScanner(strings.NewReader(content))
 	lineNum := 1
@@ -132,6 +259,7 @@ func (s *Storage) extractTasks(title, content string) []Task {
 			done := matches[1] == "x" || matches[1] == "X"
 			tasks = append(tasks, Task{
 				NoteTitle: title,
+				NotePath:  path,
 				Line:      lineNum,
 				Text:      matches[2],
 				Done:      done,
@@ -153,13 +281,13 @@ func (s *Storage) extractImages(content string) []string {
 	return images
 }
 
-// CreateNote crea una nueva nota en blanco o con plantilla
+// CreateNote crea una nueva nota en blanco o con plantilla en el directorio actual
 func (s *Storage) CreateNote(title string) (*Note, error) {
 	cleanName := strings.ToLower(title)
 	cleanName = strings.ReplaceAll(cleanName, " ", "-")
 	cleanName = unsafeChars.ReplaceAllString(cleanName, "")
 	fileName := fmt.Sprintf("%s.md", cleanName)
-	fullPath := filepath.Join(s.BaseDir, fileName)
+	fullPath := filepath.Join(s.CurrentDir(), fileName)
 
 	if _, err := os.Stat(fullPath); err == nil {
 		return nil, fmt.Errorf("ya existe una nota con el nombre: %s", fileName)
@@ -182,7 +310,16 @@ func (s *Storage) CreateNote(title string) (*Note, error) {
 	}, nil
 }
 
-// DeleteNote elimina una nota del disco
+// CreateFolder crea una subcarpeta dentro del directorio actual
+func (s *Storage) CreateFolder(name string) error {
+	cleanName := strings.ToLower(name)
+	cleanName = strings.ReplaceAll(cleanName, " ", "-")
+	cleanName = unsafeChars.ReplaceAllString(cleanName, "")
+	fullPath := filepath.Join(s.CurrentDir(), cleanName)
+	return os.MkdirAll(fullPath, 0755)
+}
+
+// DeleteNote elimina una nota o carpeta del disco
 func (s *Storage) DeleteNote(path string) error {
-	return os.Remove(path)
+	return os.RemoveAll(path)
 }

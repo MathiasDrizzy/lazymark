@@ -3,6 +3,7 @@ package views
 import (
 	"fmt"
 	"path/filepath"
+	"regexp"
 	"strings"
 
 	"github.com/MathiasDrizzy/lazymark/internal/i18n"
@@ -12,7 +13,9 @@ import (
 	"github.com/charmbracelet/glamour"
 )
 
-// RenderPreview renderiza el panel derecho de vista previa con Glamour (Markdown) o Kitty Graphics
+var mdImageRegex = regexp.MustCompile(`!\[(.*?)\]\((.*?)\)`)
+
+// RenderPreview renderiza el panel derecho de vista previa con Glamour (Markdown) e imágenes inline estilo Apple Notes
 func RenderPreview(note *storage.Note, width, height int, active bool, kittyClient *image.Client) string {
 	borderStyle := theme.InactivePanelBorder
 	if active {
@@ -29,45 +32,73 @@ func RenderPreview(note *storage.Note, width, height int, active bool, kittyClie
 		return borderStyle.Width(width).Height(height).Render(empty)
 	}
 
-	// Renderizar Markdown con Glamour
-	renderer, err := glamour.NewTermRenderer(
+	renderer, _ := glamour.NewTermRenderer(
 		glamour.WithStandardStyle("dark"),
 		glamour.WithWordWrap(contentWidth),
 	)
 
-	var renderedContent string
-	if err == nil {
-		out, err := renderer.Render(note.Content)
-		if err == nil {
-			renderedContent = out
-		} else {
-			renderedContent = note.Content
+	// Intercalar texto Markdown e imágenes en la posición exacta donde aparecen en el documento
+	content := note.Content
+	matches := mdImageRegex.FindAllStringSubmatchIndex(content, -1)
+
+	var renderedSections []string
+	lastIdx := 0
+
+	for _, m := range matches {
+		textBefore := content[lastIdx:m[0]]
+		altText := content[m[2]:m[3]]
+		imgPath := content[m[4]:m[5]]
+		lastIdx = m[1]
+
+		// Renderizar el texto antes de la imagen con Glamour
+		if strings.TrimSpace(textBefore) != "" {
+			if renderer != nil {
+				if out, err := renderer.Render(textBefore); err == nil {
+					renderedSections = append(renderedSections, strings.TrimRight(out, "\n"))
+				} else {
+					renderedSections = append(renderedSections, textBefore)
+				}
+			} else {
+				renderedSections = append(renderedSections, textBefore)
+			}
 		}
-	} else {
-		renderedContent = note.Content
+
+		// Resolver e insertar la imagen inline con colores reales
+		resolvedImg := imgPath
+		if !filepath.IsAbs(resolvedImg) {
+			resolvedImg = filepath.Join(filepath.Dir(note.Path), resolvedImg)
+		}
+
+		if ansiImg, err := image.RenderInlineToAnsi(resolvedImg, contentWidth-4, 12); err == nil && ansiImg != "" {
+			caption := theme.NormalItem.Copy().Foreground(theme.ColorPeach).Bold(true).
+				Render(fmt.Sprintf("   %s (%s)", altText, filepath.Base(imgPath)))
+			renderedSections = append(renderedSections, fmt.Sprintf("%s\n%s", caption, ansiImg))
+		}
 	}
 
-	// Renderizar imágenes inline integradas directamente en la nota (estilo Apple Notes)
-	if len(note.Images) > 0 {
-		var imgSections []string
-		for _, imgPath := range note.Images {
-			resolvedImg := imgPath
-			if !filepath.IsAbs(resolvedImg) {
-				resolvedImg = filepath.Join(filepath.Dir(note.Path), resolvedImg)
-			}
-			if ansiImg, err := image.RenderInlineToAnsi(resolvedImg, contentWidth-4, 12); err == nil && ansiImg != "" {
-				caption := theme.NormalItem.Copy().Foreground(theme.ColorPeach).Bold(true).
-					Render(fmt.Sprintf("  🖼️ %s", filepath.Base(imgPath)))
-				imgSections = append(imgSections, fmt.Sprintf("%s\n%s", caption, ansiImg))
+	// Renderizar el texto restante después de la última imagen
+	if lastIdx < len(content) {
+		remaining := content[lastIdx:]
+		if strings.TrimSpace(remaining) != "" {
+			if renderer != nil {
+				if out, err := renderer.Render(remaining); err == nil {
+					renderedSections = append(renderedSections, strings.TrimRight(out, "\n"))
+				} else {
+					renderedSections = append(renderedSections, remaining)
+				}
+			} else {
+				renderedSections = append(renderedSections, remaining)
 			}
 		}
-		if len(imgSections) > 0 {
-			renderedContent = fmt.Sprintf("%s\n\n%s", renderedContent, strings.Join(imgSections, "\n\n"))
-		}
+	}
+
+	finalContent := strings.Join(renderedSections, "\n\n")
+	if len(renderedSections) == 0 {
+		finalContent = content
 	}
 
 	return borderStyle.
 		Width(width).
 		Height(height).
-		Render(renderedContent)
+		Render(finalContent)
 }

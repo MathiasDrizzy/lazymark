@@ -128,8 +128,16 @@ func TestRenderNoteListAndPreview(t *testing.T) {
 			ModTime: time.Now(),
 		},
 	}
+	entries := []storage.NoteEntry{
+		{
+			Name: "test.md",
+			Path: "/tmp/test.md",
+			Type: storage.EntryNote,
+			Note: &notes[0],
+		},
+	}
 	ht := mouse.NewHitTester()
-	listOut := RenderNoteList(notes, 0, 40, 20, true, ht, 1)
+	listOut := RenderNoteList(entries, "", 0, 40, 20, true, ht, 1)
 	if listOut == "" {
 		t.Errorf("RenderNoteList devolvió string vacío")
 	}
@@ -159,5 +167,18 @@ func TestRenderSettingsModal(t *testing.T) {
 	zone, ok := ht.Check(20, 7)
 	if !ok || zone.Type != mouse.ZoneAction {
 		t.Errorf("hit-test en modal de configuración falló: %+v", zone)
+	}
+}
+
+func TestRenderCheatsheetAndOverlay(t *testing.T) {
+	sheet := RenderCheatsheet(80, 24)
+	if sheet == "" {
+		t.Fatalf("RenderCheatsheet devolvió string vacío")
+	}
+
+	base := "Base Content\nLine 2\nLine 3"
+	over := OverlayLayers(base, sheet, 80, 24, true)
+	if over == "" {
+		t.Fatalf("OverlayLayers devolvió string vacío")
 	}
 }

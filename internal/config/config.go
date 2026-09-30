@@ -23,6 +23,7 @@ type Config struct {
 	ShowTagsTab    bool     `json:"show_tags_tab"`
 	ShowTasksTab   bool     `json:"show_tasks_tab"`
 	ShowGalleryTab bool     `json:"show_gallery_tab"`
+	KeybindingMode string   `json:"keybinding_mode"`
 	configPath     string   `json:"-"`
 }
 
@@ -63,6 +64,7 @@ func DefaultConfig(notesDir string) *Config {
 		ShowTagsTab:    true,
 		ShowTasksTab:   true,
 		ShowGalleryTab: false,
+		KeybindingMode: "dual",
 	}
 }
 
@@ -103,6 +105,9 @@ func Load(customDir string) (*Config, error) {
 			}
 			if diskCfg.Language != "" {
 				cfg.Language = diskCfg.Language
+			}
+			if diskCfg.KeybindingMode != "" {
+				cfg.KeybindingMode = diskCfg.KeybindingMode
 			}
 			cfg.MouseClick = diskCfg.MouseClick
 			cfg.ShowTagsTab = diskCfg.ShowTagsTab

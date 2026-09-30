@@ -21,6 +21,7 @@ const (
 	ItemLanguage SettingsItem = iota
 	ItemEditor
 	ItemTheme
+	ItemKeybindings
 	ItemTabTags
 	ItemTabTasks
 	ItemTabGallery
@@ -43,6 +44,11 @@ func RenderSettingsModal(cfg *config.Config, selectedItem SettingsItem, totalWid
 	var rows []string
 	rows = append(rows, fmt.Sprintf("  %s", title))
 	rows = append(rows, fmt.Sprintf("  %s", divider))
+
+	keyMode := cfg.KeybindingMode
+	if keyMode == "" {
+		keyMode = "dual"
+	}
 
 	items := []struct {
 		id    SettingsItem
@@ -68,6 +74,20 @@ func RenderSettingsModal(cfg *config.Config, selectedItem SettingsItem, totalWid
 			id:    ItemTheme,
 			label: i18n.T("Tema de Color", "Color Theme"),
 			val:   theme.CurrentThemeName,
+		},
+		{
+			id:    ItemKeybindings,
+			label: i18n.T("Modo Atajos / Keys", "Keybindings Mode"),
+			val: func() string {
+				switch strings.ToLower(keyMode) {
+				case "vim":
+					return "Vim"
+				case "lazygit":
+					return "Lazygit"
+				default:
+					return i18n.T("Dual (Ambos)", "Dual (Both)")
+				}
+			}(),
 		},
 		{
 			id:    ItemTabTags,
@@ -101,7 +121,7 @@ func RenderSettingsModal(cfg *config.Config, selectedItem SettingsItem, totalWid
 		},
 	}
 
-	startY := (totalHeight - 16) / 2
+	startY := (totalHeight - 18) / 2
 	if startY < 2 {
 		startY = 2
 	}
@@ -154,11 +174,78 @@ func RenderSettingsModal(cfg *config.Config, selectedItem SettingsItem, totalWid
 
 	body := strings.Join(rows, "\n")
 
-	modal := theme.ActivePanelBorder.
+	return theme.ActivePanelBorder.
 		Width(modalWidth).
 		Background(theme.ColorBase).
 		Render(body)
+}
 
-	// Centrar el modal en la pantalla
-	return lipgloss.Place(totalWidth, totalHeight, lipgloss.Center, lipgloss.Center, modal)
+// OverlayLayers superpone un bloque flotante sobre la vista base preservando el fondo visible
+func OverlayLayers(base, overlay string, totalWidth, totalHeight int, alignBottomRight bool) string {
+	baseLines := strings.Split(base, "\n")
+	overlayLines := strings.Split(overlay, "\n")
+
+	// Asegurar tamaño base
+	for len(baseLines) < totalHeight {
+		baseLines = append(baseLines, strings.Repeat(" ", totalWidth))
+	}
+
+	overlayH := len(overlayLines)
+	overlayW := 0
+	for _, l := range overlayLines {
+		w := lipgloss.Width(l)
+		if w > overlayW {
+			overlayW = w
+		}
+	}
+
+	startY := (totalHeight - overlayH) / 2
+	startX := (totalWidth - overlayW) / 2
+
+	if alignBottomRight {
+		startY = totalHeight - overlayH - 2
+		startX = totalWidth - overlayW - 3
+	}
+
+	if startY < 0 {
+		startY = 0
+	}
+	if startX < 0 {
+		startX = 0
+	}
+
+	for i, oLine := range overlayLines {
+		targetY := startY + i
+		if targetY >= len(baseLines) {
+			break
+		}
+
+		bLine := baseLines[targetY]
+		bLen := lipgloss.Width(bLine)
+		if bLen < totalWidth {
+			bLine = bLine + strings.Repeat(" ", totalWidth-bLen)
+		}
+
+		// Combinar línea: fondo hasta startX + overlay + fondo después de startX+overlayW
+		left := ""
+		if startX > 0 {
+			left = lipgloss.NewStyle().MaxWidth(startX).Render(bLine)
+			if lipgloss.Width(left) < startX {
+				left += strings.Repeat(" ", startX-lipgloss.Width(left))
+			}
+		}
+
+		right := ""
+		remainingStart := startX + overlayW
+		if remainingStart < totalWidth {
+			rightRunes := []rune(bLine)
+			if len(rightRunes) > remainingStart {
+				right = string(rightRunes[remainingStart:])
+			}
+		}
+
+		baseLines[targetY] = left + oLine + right
+	}
+
+	return strings.Join(baseLines, "\n")
 }
