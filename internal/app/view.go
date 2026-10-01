@@ -2,11 +2,13 @@ package app
 
 import (
 	"fmt"
+	"path/filepath"
 	"strings"
 
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
 	"github.com/MathiasDrizzy/lazymark/internal/i18n"
+	"github.com/MathiasDrizzy/lazymark/internal/storage"
 	"github.com/MathiasDrizzy/lazymark/internal/ui/mouse"
 	"github.com/MathiasDrizzy/lazymark/internal/ui/textwidth"
 	"github.com/MathiasDrizzy/lazymark/internal/ui/theme"
@@ -76,7 +78,27 @@ func (m *AppModel) renderPreview() string {
 	case panelTags:
 		return views.RenderTagPreview(m.c.notes, m.tags.current(), r.W, r.H, active)
 	}
+	if e := m.notes.current(); e != nil && e.Type == storage.EntryFolder {
+		return m.renderFolderPreview(e, r, active)
+	}
 	return m.preview.view(m.notes.currentNote(), r, active)
+}
+
+// renderFolderPreview lista las notas que hay dentro de la carpeta bajo el cursor.
+func (m *AppModel) renderFolderPreview(e *storage.NoteEntry, r Rect, active bool) string {
+	prefix := e.Path + string(filepath.Separator)
+	var lines []string
+	for _, n := range m.c.notes {
+		if rel, ok := strings.CutPrefix(n.Path, prefix); ok {
+			lines = append(lines, " "+lipgloss.NewStyle().Foreground(theme.ColorTeal).Render(iconNote)+" "+
+				lipgloss.NewStyle().Foreground(theme.ColorText).Render(rel)+"  "+dim(n.ModTime.Format("02 Jan 2006")))
+		}
+	}
+	footer := fmt.Sprintf(i18n.T("%d nota(s)", "%d note(s)"), len(lines))
+	if len(lines) == 0 {
+		lines = []string{" " + dim(i18n.T("Carpeta vacía", "Empty folder"))}
+	}
+	return theme.RenderPanel("[4]─"+iconFolderOpen+" "+e.Name, footer, lines, r.W, r.H, active)
 }
 
 // renderFooter dibuja la barra inferior estilo lazygit: la papelera abajo a la

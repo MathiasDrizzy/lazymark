@@ -234,3 +234,13 @@ func TestDividerDrag(t *testing.T) {
 		t.Errorf("el divisor no se movió: antes %d, después %d", before, m.layout.Preview.X)
 	}
 }
+
+// TestFolderPreview: con el cursor sobre una carpeta, el preview lista sus notas.
+func TestFolderPreview(t *testing.T) {
+	m := newTestModel(t, 120, 35)
+	m.notes.selectPath(filepath.Join(m.c.store.BaseDir, "proyectos"))
+	out := plain(m)
+	if !strings.Contains(out, "lazymark-roadmap.md") || !strings.Contains(out, "1 nota(s)") {
+		t.Errorf("el preview de la carpeta no lista sus notas:\n%s", out)
+	}
+}
