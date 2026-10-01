@@ -179,6 +179,13 @@ func (p *inputPopup) handle(_ Action, msg tea.KeyPressMsg) (tea.Cmd, bool) {
 	return cmd, false
 }
 
+// paste inserta en el campo el texto pegado.
+func (p *inputPopup) paste(msg tea.PasteMsg) tea.Cmd {
+	var cmd tea.Cmd
+	p.input, cmd = p.input.Update(msg)
+	return cmd
+}
+
 func (p *inputPopup) click(int, int) (tea.Cmd, bool) { return nil, false }
 
 func (p *inputPopup) render(l Layout) string {

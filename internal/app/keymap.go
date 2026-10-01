@@ -119,6 +119,7 @@ func defaultBindings() []Binding {
 	return []Binding{
 		{actQuit, ctxGlobal, []string{"q", "ctrl+c"}, "Salir", "Quit", true},
 		{actCheatsheet, ctxGlobal, []string{"?"}, "Atajos", "Keybindings", true},
+		{actPaste, ctxGlobal, []string{"ctrl+v"}, "Pegar imagen", "Paste image", false},
 		{actSettings, ctxGlobal, []string{","}, "Ajustes", "Settings", false},
 		{actTrash, ctxGlobal, []string{"x"}, "Papelera", "Trash", false},
 		{actPanelNotes, ctxGlobal, []string{"1"}, "Panel Notas", "Notes panel", false},
@@ -151,7 +152,6 @@ func defaultBindings() []Binding {
 		{actDelete, ctxNotes, []string{"d"}, "Borrar", "Delete", true},
 		{actSelect, ctxNotes, []string{"v"}, "Seleccionar", "Select", true},
 		{actSelectAll, ctxNotes, []string{"V"}, "Seleccionar todas", "Select all", false},
-		{actPaste, ctxNotes, []string{"ctrl+v"}, "Pegar imagen", "Paste image", false},
 
 		{actEnter, ctxTasks, []string{"enter"}, "Abrir nota", "Open note", true},
 		{actToggleTask, ctxTasks, []string{"space"}, "Alternar tarea", "Toggle task", true},

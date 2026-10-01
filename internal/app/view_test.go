@@ -1,6 +1,7 @@
 package app
 
 import (
+	"errors"
 	"fmt"
 	"math/rand"
 	"os"
@@ -77,8 +78,17 @@ func newTestModel(t *testing.T, w, h int) *AppModel {
 	if err != nil {
 		t.Fatalf("New: %v", err)
 	}
+	// R17: los tests nunca leen el portapapeles real; el que lo necesite pone un lector simulado.
+	m.c.clip.Reader = noRealClipboard{}
 	m.Update(tea.WindowSizeMsg{Width: w, Height: h})
 	return m
+}
+
+// noRealClipboard hace fallar cualquier lectura del portapapeles del sistema.
+type noRealClipboard struct{}
+
+func (noRealClipboard) ReadImage(string) error {
+	return errors.New("portapapeles real deshabilitado en los tests")
 }
 
 // press envía teclas como si las escribiera el usuario ("enter", "space", "?"…).

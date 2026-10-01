@@ -157,6 +157,8 @@ func (m *AppModel) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.c.setStatus("%s", i18n.T("Nota actualizada", "Note updated"))
 		}
 		return m, tea.ClearScreen
+	case tea.PasteMsg:
+		return m, m.handlePaste(msg)
 	case tea.KeyPressMsg:
 		return m, m.handleKey(msg)
 	case tea.MouseClickMsg:
@@ -242,6 +244,9 @@ func (m *AppModel) do(a Action) tea.Cmd {
 	case actKanban:
 		m.kanbanOn = !m.kanbanOn
 		m.relayout()
+		return nil
+	case actPaste:
+		m.attachImage(m.c.clip.SaveFromClipboard)
 		return nil
 	}
 	if m.kanbanOn {

@@ -2,8 +2,10 @@ package clipboard
 
 import (
 	"errors"
+	"net/url"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -104,7 +106,12 @@ func TestParsePastedPaths(t *testing.T) {
 	text := mk("notas.txt")
 	_ = os.Mkdir(filepath.Join(dir, "carpeta.png"), 0o755)
 
+	// Ghostty/macOS y Linux escapan con "\"; Windows Terminal entrega la ruta entre comillas.
 	esc := strings.NewReplacer(" ", `\ `, "(", `\(`, ")", `\)`).Replace(spaced)
+	if runtime.GOOS == "windows" {
+		esc = `"` + spaced + `"`
+	}
+	fileURL := (&url.URL{Scheme: "file", Path: "/" + strings.TrimPrefix(filepath.ToSlash(spaced), "/")}).String()
 	cases := []struct {
 		name, in string
 		want     []string
@@ -113,7 +120,7 @@ func TestParsePastedPaths(t *testing.T) {
 		{"con salto final", plain + "\n", []string{plain}},
 		{"espacios escapados", esc, []string{spaced}},
 		{"entre comillas", `'` + spaced + `'`, []string{spaced}},
-		{"url file://", "file://" + strings.ReplaceAll(spaced, " ", "%20"), []string{spaced}},
+		{"url file://", fileURL, []string{spaced}},
 		{"varias", plain + "\n" + esc, []string{plain, spaced}},
 		{"no es imagen", text, nil},
 		{"una buena y una mala", plain + "\n" + text, nil},
@@ -127,6 +134,26 @@ func TestParsePastedPaths(t *testing.T) {
 		got := ParsePastedPaths(c.in)
 		if strings.Join(got, "|") != strings.Join(c.want, "|") {
 			t.Errorf("%s: ParsePastedPaths(%q) = %q, se esperaba %q", c.name, c.in, got, c.want)
+		}
+	}
+}
+
+// TestFilePathFromURL prueba la conversión de Windows en cualquier sistema.
+func TestFilePathFromURL(t *testing.T) {
+	cases := []struct {
+		in      string
+		windows bool
+		want    string
+	}{
+		{"/C:/Users/yo/mi foto.png", true, `C:\Users\yo\mi foto.png`},
+		{"/D:/x/y.jpg", true, `D:\x\y.jpg`},
+		{"/unidad-de-red/x.png", true, `\unidad-de-red\x.png`},
+		{"/Users/yo/mi foto.png", false, "/Users/yo/mi foto.png"},
+		{"/C:/no/cambia.png", false, "/C:/no/cambia.png"},
+	}
+	for _, c := range cases {
+		if got := filePathFromURL(c.in, c.windows); got != c.want {
+			t.Errorf("filePathFromURL(%q, windows=%v) = %q, se esperaba %q", c.in, c.windows, got, c.want)
 		}
 	}
 }

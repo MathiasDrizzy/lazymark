@@ -149,7 +149,7 @@ func pastedPath(s string) (string, bool) {
 		if err != nil {
 			return "", false
 		}
-		s = u.Path
+		s = filePathFromURL(u.Path, runtime.GOOS == "windows")
 	} else if runtime.GOOS != "windows" {
 		s = unescapeShell(s)
 	}
@@ -168,6 +168,19 @@ func pastedPath(s string) (string, bool) {
 		return "", false
 	}
 	return s, true
+}
+
+// filePathFromURL convierte el path de una URL file:// en una ruta del sistema.
+// En Windows la URL es file:///C:/ruta: sobra la barra de antes de la unidad y
+// las barras pasan a invertidas.
+func filePathFromURL(p string, windows bool) string {
+	if !windows {
+		return p
+	}
+	if len(p) >= 3 && p[0] == '/' && p[2] == ':' {
+		p = p[1:]
+	}
+	return strings.ReplaceAll(p, "/", `\`)
 }
 
 // unescapeShell quita la barra de los caracteres escapados ("\ " -> " ").

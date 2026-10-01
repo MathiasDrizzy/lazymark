@@ -173,8 +173,6 @@ func (p *notesPanel) key(a Action) tea.Cmd {
 		}
 	case actSelectAll:
 		p.selectAll()
-	case actPaste:
-		return p.pasteImage()
 	case actEscape:
 		if len(p.selected) > 0 {
 			p.selected = map[string]bool{}
@@ -372,26 +370,6 @@ func (p *notesPanel) promptDelete() tea.Cmd {
 		return trash()
 	}
 	return p.c.confirm(title, fmt.Sprintf(i18n.T("¿Mover '%s' a la papelera?", "Move '%s' to trash?"), filepath.Base(paths[0])), false, trash)
-}
-
-func (p *notesPanel) pasteImage() tea.Cmd {
-	note := p.currentNote()
-	if note == nil {
-		p.c.setStatus("%s", i18n.T("Selecciona una nota para pegar la imagen", "Select a note to paste the image"))
-		return nil
-	}
-	ref, err := p.c.clip.SaveFromClipboard(filepath.Dir(note.Path), filepath.Base(note.Path))
-	if err != nil {
-		p.c.errStatus("Portapapeles", "Clipboard", err)
-		return nil
-	}
-	if err := appendLine(note.Path, fmt.Sprintf("\n![%s](%s)\n", i18n.T("Imagen", "Image"), ref)); err != nil {
-		p.c.errStatus("No se pudo insertar la imagen", "Could not insert image", err)
-		return nil
-	}
-	p.reload()
-	p.c.setStatus(i18n.T("Imagen guardada en %s", "Image saved to %s"), ref)
-	return nil
 }
 
 func (p *notesPanel) title() string {
