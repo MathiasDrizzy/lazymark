@@ -1,7 +1,6 @@
 package app
 
 import (
-	"path/filepath"
 	"slices"
 
 	tea "charm.land/bubbletea/v2"
@@ -63,7 +62,7 @@ func New(cfg *config.Config) (*AppModel, error) {
 		cfg:   cfg,
 		store: store,
 		kitty: image.New(),
-		clip:  clipboard.New(filepath.Join(cfg.NotesDir, "assets")),
+		clip:  clipboard.New(),
 		keys:  NewKeymap(cfg),
 	}
 	if cfg.HideCompletedTasks {

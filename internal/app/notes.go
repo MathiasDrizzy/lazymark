@@ -380,7 +380,7 @@ func (p *notesPanel) pasteImage() tea.Cmd {
 		p.c.setStatus("%s", i18n.T("Selecciona una nota para pegar la imagen", "Select a note to paste the image"))
 		return nil
 	}
-	ref, err := p.c.clip.PasteImage(filepath.Base(note.Path))
+	ref, err := p.c.clip.SaveFromClipboard(filepath.Dir(note.Path), filepath.Base(note.Path))
 	if err != nil {
 		p.c.errStatus("Portapapeles", "Clipboard", err)
 		return nil
