@@ -5,6 +5,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"runtime"
 	"testing"
 	"time"
 )
@@ -46,8 +47,11 @@ func TestToggleTaskRewritesOnlyThatLine(t *testing.T) {
 			t.Fatalf("línea %d: el archivo cambió más que la casilla:\nantes:   %q\ndespués: %q\nesperado:%q", c.line, before, after, want)
 		}
 	}
-	if fi, _ := os.Stat(path); fi.Mode().Perm() != 0o640 {
-		t.Errorf("los permisos cambiaron: %v", fi.Mode().Perm())
+	// Windows no tiene permisos Unix (todo archivo figura como 0666): solo se comprueban en el resto.
+	if runtime.GOOS != "windows" {
+		if fi, _ := os.Stat(path); fi.Mode().Perm() != 0o640 {
+			t.Errorf("los permisos cambiaron: %v", fi.Mode().Perm())
+		}
 	}
 	if _, err := os.Stat(path + ".tmp"); !os.IsNotExist(err) {
 		t.Error("quedó un .tmp")

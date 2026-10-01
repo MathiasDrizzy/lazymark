@@ -111,6 +111,7 @@ func TestToggleStaleNoteIsNotOverwritten(t *testing.T) {
 
 // taskRowPos devuelve la celda (x, y) de la casilla y la del texto de la tarea.
 func taskRowPos(m *AppModel, i int) (boxX, textX, y int) {
+	_ = m.View() // el render fija el desplazamiento de la lista
 	r := m.layout.Tasks
 	return r.X + 2, r.X + 6, r.Y + 1 + i - m.tasks.list.offset
 }
@@ -120,6 +121,14 @@ func taskRowPos(m *AppModel, i int) (boxX, textX, y int) {
 func TestClickOnCheckboxToggles(t *testing.T) {
 	m := newTestModel(t, 120, 35)
 	i := taskIndex(t, m, "Leche")
+	// El panel muestra pocas filas y el orden de las notas depende de sus fechas:
+	// el cursor se pone en una fila vecina para que la tarea quede visible.
+	neighbor := i - 1
+	if neighbor < 0 {
+		neighbor = i + 1
+	}
+	m.tasks.list.set(neighbor, len(m.c.tasks))
+	_ = m.View() // el render fija el desplazamiento de la lista
 	_, textX, y := taskRowPos(m, i)
 
 	click(m, textX, y)
@@ -229,6 +238,14 @@ func TestStrikethroughStaysInRow(t *testing.T) {
 	m := newTestModel(t, 120, 35)
 	press(m, "2")
 	r := m.layout.Tasks
+	// el cursor sobre una tarea hecha, para que haya alguna visible en el panel
+	for i, tk := range m.c.tasks {
+		if tk.Done {
+			m.tasks.list.set(i, len(m.c.tasks))
+			break
+		}
+	}
+	_ = m.View() // el render fija el desplazamiento de la lista
 
 	doneRows := map[int]bool{}
 	for i, tk := range m.c.tasks {

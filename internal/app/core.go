@@ -114,13 +114,13 @@ func (c *core) openEditor(path string, line int) tea.Cmd {
 	if path == "" {
 		return nil
 	}
-	// El editor puede traer argumentos ("code --wait").
-	fields := strings.Fields(c.cfg.Editor)
-	if len(fields) == 0 {
-		fields = []string{"micro"}
+	// El editor puede traer argumentos ("code --wait") y una ruta con espacios.
+	name, extra := config.SplitEditor(c.cfg.Editor)
+	if name == "" {
+		name = "micro"
 	}
-	bin := config.ResolveEditorBin(fields[0])
-	args := append([]string{}, fields[1:]...)
+	bin := config.ResolveEditorBin(name)
+	args := append([]string{}, extra...)
 	lower := strings.ToLower(filepath.Base(bin))
 	if line > 1 && (strings.Contains(lower, "micro") || strings.Contains(lower, "vim") || strings.Contains(lower, "nano")) {
 		args = append(args, fmt.Sprintf("+%d", line))

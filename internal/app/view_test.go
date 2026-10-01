@@ -2,10 +2,13 @@ package app
 
 import (
 	"fmt"
+	"math/rand"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
+	"time"
 
 	tea "charm.land/bubbletea/v2"
 	"github.com/MathiasDrizzy/lazymark/internal/config"
@@ -13,11 +16,17 @@ import (
 )
 
 // copyFixtures copia testdata/notes a un directorio temporal para que el test
-// nunca toque las notas reales ni modifique los fixtures versionados.
+// nunca toque las notas reales ni modifique los fixtures versionados. Las fechas
+// de modificación se fijan explícitamente (cada archivo, alfabéticamente, un
+// minuto después del anterior): el orden de las notas y de sus tareas no puede
+// depender del sistema de archivos ni de la velocidad de la copia.
+// Con LAZYMARK_TEST_CHAOS=<semilla> se barajan, para comprobar que ningún test
+// depende de ese orden.
 func copyFixtures(t *testing.T) string {
 	t.Helper()
 	dst := t.TempDir()
 	src := filepath.Join("testdata", "notes")
+	var files []string
 	err := filepath.WalkDir(src, func(path string, d os.DirEntry, err error) error {
 		if err != nil {
 			return err
@@ -31,10 +40,25 @@ func copyFixtures(t *testing.T) string {
 		if err != nil {
 			return err
 		}
+		files = append(files, target)
 		return os.WriteFile(target, data, 0o644)
 	})
 	if err != nil {
 		t.Fatalf("copiando fixtures: %v", err)
+	}
+	order := make([]int, len(files))
+	for i := range order {
+		order[i] = i
+	}
+	if seed, err := strconv.Atoi(os.Getenv("LAZYMARK_TEST_CHAOS")); err == nil {
+		rand.New(rand.NewSource(int64(seed))).Shuffle(len(order), func(i, j int) { order[i], order[j] = order[j], order[i] })
+	}
+	base := time.Date(2026, 9, 1, 12, 0, 0, 0, time.UTC)
+	for i, f := range files {
+		mt := base.Add(time.Duration(order[i]) * time.Minute)
+		if err := os.Chtimes(f, mt, mt); err != nil {
+			t.Fatal(err)
+		}
 	}
 	return dst
 }
@@ -46,6 +70,7 @@ func newTestModel(t *testing.T, w, h int) *AppModel {
 	home := t.TempDir()
 	t.Setenv("HOME", home)
 	t.Setenv("XDG_CONFIG_HOME", filepath.Join(home, ".config"))
+	t.Setenv("AppData", filepath.Join(home, "AppData")) // Windows
 	cfg := config.DefaultConfig(copyFixtures(t))
 	cfg.Language = "es"
 	m, err := New(cfg)

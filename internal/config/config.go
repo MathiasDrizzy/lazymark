@@ -197,18 +197,48 @@ func DetectInstalledEditors() []string {
 	return list
 }
 
-// EditorExists indica si el ejecutable del editor (primera palabra, sin
-// argumentos) existe como ruta o en el PATH.
-func EditorExists(editor string) bool {
+// SplitEditor separa el comando del editor en ejecutable y argumentos. Acepta
+// una ruta con espacios sin comillas ("C:\Program Files\Editor\ed.exe"), una
+// ruta entre comillas seguida de argumentos, y "nombre arg1 arg2".
+func SplitEditor(editor string) (bin string, args []string) {
+	editor = strings.TrimSpace(editor)
+	if editor == "" {
+		return "", nil
+	}
+	if isFile(editor) {
+		return editor, nil
+	}
+	if q := editor[0]; q == '"' || q == '\'' {
+		if end := strings.IndexByte(editor[1:], q); end >= 0 {
+			return editor[1 : 1+end], strings.Fields(editor[2+end:])
+		}
+	}
 	fields := strings.Fields(editor)
-	if len(fields) == 0 {
+	for k := len(fields); k > 1; k-- {
+		if cand := strings.Join(fields[:k], " "); isFile(cand) {
+			return cand, fields[k:]
+		}
+	}
+	return fields[0], fields[1:]
+}
+
+func isFile(path string) bool {
+	fi, err := os.Stat(path)
+	return err == nil && fi.Mode().IsRegular()
+}
+
+// EditorExists indica si el ejecutable del editor (sin sus argumentos) existe
+// como ruta o en el PATH.
+func EditorExists(editor string) bool {
+	bin, _ := SplitEditor(editor)
+	if bin == "" {
 		return false
 	}
-	bin := ResolveEditorBin(fields[0])
-	if _, err := os.Stat(bin); err == nil {
+	resolved := ResolveEditorBin(bin)
+	if _, err := os.Stat(resolved); err == nil {
 		return true
 	}
-	_, err := exec.LookPath(bin)
+	_, err := exec.LookPath(resolved)
 	return err == nil
 }
 

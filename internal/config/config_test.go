@@ -1,8 +1,10 @@
 package config
 
 import (
+	"encoding/json"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -115,12 +117,51 @@ func TestLoadRespectsCustomEditor(t *testing.T) {
 		t.Errorf("Editor = %q, se esperaba %q", cfg.Editor, bin)
 	}
 
-	writeDiskConfig(t, `{"keymap_version":2,"editor":"`+bin+` --wait"}`)
+	// el JSON se arma con json.Marshal: una ruta de Windows lleva barras invertidas
+	raw, _ := json.Marshal(map[string]any{"keymap_version": 2, "editor": bin + " --wait"})
+	writeDiskConfig(t, string(raw))
 	cfg, err = Load(t.TempDir())
 	if err != nil {
 		t.Fatal(err)
 	}
 	if cfg.Editor != bin+" --wait" {
 		t.Errorf("Editor con argumentos = %q", cfg.Editor)
+	}
+}
+
+func TestSplitEditor(t *testing.T) {
+	dir := filepath.Join(t.TempDir(), "Program Files", "Mi Editor")
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	bin := filepath.Join(dir, "ed")
+	if err := os.WriteFile(bin, []byte("x"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	cases := []struct {
+		name, in, wantBin, wantArgs string
+	}{
+		{"nombre simple", "micro", "micro", ""},
+		{"nombre con argumentos", "code --wait -n", "code", "--wait -n"},
+		{"ruta con espacios sin comillas", bin, bin, ""},
+		{"ruta con espacios y argumentos", bin + " --wait", bin, "--wait"},
+		{"ruta entre comillas dobles", `"` + bin + `" --wait`, bin, "--wait"},
+		{"ruta entre comillas simples", "'" + bin + "'", bin, ""},
+		{"espacios de más", "  vim  -u  NONE ", "vim", "-u NONE"},
+		{"vacío", "   ", "", ""},
+	}
+	for _, c := range cases {
+		gotBin, gotArgs := SplitEditor(c.in)
+		if gotBin != c.wantBin || strings.Join(gotArgs, " ") != c.wantArgs {
+			t.Errorf("%s: SplitEditor(%q) = %q %q, se esperaba %q %q", c.name, c.in, gotBin, gotArgs, c.wantBin, c.wantArgs)
+		}
+	}
+	for _, in := range []string{bin, bin + " --wait", `"` + bin + `" -n`} {
+		if !EditorExists(in) {
+			t.Errorf("EditorExists(%q) debería ser verdadero", in)
+		}
+	}
+	if EditorExists(filepath.Join(dir, "no-existe")) || EditorExists("") {
+		t.Error("EditorExists debería ser falso para un editor inexistente o vacío")
 	}
 }
