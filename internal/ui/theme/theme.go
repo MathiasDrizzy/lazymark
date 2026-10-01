@@ -204,12 +204,12 @@ var (
 // ─── Estilos activos (reconstruidos al cambiar de tema) ────────────
 
 var (
-	ActivePanelBorder  lipgloss.Style
+	ActivePanelBorder   lipgloss.Style
 	InactivePanelBorder lipgloss.Style
-	TabActive          lipgloss.Style
-	TabInactive        lipgloss.Style
-	SelectedItem lipgloss.Style
-	NormalItem   lipgloss.Style
+	TabActive           lipgloss.Style
+	TabInactive         lipgloss.Style
+	SelectedItem        lipgloss.Style
+	NormalItem          lipgloss.Style
 
 	// Barra de selección sólida estilo Lazygit a todo lo ancho
 	SelectedLineActive   lipgloss.Style
@@ -349,4 +349,3 @@ func PrevTheme() string {
 	ApplyThemeByName(names[0])
 	return names[0]
 }
-

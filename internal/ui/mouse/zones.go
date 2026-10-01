@@ -4,10 +4,10 @@ package mouse
 type ZoneType string
 
 const (
-	ZoneTab     ZoneType = "tab"
-	ZoneNote    ZoneType = "note"
-	ZoneAction  ZoneType = "action"
-	ZonePreview ZoneType = "preview"
+	ZoneTab        ZoneType = "tab"
+	ZoneNote       ZoneType = "note"
+	ZoneAction     ZoneType = "action"
+	ZonePreview    ZoneType = "preview"
 	ZoneTag        ZoneType = "tag"
 	ZoneTask       ZoneType = "task"
 	ZoneGallery    ZoneType = "gallery"
@@ -17,14 +17,14 @@ const (
 
 // Zone representa una región rectangular en la pantalla de la terminal
 type Zone struct {
-	ID       string
-	Type     ZoneType
-	X1       int
-	Y1       int
-	X2       int
-	Y2       int
-	Index    int
-	Payload  string
+	ID      string
+	Type    ZoneType
+	X1      int
+	Y1      int
+	X2      int
+	Y2      int
+	Index   int
+	Payload string
 }
 
 // HitTester gestiona el registro y verificación de coordenadas de clic

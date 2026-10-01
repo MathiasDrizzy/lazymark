@@ -459,9 +459,9 @@ func (s *Storage) ToggleTask(notePath string, lineNum int) (bool, error) {
 type TaskStage int
 
 const (
-	StageTodo TaskStage = iota // 0: Por Hacer (- [ ])
-	StageDoing                 // 1: En Progreso (- [ ] con #doing, #wip, #progreso)
-	StageDone                  // 2: Completado (- [x])
+	StageTodo  TaskStage = iota // 0: Por Hacer (- [ ])
+	StageDoing                  // 1: En Progreso (- [ ] con #doing, #wip, #progreso)
+	StageDone                   // 2: Completado (- [x])
 )
 
 var inProgressTagRegex = regexp.MustCompile(`(?i)#(doing|wip|progreso|in-progress)\b`)

@@ -45,11 +45,11 @@ func DefaultKeybindings() KeybindingsConfig {
 
 // Config almacena las preferencias de ejecución de la aplicación.
 type Config struct {
-	NotesDir       string            `json:"notes_dir"`
-	Editor         string            `json:"editor"`
-	MouseClick     bool              `json:"mouse_click"`
-	Theme          string            `json:"theme"`
-	Language       string            `json:"language"`
+	NotesDir           string            `json:"notes_dir"`
+	Editor             string            `json:"editor"`
+	MouseClick         bool              `json:"mouse_click"`
+	Theme              string            `json:"theme"`
+	Language           string            `json:"language"`
 	ShowTagsTab        bool              `json:"show_tags_tab"`
 	ShowTasksTab       bool              `json:"show_tasks_tab"`
 	ConfirmDelete      bool              `json:"confirm_delete"`

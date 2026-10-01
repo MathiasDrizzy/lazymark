@@ -54,11 +54,11 @@ type AppModel struct {
 	kanbanCol      int    // Columna activa en tablero Kanban (0=Todo, 1=Doing, 2=Done)
 	kanbanSelected [3]int // Fila seleccionada en cada columna Kanban
 
-	notes        []storage.Note
-	selectedNote int
-	entries      []storage.NoteEntry // Carpetas y notas navegables
+	notes         []storage.Note
+	selectedNote  int
+	entries       []storage.NoteEntry // Carpetas y notas navegables
 	selectedEntry int
-	activeTab    int
+	activeTab     int
 	activePanel   int  // PanelNotes, PanelTasks, PanelTags, PanelPreview
 	lastLeftPanel int  // Último panel izquierdo activo (PanelNotes, PanelTasks, PanelTags)
 	isMaximized   bool // Maximización del panel activo al 100%
@@ -1802,7 +1802,6 @@ func (m *AppModel) openKanbanCardEditor() (tea.Model, tea.Cmd) {
 	card := cards[selIdx]
 	return m, m.openEditorForPathAndLine(card.NotePath, card.Task.Line)
 }
-
 
 func (m *AppModel) createQuickNote() tea.Cmd {
 	targetDir := m.storage.BaseDir

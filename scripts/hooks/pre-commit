@@ -1,0 +1,18 @@
+#!/usr/bin/env bash
+# Pre-commit de lazymark. Se activa con: git config core.hooksPath scripts/hooks
+set -euo pipefail
+cd "$(git rev-parse --show-toplevel)"
+
+echo "pre-commit: gofmt -l"
+unformatted="$(gofmt -l $(git ls-files '*.go'))"
+if [ -n "$unformatted" ]; then
+  echo "pre-commit: archivos sin gofmt:" >&2
+  echo "$unformatted" >&2
+  exit 1
+fi
+
+echo "pre-commit: go vet ./..."
+go vet ./...
+
+echo "pre-commit: go test ./..."
+go test ./...

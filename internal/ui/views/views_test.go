@@ -214,8 +214,8 @@ func TestRenderConfirmModal(t *testing.T) {
 
 func TestRenderSettingsModal(t *testing.T) {
 	cfg := &config.Config{
-		Editor:         "micro",
-		Theme:          "catppuccin-mocha",
+		Editor:       "micro",
+		Theme:        "catppuccin-mocha",
 		Language:     "es",
 		ShowTagsTab:  true,
 		ShowTasksTab: true,
@@ -472,4 +472,3 @@ func TestCollectKanbanAndRender(t *testing.T) {
 		t.Errorf("Tipo de zona inesperado: %v", zone.Type)
 	}
 }
-

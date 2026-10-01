@@ -16,9 +16,9 @@ import (
 type TaskFilter int
 
 const (
-	TaskFilterAll      TaskFilter = iota // Todas las tareas
-	TaskFilterPending                    // Solo pendientes (- [ ])
-	TaskFilterDone                       // Solo completadas (- [x])
+	TaskFilterAll     TaskFilter = iota // Todas las tareas
+	TaskFilterPending                   // Solo pendientes (- [ ])
+	TaskFilterDone                      // Solo completadas (- [x])
 )
 
 // FlatTask es una tarea aplanada con contexto de la nota padre

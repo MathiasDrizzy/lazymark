@@ -268,15 +268,11 @@ func OverlayLayers(base, overlay string, totalWidth, totalHeight int, alignBotto
 		expectedRightWidth := totalWidth - (startX + overlayW)
 		right := ""
 		if expectedRightWidth > 0 {
-			if alignBottomRight {
-				right = strings.Repeat(" ", expectedRightWidth)
-			} else {
-				remainingStart := startX + overlayW
-				right = ansi.Cut(bLine, remainingStart, totalWidth)
-				rw := ansi.StringWidth(right)
-				if rw < expectedRightWidth {
-					right += strings.Repeat(" ", expectedRightWidth-rw)
-				}
+			// Conservar el fondo a la derecha del popup (incluido el borde de los paneles)
+			right = ansi.Cut(bLine, startX+overlayW, totalWidth)
+			rw := ansi.StringWidth(right)
+			if rw < expectedRightWidth {
+				right += strings.Repeat(" ", expectedRightWidth-rw)
 			}
 		}
 

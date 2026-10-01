@@ -66,9 +66,9 @@ func RenderInlineToAnsi(imagePath string, maxWidth, maxHeight int) (string, erro
 	for py := 0; py < pixelHeight; py += 2 {
 		for px := 0; px < targetW; px++ {
 			// Mapear coordenadas a la imagen original
-			srcX := bounds.Min.X + (px * origW) / targetW
-			srcYTop := bounds.Min.Y + (py * origH) / pixelHeight
-			srcYBottom := bounds.Min.Y + ((py + 1) * origH) / pixelHeight
+			srcX := bounds.Min.X + (px*origW)/targetW
+			srcYTop := bounds.Min.Y + (py*origH)/pixelHeight
+			srcYBottom := bounds.Min.Y + ((py+1)*origH)/pixelHeight
 
 			r1, g1, b1, _ := img.At(srcX, srcYTop).RGBA()
 			topR, topG, topB := uint8(r1>>8), uint8(g1>>8), uint8(b1>>8)

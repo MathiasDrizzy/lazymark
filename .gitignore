@@ -22,8 +22,7 @@ Thumbs.db
 *.swo
 *~
 
-# Herramientas internas de desarrollo y agentes locales
-.agents/
-AGENTS.md
-LEARNING_SYSTEM.md
-harness/
+# Archivos de agentes (SPEC X11)
+CLAUDE.local.md
+.claude/
+ESTADO.md

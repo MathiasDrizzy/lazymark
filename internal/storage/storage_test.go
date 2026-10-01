@@ -299,4 +299,3 @@ func TestUpdateTaskStage(t *testing.T) {
 		t.Errorf("Se esperaba etapa StageTodo, obtenido %v (texto: %s, done: %v)", GetTaskStage(taskReloaded3), taskReloaded3.Text, taskReloaded3.Done)
 	}
 }
-
