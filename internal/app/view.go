@@ -3,6 +3,7 @@ package app
 import (
 	"fmt"
 	"path/filepath"
+	"strconv"
 	"strings"
 
 	tea "charm.land/bubbletea/v2"
@@ -105,54 +106,82 @@ func (m *AppModel) renderFolderPreview(e *storage.NoteEntry, r Rect, active bool
 // renderFooter dibuja la barra inferior estilo lazygit: la papelera abajo a la
 // izquierda, los atajos del contexto ("Acción: tecla | …") y el estado a la
 // derecha. Cada atajo es un botón clicable.
+//
+// El ancho se reparte con un presupuesto: primero se acorta el estado para que
+// siempre quepan los atajos globales (Atajos: ?, Salir: q) y después se quitan
+// de a uno los atajos del panel, del último al primero. La barra nunca se
+// vacía mientras quepa un atajo y mide siempre exactamente el ancho.
 func (m *AppModel) renderFooter() string {
 	f := m.layout.Footer
 	keyStyle := lipgloss.NewStyle().Foreground(theme.ColorBlue)
 	sep := lipgloss.NewStyle().Foreground(theme.ColorOverlay0).Render(" | ")
+	const sepW, gap = 3, 2
 
-	trash := fmt.Sprintf("%s %d", "\U000f0a7a", m.c.trashCount)
-	out := lipgloss.NewStyle().Foreground(theme.ColorPeach).Render(trash) + " "
-	x := textwidth.Width(trash) + 1
-	m.ht.Register("footer-trash", mouse.ZoneAction, f.X, f.Y, f.X+x-2, f.Y, int(actTrash), "")
-
-	status := lipgloss.NewStyle().Foreground(theme.ColorGreen).Render(m.c.status)
-	room := f.W - textwidth.Width(m.c.status) - 2
-	// Los atajos globales (Atajos: ?, Salir: q) siempre quedan visibles, como
-	// en lazygit: si no hay lugar, se recortan los del panel.
-	ctx := m.contexts()[0]
-	global := m.c.keys.Footer(ctxGlobal)
-	panel := m.c.keys.Footer(ctx)
-	width := func(bs []Binding) int {
+	trash := "\U000f0a7a " + strconv.Itoa(m.c.trashCount)
+	trashW := textwidth.Width(trash) + 1 // y un espacio
+	label := func(b Binding) string { return b.Desc() + ": " + keyLabel(b.Keys[0]) }
+	span := func(bs []Binding) int {
 		w := 0
 		for i, b := range bs {
 			if i > 0 {
-				w += 3
+				w += sepW
 			}
-			w += textwidth.Width(b.Desc() + ": " + keyLabel(b.Keys[0]))
+			w += textwidth.Width(label(b))
 		}
 		return w
 	}
-	for len(panel) > 0 && x+width(append(append([]Binding{}, panel...), global...)) > room {
-		panel = panel[:len(panel)-1]
+	join := func(a, b []Binding) []Binding { return append(append([]Binding{}, a...), b...) }
+
+	panel := m.c.keys.Footer(m.contexts()[0])
+	global := m.c.keys.Footer(ctxGlobal)
+
+	// 1) el estado se acorta para dejar sitio a los atajos globales (o desaparece)
+	status := m.c.status
+	if maxStatus := f.W - trashW - span(global) - gap; maxStatus <= 0 {
+		status = ""
+	} else if textwidth.Width(status) > maxStatus {
+		status = textwidth.Truncate(status, maxStatus, textwidth.Ellipsis)
 	}
-	for i, b := range append(panel, global...) {
-		label := b.Desc() + ": " + keyLabel(b.Keys[0])
-		w := textwidth.Width(label)
-		if i > 0 {
-			out += sep
-			x += 3
-		}
-		if x+w > room {
+	statusW := textwidth.Width(status)
+	avail := f.W - trashW - statusW
+	if statusW > 0 {
+		avail -= gap
+	}
+
+	// 2) atajos: se quitan de a uno los del panel; si ni los globales caben, el último de ellos
+	var hints []Binding
+	for k := len(panel); k >= 0; k-- {
+		if cand := join(panel[:k], global); span(cand) <= avail {
+			hints = cand
 			break
 		}
-		m.ht.Register(fmt.Sprintf("footer-%d", i), mouse.ZoneAction, f.X+x, f.Y, f.X+x+w-1, f.Y, int(b.Action), "")
-		out += keyStyle.Render(label)
+	}
+	for hints == nil && len(global) > 0 {
+		global = global[:len(global)-1] // prioridad: se conserva el primero
+		if span(global) <= avail {
+			hints = global
+		}
+		if len(global) == 0 {
+			break
+		}
+	}
+
+	out := lipgloss.NewStyle().Foreground(theme.ColorPeach).Render(trash) + " "
+	m.ht.Register("footer-trash", mouse.ZoneAction, f.X, f.Y, f.X+trashW-2, f.Y, int(actTrash), "")
+	x := trashW
+	for i, b := range hints {
+		if i > 0 {
+			out += sep
+			x += sepW
+		}
+		l := label(b)
+		w := textwidth.Width(l)
+		m.ht.Register("footer-"+strconv.Itoa(i), mouse.ZoneAction, f.X+x, f.Y, f.X+x+w-1, f.Y, int(b.Action), "")
+		out += keyStyle.Render(l)
 		x += w
 	}
-	if room < 0 {
-		status = ""
-	}
-	return textwidth.Pad(out, f.W-textwidth.Width(status)) + status
+	right := lipgloss.NewStyle().Foreground(theme.ColorGreen).Render(status)
+	return textwidth.Fit(textwidth.Pad(out, f.W-statusW)+right, f.W)
 }
 
 // renderTooSmall muestra el aviso de tamaño mínimo en vez de una UI rota (X6).
