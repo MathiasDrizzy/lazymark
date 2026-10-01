@@ -244,3 +244,30 @@ func TestFolderPreview(t *testing.T) {
 		t.Errorf("el preview de la carpeta no lista sus notas:\n%s", out)
 	}
 }
+
+// TestMovePopupClickSelects (decisión G): en el popup de mover, un clic (o dos)
+// solo selecciona la carpeta; Enter confirma el movimiento.
+func TestMovePopupClickSelects(t *testing.T) {
+	m := newTestModel(t, 120, 35)
+	note := filepath.Join(m.c.store.BaseDir, "compras.md")
+	m.notes.selectPath(note)
+	press(m, "m")
+	p := m.c.top().(*movePopup)
+	r := popupRect(m.layout, p, p.render(m.layout))
+	row := r.Y + p.top + 1
+	click(m, r.X+4, row)
+	click(m, r.X+4, row)
+	if m.c.top() == nil {
+		t.Fatal("los clics confirmaron el movimiento")
+	}
+	if _, err := os.Stat(note); err != nil {
+		t.Fatal("la nota se movió sin Enter")
+	}
+	if p.list.cursor != 1 {
+		t.Errorf("el clic no seleccionó la fila: cursor=%d", p.list.cursor)
+	}
+	press(m, "enter")
+	if _, err := os.Stat(note); !os.IsNotExist(err) {
+		t.Error("Enter no movió la nota")
+	}
+}

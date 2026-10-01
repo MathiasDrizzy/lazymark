@@ -218,10 +218,9 @@ func (p *movePopup) handle(a Action, _ tea.KeyPressMsg) (tea.Cmd, bool) {
 	return nil, false
 }
 
+// click solo selecciona la carpeta; mover se confirma con Enter (decisión G).
 func (p *movePopup) click(_, y int) (tea.Cmd, bool) {
-	if i, again, ok := p.clickRow(y); ok && again {
-		return p.onPick(p.folders[i]), true
-	}
+	p.clickRow(y)
 	return nil, false
 }
 
