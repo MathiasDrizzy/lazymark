@@ -2,6 +2,7 @@ package storage
 
 import (
 	"bufio"
+	"bytes"
 	"errors"
 	"fmt"
 	"io/fs"
@@ -572,3 +573,56 @@ func (s *Storage) Rename(path, newName string) (string, error) {
 
 // ErrNoteChanged indica que la nota cambió en disco desde que se cargó.
 var ErrNoteChanged = errors.New("la nota cambió por fuera; recarga antes de editarla")
+
+// AppendToNote agrega text como un párrafo al final de la nota, sin tocar lo
+// anterior. Si la nota cambió por fuera desde que se cargó (expected), no
+// escribe y devuelve ErrNoteChanged (X10).
+func (s *Storage) AppendToNote(notePath, text string, expected time.Time) error {
+	fi, err := os.Stat(notePath)
+	if err != nil {
+		return err
+	}
+	if !expected.IsZero() && !fi.ModTime().Equal(expected) {
+		return ErrNoteChanged
+	}
+	data, err := os.ReadFile(notePath)
+	if err != nil {
+		return err
+	}
+	nl := "\n"
+	if bytes.Contains(data, []byte("\r\n")) {
+		nl = "\r\n"
+	}
+	var add string
+	switch {
+	case len(data) == 0:
+		add = text + nl
+	case bytes.HasSuffix(data, []byte("\n")):
+		add = nl + text + nl
+	default:
+		add = nl + nl + text + nl
+	}
+	f, err := os.OpenFile(notePath, os.O_APPEND|os.O_WRONLY, 0)
+	if err != nil {
+		return err
+	}
+	if _, err := f.WriteString(add); err != nil {
+		_ = f.Close()
+		return err
+	}
+	return f.Close()
+}
+
+// InsertAfterLine inserta text, separado por una línea en blanco, debajo de la
+// línea lineNum (desde 1), sin tocar el resto del archivo. Comprueba el mtime
+// igual que AppendToNote.
+func (s *Storage) InsertAfterLine(notePath string, lineNum int, text string, expected time.Time) error {
+	return rewriteLine(notePath, lineNum, expected, func(line string) (string, error) {
+		nl := "\n"
+		if strings.HasSuffix(line, "\r") {
+			nl = "\r\n"
+			line = strings.TrimSuffix(line, "\r")
+		}
+		return line + nl + nl + text + strings.TrimSuffix(nl, "\n"), nil
+	})
+}
