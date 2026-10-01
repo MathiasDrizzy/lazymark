@@ -7,6 +7,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/MathiasDrizzy/lazymark/internal/image"
 	"github.com/MathiasDrizzy/lazymark/internal/storage"
 	"github.com/charmbracelet/x/ansi"
 )
@@ -19,7 +20,7 @@ func TestPreviewKeepsBlankLines(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	out := ansi.Strip(renderMarkdown(&storage.Note{Path: path, Content: string(data)}, 70))
+	out := ansi.Strip(renderMarkdown(&storage.Note{Path: path, Content: string(data)}, 70, image.New()))
 	checks := map[string]string{
 		"salto simple":          `UNO_A[^\n]*\n[^\n]*UNO_B`,
 		"una línea en blanco":   `UNO_B[^\n]*\n *\n *DOS_A`,

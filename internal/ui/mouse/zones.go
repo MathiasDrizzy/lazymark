@@ -10,7 +10,6 @@ const (
 	ZonePreview    ZoneType = "preview"
 	ZoneTag        ZoneType = "tag"
 	ZoneTask       ZoneType = "task"
-	ZoneGallery    ZoneType = "gallery"
 	ZoneKanbanCol  ZoneType = "kanban_col"
 	ZoneKanbanCard ZoneType = "kanban_card"
 )

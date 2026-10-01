@@ -1,8 +1,8 @@
 package app
 
 import (
-	"fmt"
 	"path/filepath"
+	"slices"
 
 	tea "charm.land/bubbletea/v2"
 	"github.com/MathiasDrizzy/lazymark/internal/clipboard"
@@ -13,6 +13,7 @@ import (
 	"github.com/MathiasDrizzy/lazymark/internal/ui/mouse"
 	"github.com/MathiasDrizzy/lazymark/internal/ui/theme"
 	"github.com/MathiasDrizzy/lazymark/internal/ui/views"
+	uv "github.com/charmbracelet/ultraviolet"
 )
 
 // AppModel es el modelo raíz: decide el foco, rutea teclas y clics al panel o
@@ -33,6 +34,11 @@ type AppModel struct {
 	tags    tagsPanel
 	preview previewPanel
 	kanban  kanbanSheet
+
+	// imgNote es la nota cuyas imágenes están en la terminal; emit envía una
+	// secuencia cruda a la terminal (se cambia en los tests para registrarlas).
+	imgNote string
+	emit    func(seq any) tea.Cmd
 
 	// ht guarda las zonas que se registran durante el render (footer y Kanban).
 	ht       *mouse.HitTester
@@ -63,7 +69,8 @@ func New(cfg *config.Config) (*AppModel, error) {
 	if cfg.HideCompletedTasks {
 		c.taskFilter = views.TaskFilterPending
 	}
-	m := &AppModel{c: c, ratio: cfg.SidebarRatio, ht: mouse.NewHitTester()}
+	m := &AppModel{c: c, ratio: cfg.SidebarRatio, ht: mouse.NewHitTester(), emit: tea.Raw}
+	m.preview.imgs = c.kitty
 	m.notes = newNotesPanel(c)
 	m.tasks = tasksPanel{c: c}
 	m.tags = tagsPanel{c: c}
@@ -72,7 +79,9 @@ func New(cfg *config.Config) (*AppModel, error) {
 	return m, nil
 }
 
-func (m *AppModel) Init() tea.Cmd { return nil }
+// Init consulta a la terminal si soporta gráficos Kitty (a=q + DA1). Mientras
+// no conteste afirmativamente, las imágenes se muestran como texto.
+func (m *AppModel) Init() tea.Cmd { return m.emit(image.QuerySequence()) }
 
 // relayout recalcula la geometría. Se llama solo ante un cambio de tamaño o de
 // modo (foco con zoom, Kanban, proporción, paneles visibles, cantidad de tags).
@@ -114,12 +123,31 @@ func (m *AppModel) syncPreviewToTask() {
 	m.preview.scrollY = max(0, line-h/3) // la tarea queda en el tercio superior, con contexto arriba
 }
 
+// Update procesa el mensaje y después deja los gráficos coherentes con lo que
+// se va a dibujar, enviando antes que nada las secuencias que hagan falta.
 func (m *AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	_, cmd := m.update(msg)
+	if raws := m.prepareImages(); len(raws) > 0 {
+		if cmd != nil {
+			raws = append(raws, cmd)
+		}
+		cmd = tea.Sequence(raws...)
+	}
+	return m, cmd
+}
+
+func (m *AppModel) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
+	case uv.KittyGraphicsEvent:
+		if image.IsSupportReply(msg) {
+			m.c.kitty.SetSupported(true)
+		}
 	case tea.WindowSizeMsg:
 		m.w, m.h = msg.Width, msg.Height
 		m.relayout()
 	case EditorFinishedMsg:
+		m.c.editing = false
+		m.c.kitty.Reset() // al volver del editor las imágenes se transmiten de nuevo
 		m.notes.reload()
 		m.notes.selectPath(msg.Path)
 		m.preview.cacheKey = ""
@@ -399,8 +427,49 @@ func (m *AppModel) noteByPath(path string) *storage.Note {
 func (m *AppModel) quit() tea.Cmd {
 	m.quitting = true
 	_ = m.c.cfg.Save()
-	if m.c.kitty != nil && m.c.kitty.Supported {
-		fmt.Print(m.c.kitty.ClearAllCommand())
-	}
+	m.c.kitty.Reset() // no dejar imágenes en la terminal al salir
 	return tea.Quit
+}
+
+// displayedNote es la nota que el panel derecho está mostrando (nil si es una
+// carpeta, un tag o no hay selección).
+func (m *AppModel) displayedNote() *storage.Note {
+	if m.zoom && m.focus == panelPreview {
+		return m.previewNote() // el render maximizado muestra siempre la nota
+	}
+	switch m.lastLeft {
+	case panelTags:
+		return nil
+	case panelTasks:
+		return m.previewNote()
+	}
+	return m.notes.currentNote()
+}
+
+// prepareImages deja los gráficos coherentes con lo que se va a dibujar y
+// devuelve los comandos que los mandan a la terminal. Cambiar de nota o abrir
+// un popup borra las imágenes (a=d); al volver se transmiten de nuevo. Se
+// ejecuta dentro de Update para que el render de View ya encuentre el
+// markdown en caché y no tenga que emitir nada.
+func (m *AppModel) prepareImages() []tea.Cmd {
+	k := m.c.kitty
+	visible := len(m.c.popups) == 0 && !m.kanbanOn && !m.layout.TooSmall && !m.quitting && !m.c.editing
+	k.SetVisible(visible)
+	note := m.displayedNote()
+	path := ""
+	if note != nil {
+		path = note.Path
+	}
+	if path != m.imgNote {
+		m.imgNote = path
+		k.Reset()
+	}
+	if visible && note != nil && !m.quitting {
+		m.preview.lines(note, m.layout.Preview.W-3)
+	}
+	var cmds []tea.Cmd
+	for _, seq := range k.TakePending() {
+		cmds = append(cmds, m.emit(seq))
+	}
+	return slices.DeleteFunc(cmds, func(c tea.Cmd) bool { return c == nil })
 }

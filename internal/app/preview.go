@@ -22,6 +22,7 @@ var mdImage = regexp.MustCompile(`!\[(.*?)\]\((.*?)\)`)
 // previewPanel es el panel derecho: markdown renderizado con scroll vertical y
 // horizontal. El render se cachea por nota, fecha, ancho y tema.
 type previewPanel struct {
+	imgs             *image.Client
 	scrollY, scrollX int
 
 	cacheKey   string
@@ -32,10 +33,10 @@ func (p *previewPanel) reset() { p.scrollY, p.scrollX = 0, 0 }
 
 // lines devuelve el markdown de note renderizado a width columnas.
 func (p *previewPanel) lines(note *storage.Note, width int) []string {
-	key := fmt.Sprintf("%s|%d|%d|%s", note.Path, note.ModTime.UnixNano(), width, theme.CurrentThemeName)
+	key := fmt.Sprintf("%s|%d|%d|%s|%d", note.Path, note.ModTime.UnixNano(), width, theme.CurrentThemeName, p.imgs.Generation())
 	if key != p.cacheKey {
 		p.cacheKey = key
-		p.cacheLines = strings.Split(renderMarkdown(note, width), "\n")
+		p.cacheLines = strings.Split(renderMarkdown(note, width, p.imgs), "\n")
 	}
 	return p.cacheLines
 }
@@ -69,7 +70,7 @@ func (p *previewPanel) view(note *storage.Note, r Rect, active bool) string {
 
 // renderMarkdown renderiza la nota con Glamour respetando las líneas en blanco
 // tal como se escribieron, e intercala las imágenes en su posición.
-func renderMarkdown(note *storage.Note, width int) string {
+func renderMarkdown(note *storage.Note, width int, imgs *image.Client) string {
 	width = max(10, width)
 	style := "dark"
 	if theme.CurrentThemeName == "catppuccin-latte" {
@@ -80,6 +81,8 @@ func renderMarkdown(note *storage.Note, width int) string {
 		glamour.WithWordWrap(width),
 		glamour.WithPreservedNewLines(),
 	)
+	indent := 2 // sangría de Glamour; las imágenes se alinean con el texto
+	measured := false
 	render := func(md string) string {
 		if err != nil {
 			return md
@@ -88,7 +91,22 @@ func renderMarkdown(note *storage.Note, width int) string {
 		if rerr != nil {
 			return md
 		}
-		return strings.Trim(out, "\n")
+		out = strings.Trim(out, "\n")
+		if !measured {
+			// la sangría del texto es la menor de sus líneas: el título lleva un espacio de más
+			least := -1
+			for _, l := range strings.Split(textwidth.Strip(out), "\n") {
+				if strings.TrimSpace(l) != "" {
+					if n := len(l) - len(strings.TrimLeft(l, " ")); least < 0 || n < least {
+						least = n
+					}
+				}
+			}
+			if least >= 0 {
+				indent, measured = least, true
+			}
+		}
+		return out
 	}
 	// Markdown colapsa varias líneas en blanco en una; se renderiza por tramos
 	// y se reponen las líneas en blanco tal como se escribieron (H1-4).
@@ -112,17 +130,12 @@ func renderMarkdown(note *storage.Note, width int) string {
 		if before := content[last:m[0]]; strings.TrimSpace(before) != "" {
 			sections = append(sections, renderKeep(before))
 		}
-		alt, src := content[m[2]:m[3]], content[m[4]:m[5]]
+		src := content[m[4]:m[5]]
 		last = m[1]
 		if !filepath.IsAbs(src) {
 			src = filepath.Join(filepath.Dir(note.Path), src)
 		}
-		caption := lipgloss.NewStyle().Foreground(theme.ColorPeach).Bold(true).Render(fmt.Sprintf("  %s (%s)", alt, filepath.Base(src)))
-		if img, ierr := image.RenderInlineToAnsi(src, width-4, 12); ierr == nil && img != "" {
-			sections = append(sections, caption+"\n"+img)
-		} else {
-			sections = append(sections, caption)
-		}
+		sections = append(sections, imageBlock(imgs, src, width, indent))
 	}
 	if rest := content[last:]; strings.TrimSpace(rest) != "" {
 		sections = append(sections, renderKeep(rest))
@@ -170,6 +183,23 @@ func splitBlankRuns(md string) []segment {
 	}
 	flush(gap)
 	return out
+}
+
+// maxImageRows es el alto máximo, en filas, con el que se dibuja una imagen.
+const maxImageRows = 18
+
+// imageBlock devuelve el bloque que reemplaza a `![](ruta)` en el preview: la
+// imagen (placeholders de Kitty) alineada con el texto, o su texto de
+// reemplazo si la terminal no soporta gráficos o no se puede mostrar.
+func imageBlock(imgs *image.Client, path string, width, indent int) string {
+	pad := strings.Repeat(" ", indent)
+	if lines, ok := imgs.Block(path, max(2, width-indent-1), maxImageRows); ok {
+		for i := range lines {
+			lines[i] = pad + lines[i]
+		}
+		return strings.Join(lines, "\n")
+	}
+	return pad + lipgloss.NewStyle().Foreground(theme.ColorPeach).Render(image.Label(path))
 }
 
 // doubleClick detecta un segundo clic en la misma zona en menos de 400 ms.

@@ -41,6 +41,10 @@ type core struct {
 
 	status string
 	popups []popup
+
+	// editing es true mientras el editor externo tiene la terminal: las
+	// imágenes no se transmiten hasta que vuelva.
+	editing bool
 }
 
 // reload relee las notas del disco y recalcula todo lo derivado.
@@ -122,6 +126,8 @@ func (c *core) openEditor(path string, line int) tea.Cmd {
 		args = append(args, fmt.Sprintf("+%d", line))
 	}
 	args = append(args, path)
+	c.editing = true
+	c.kitty.Reset() // el editor se abre sin imágenes en la terminal
 	return tea.ExecProcess(exec.Command(bin, args...), func(err error) tea.Msg {
 		return EditorFinishedMsg{Path: path, Err: err}
 	})
