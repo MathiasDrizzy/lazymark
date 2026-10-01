@@ -27,7 +27,6 @@ const (
 	ItemHideDoneTasks
 	ItemTabTags
 	ItemTabTasks
-	ItemTabGallery
 	TotalSettingsItems
 )
 
@@ -140,21 +139,11 @@ func RenderSettingsModal(cfg *config.Config, selectedItem SettingsItem, totalWid
 				return "[ ] " + i18n.T("Oculta", "Disabled")
 			}(),
 		},
-		{
-			id:    ItemTabGallery,
-			label: i18n.T("Pestaña Galería", "Gallery Tab"),
-			val: func() string {
-				if cfg.ShowGalleryTab {
-					return "[✓] " + i18n.T("Activa", "Enabled")
-				}
-				return "[ ] " + i18n.T("Oculta", "Disabled")
-			}(),
-		},
 	}
 
 	// Ancho total del modal con bordes y padding para cálculo exacto de posición
 	startX := totalWidth - (modalWidth + 4) - 1
-	startY := totalHeight - 18
+	startY := totalHeight - 16
 	if startX < 2 {
 		startX = 2
 	}

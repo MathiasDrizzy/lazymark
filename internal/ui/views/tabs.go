@@ -16,7 +16,7 @@ type TabItem struct {
 }
 
 // DefaultTabs devuelve las pestañas por defecto localizadas
-func DefaultTabs(showTags, showTasks, showGallery bool) []TabItem {
+func DefaultTabs(showTags, showTasks bool) []TabItem {
 	tabs := []TabItem{
 		{ID: "notes", Title: i18n.T("Notas", "Notes")},
 	}
@@ -25,9 +25,6 @@ func DefaultTabs(showTags, showTasks, showGallery bool) []TabItem {
 	}
 	if showTasks {
 		tabs = append(tabs, TabItem{ID: "tasks", Title: i18n.T("Tareas", "Tasks")})
-	}
-	if showGallery {
-		tabs = append(tabs, TabItem{ID: "gallery", Title: i18n.T("Imágenes/Adjuntos", "Images/Attachments")})
 	}
 	return tabs
 }
@@ -38,7 +35,7 @@ func RenderTabs(activeTab int, totalWidth int, ht *mouse.HitTester, customTabs .
 	if len(customTabs) > 0 && len(customTabs[0]) > 0 {
 		tabs = customTabs[0]
 	} else {
-		tabs = DefaultTabs(true, true, true)
+		tabs = DefaultTabs(true, true)
 	}
 
 	var renderedTabs []string

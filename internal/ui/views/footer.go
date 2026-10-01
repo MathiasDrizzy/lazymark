@@ -18,25 +18,34 @@ type ActionBtn struct {
 }
 
 // GetNotesActions devuelve los atajos para el panel de Notas
-func GetNotesActions() []ActionBtn {
-	return []ActionBtn{
-		{Key: "c", Action: i18n.T("+Nota", "+Note"), ID: "action-new"},
-		{Key: "F", Action: i18n.T("+Carpeta", "+Folder"), ID: "action-folder"},
-		{Key: "v", Action: i18n.T("Sel", "Sel"), ID: "action-select"},
-		{Key: "m", Action: i18n.T("Mover", "Move"), ID: "action-move"},
-		{Key: "e", Action: i18n.T("Editar", "Edit"), ID: "action-edit"},
-		{Key: "d", Action: i18n.T("Borrar", "Delete"), ID: "action-delete"},
-		{Key: "w", Action: i18n.T("Zoom", "Zoom"), ID: "action-zoom"},
-		{Key: "h", Action: i18n.T("Atajos", "Keys"), ID: "action-cheatsheet"},
-		{Key: "?", Action: i18n.T("Ajustes", "Settings"), ID: "action-config"},
-		{Key: "q", Action: i18n.T("Salir", "Quit"), ID: "action-quit"},
+func GetNotesActions(hasTagFilter ...bool) []ActionBtn {
+	var actions []ActionBtn
+	if len(hasTagFilter) > 0 && hasTagFilter[0] {
+		actions = append(actions, ActionBtn{Key: "Esc", Action: i18n.T("Limpiar filtro", "Clear filter"), ID: "action-clear-filter"})
 	}
+	actions = append(actions,
+		ActionBtn{Key: "c", Action: i18n.T("+Nota", "+Note"), ID: "action-new"},
+		ActionBtn{Key: "F", Action: i18n.T("+Carpeta", "+Folder"), ID: "action-folder"},
+		ActionBtn{Key: "v", Action: i18n.T("Sel", "Sel"), ID: "action-select"},
+		ActionBtn{Key: "m", Action: i18n.T("Mover", "Move"), ID: "action-move"},
+		ActionBtn{Key: "e", Action: i18n.T("Editar", "Edit"), ID: "action-edit"},
+		ActionBtn{Key: "d", Action: i18n.T("Borrar", "Delete"), ID: "action-delete"},
+		ActionBtn{Key: "w", Action: i18n.T("Zoom", "Zoom"), ID: "action-zoom"},
+		ActionBtn{Key: "h", Action: i18n.T("Atajos", "Keys"), ID: "action-cheatsheet"},
+		ActionBtn{Key: "?", Action: i18n.T("Ajustes", "Settings"), ID: "action-config"},
+		ActionBtn{Key: "q", Action: i18n.T("Salir", "Quit"), ID: "action-quit"},
+	)
+	return actions
 }
 
 // GetTagActions devuelve los atajos contextuales del panel Categorías/Tags
-func GetTagActions() []ActionBtn {
+func GetTagActions(hasTagFilter ...bool) []ActionBtn {
+	filterAction := i18n.T("Filtrar notas", "Filter notes")
+	if len(hasTagFilter) > 0 && hasTagFilter[0] {
+		filterAction = i18n.T("Quitar filtro", "Remove filter")
+	}
 	return []ActionBtn{
-		{Key: "Enter", Action: i18n.T("Ver notas", "View notes"), ID: "action-view-tag"},
+		{Key: "Enter", Action: filterAction, ID: "action-view-tag"},
 		{Key: "e", Action: i18n.T("Editar", "Edit"), ID: "action-edit"},
 		{Key: "w", Action: i18n.T("Zoom", "Zoom"), ID: "action-zoom"},
 		{Key: "h", Action: i18n.T("Atajos", "Keys"), ID: "action-cheatsheet"},

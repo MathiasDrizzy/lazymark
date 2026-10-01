@@ -50,9 +50,8 @@ type Config struct {
 	MouseClick     bool              `json:"mouse_click"`
 	Theme          string            `json:"theme"`
 	Language       string            `json:"language"`
-	ShowTagsTab    bool              `json:"show_tags_tab"`
-	ShowTasksTab   bool              `json:"show_tasks_tab"`
-	ShowGalleryTab bool              `json:"show_gallery_tab"`
+	ShowTagsTab        bool              `json:"show_tags_tab"`
+	ShowTasksTab       bool              `json:"show_tasks_tab"`
 	ConfirmDelete      bool              `json:"confirm_delete"`
 	HideCompletedTasks bool              `json:"hide_completed_tasks"`
 	SidebarRatio       float64           `json:"sidebar_ratio"`
@@ -97,7 +96,6 @@ func DefaultConfig(notesDir string) *Config {
 		Language:           "auto",
 		ShowTagsTab:        true,
 		ShowTasksTab:       true,
-		ShowGalleryTab:     false,
 		ConfirmDelete:      true,
 		HideCompletedTasks: false,
 		SidebarRatio:       0.33,
@@ -180,7 +178,6 @@ func Load(customDir string) (*Config, error) {
 			cfg.MouseClick = diskCfg.MouseClick
 			cfg.ShowTagsTab = diskCfg.ShowTagsTab
 			cfg.ShowTasksTab = diskCfg.ShowTasksTab
-			cfg.ShowGalleryTab = diskCfg.ShowGalleryTab
 			if diskCfg.SidebarRatio >= 0.15 && diskCfg.SidebarRatio <= 0.75 {
 				cfg.SidebarRatio = diskCfg.SidebarRatio
 			}

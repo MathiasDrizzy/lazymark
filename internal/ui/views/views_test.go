@@ -151,6 +151,39 @@ func TestRenderNoteListAndPreview(t *testing.T) {
 	}
 }
 
+func TestRenderNoteListWithTagFilter(t *testing.T) {
+	notes := []storage.Note{
+		{
+			ID:      "test.md",
+			Title:   "Nota de Prueba",
+			Path:    "/tmp/test.md",
+			Content: "# Encabezado #golang\nContenido de prueba",
+			Tags:    []string{"golang"},
+			ModTime: time.Now(),
+		},
+	}
+	entries := []storage.NoteEntry{
+		{
+			Name: "test.md",
+			Path: "/tmp/test.md",
+			Type: storage.EntryNote,
+			Note: &notes[0],
+		},
+	}
+	ht := mouse.NewHitTester()
+	listOut := RenderNoteList(entries, nil, 0, 40, 20, true, ht, 1, "golang")
+	if listOut == "" {
+		t.Fatalf("RenderNoteList con filtro devolvió string vacío")
+	}
+
+	if !strings.Contains(listOut, "(#golang)") {
+		t.Errorf("Se esperaba que el título contuviera '(#golang)', salida: %s", listOut)
+	}
+	if !strings.Contains(listOut, "1 of 1") {
+		t.Errorf("Se esperaba contador '1 of 1' en el borde, salida: %s", listOut)
+	}
+}
+
 func TestRenderConfirmModal(t *testing.T) {
 	ht := mouse.NewHitTester()
 	notes := []storage.Note{
@@ -183,10 +216,9 @@ func TestRenderSettingsModal(t *testing.T) {
 	cfg := &config.Config{
 		Editor:         "micro",
 		Theme:          "catppuccin-mocha",
-		Language:       "es",
-		ShowTagsTab:    true,
-		ShowTasksTab:   true,
-		ShowGalleryTab: true,
+		Language:     "es",
+		ShowTagsTab:  true,
+		ShowTasksTab: true,
 	}
 	ht := mouse.NewHitTester()
 	out := RenderSettingsModal(cfg, ItemLanguage, 80, 24, ht)

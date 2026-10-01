@@ -83,6 +83,7 @@ type AppModel struct {
 	// Árbol de carpetas y selección múltiple
 	expandedFolders map[string]bool
 	selectedPaths   map[string]bool
+	activeTagFilter string
 
 	// Modal de confirmación para acciones críticas
 	showConfirmModal bool
@@ -136,6 +137,7 @@ func New(cfg *config.Config) (*AppModel, error) {
 		entries:         entries,
 		expandedFolders: make(map[string]bool),
 		selectedPaths:   make(map[string]bool),
+		activeTagFilter: "",
 		selectedNote:    0,
 		selectedEntry:   0,
 		activeTab:       0,
@@ -167,7 +169,7 @@ func New(cfg *config.Config) (*AppModel, error) {
 
 // refreshVisibleTabs actualiza la lista de pestañas visibles según la configuración
 func (m *AppModel) refreshVisibleTabs() {
-	m.visibleTabs = views.DefaultTabs(m.cfg.ShowTagsTab, m.cfg.ShowTasksTab, m.cfg.ShowGalleryTab)
+	m.visibleTabs = views.DefaultTabs(m.cfg.ShowTagsTab, m.cfg.ShowTasksTab)
 	if m.activeTab >= len(m.visibleTabs) {
 		m.activeTab = len(m.visibleTabs) - 1
 		if m.activeTab < 0 {
@@ -418,7 +420,23 @@ func (m *AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		// Atajos globales fuera de configuración
 		switch key {
-		case "q", "esc":
+		case "esc":
+			if m.activeTagFilter != "" {
+				m.clearTagFilter()
+				return m, nil
+			}
+			if m.isMaximized {
+				m.isMaximized = false
+				m.statusMsg = i18n.T("Panel restaurado", "Panel restored")
+				return m, nil
+			}
+			m.quitting = true
+			if m.kitty != nil && m.kitty.Supported {
+				fmt.Print(m.kitty.ClearAllCommand())
+			}
+			return m, tea.Quit
+
+		case "q":
 			m.quitting = true
 			if m.kitty != nil && m.kitty.Supported {
 				fmt.Print(m.kitty.ClearAllCommand())
@@ -534,6 +552,11 @@ func (m *AppModel) updateForActivePanel(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 
 func (m *AppModel) updateNotesTab(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	switch msg.String() {
+	case "esc":
+		if m.activeTagFilter != "" {
+			m.clearTagFilter()
+			return m, nil
+		}
 	case "up", "k":
 		if m.selectedEntry > 0 {
 			m.selectedEntry--
@@ -749,7 +772,17 @@ func (m *AppModel) updateTagsTab(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.selectedTag = len(m.tags) - 1
 		}
 		return m, nil
-	case "enter", "e":
+	case "enter":
+		if m.selectedTag < len(m.tags) {
+			tag := m.tags[m.selectedTag]
+			if m.activeTagFilter == tag.Name {
+				m.clearTagFilter()
+			} else {
+				m.applyTagFilter(tag.Name)
+			}
+		}
+		return m, nil
+	case "e":
 		if m.selectedTag < len(m.tags) {
 			tag := m.tags[m.selectedTag]
 			filtered := views.NotesForTag(m.notes, tag.Name)
@@ -928,9 +961,16 @@ func (m *AppModel) handleZoneClick(zone *mouse.Zone) (tea.Model, tea.Cmd) {
 			}
 		}
 	case mouse.ZoneTag:
-		m.activePanel = PanelTags
-		m.lastLeftPanel = PanelTags
 		m.selectedTag = zone.Index
+		if zone.Index < len(m.tags) {
+			tag := m.tags[zone.Index]
+			if m.activeTagFilter == tag.Name {
+				m.clearTagFilter()
+			} else {
+				m.applyTagFilter(tag.Name)
+			}
+		}
+		return m, nil
 	case mouse.ZoneTask:
 		m.activePanel = PanelTasks
 		m.lastLeftPanel = PanelTasks
@@ -1007,8 +1047,6 @@ func (m *AppModel) handleActionClick(zone *mouse.Zone) (tea.Model, tea.Cmd) {
 			m.cfg.ShowTagsTab = !m.cfg.ShowTagsTab
 		case "tasks":
 			m.cfg.ShowTasksTab = !m.cfg.ShowTasksTab
-		case "gallery":
-			m.cfg.ShowGalleryTab = !m.cfg.ShowGalleryTab
 		}
 		m.refreshVisibleTabs()
 		_ = m.cfg.Save()
@@ -1073,6 +1111,19 @@ func (m *AppModel) handleActionClick(zone *mouse.Zone) (tea.Model, tea.Cmd) {
 		return m, nil
 	case "action-zoom":
 		m.isMaximized = !m.isMaximized
+		return m, nil
+	case "action-clear-filter":
+		m.clearTagFilter()
+		return m, nil
+	case "action-view-tag":
+		if m.selectedTag < len(m.tags) {
+			tag := m.tags[m.selectedTag]
+			if m.activeTagFilter == tag.Name {
+				m.clearTagFilter()
+			} else {
+				m.applyTagFilter(tag.Name)
+			}
+		}
 		return m, nil
 	case "action-toggle-task":
 		return m.toggleCurrentTask()
@@ -1280,11 +1331,6 @@ func (m *AppModel) toggleConfigItem(item views.SettingsItem, forward bool) {
 		m.refreshVisibleTabs()
 		_ = m.cfg.Save()
 
-	case views.ItemTabGallery:
-		m.cfg.ShowGalleryTab = !m.cfg.ShowGalleryTab
-		m.refreshVisibleTabs()
-		_ = m.cfg.Save()
-
 	case views.ItemConfirmDelete:
 		m.cfg.ConfirmDelete = !m.cfg.ConfirmDelete
 		_ = m.cfg.Save()
@@ -1355,20 +1401,33 @@ func (m *AppModel) calcStackedHeights(totalH int) (hNotes, hTasks, hTags int) {
 			return 0, 0, totalH
 		}
 	}
-	hNotes = (totalH * 50) / 100
-	hTasks = (totalH * 25) / 100
-	hTags = totalH - hNotes - hTasks
 
-	// Altura mínima de 3 filas para cada panel visible
-	minH := 3
-	if hNotes < minH {
-		hNotes = minH
+	// Altura compacta adaptativa para [3] Categorías (sin espacio muerto):
+	// Si solo hay pocos tags (ej. 4 o 5), calcula min(len(tags) + 2, 6) con un mínimo de 3
+	hTags = len(m.tags) + 2
+	maxTags := (totalH * 25) / 100
+	if maxTags < 6 {
+		maxTags = 6
 	}
-	if hTasks < minH {
-		hTasks = minH
+	if len(m.tags) <= 4 && hTags > 6 {
+		hTags = 6
 	}
-	if hTags < minH {
-		hTags = minH
+	if hTags > maxTags {
+		hTags = maxTags
+	}
+	if hTags < 3 {
+		hTags = 3
+	}
+
+	// El espacio vertical restante se distribuye entre Notas y Tareas (65% notas, 35% tareas)
+	remainingH := totalH - hTags
+	hTasks = (remainingH * 35) / 100
+	if hTasks < 3 {
+		hTasks = 3
+	}
+	hNotes = remainingH - hTasks
+	if hNotes < 3 {
+		hNotes = 3
 	}
 	diff := (hNotes + hTasks + hTags) - totalH
 	if diff > 0 {
@@ -1757,7 +1816,64 @@ func (m *AppModel) deleteCurrentEntry() tea.Cmd {
 	return cmd
 }
 
+func (m *AppModel) applyTagFilter(tagName string) {
+	m.activeTagFilter = tagName
+	matchingNotes := views.NotesForTag(m.notes, tagName)
+	var filtered []storage.NoteEntry
+	for _, n := range matchingNotes {
+		noteCopy := n
+		filtered = append(filtered, storage.NoteEntry{
+			Type:    storage.EntryNote,
+			Name:    n.ID,
+			Path:    n.Path,
+			Note:    &noteCopy,
+			ModTime: n.ModTime,
+			Depth:   0,
+		})
+	}
+	m.entries = filtered
+	m.selectedEntry = 0
+	m.previewScrollY = 0
+	m.previewScrollX = 0
+	m.activePanel = PanelNotes
+	m.lastLeftPanel = PanelNotes
+	m.statusMsg = fmt.Sprintf(i18n.T("Filtrando por #%s (%d notas)", "Filtering by #%s (%d notes)"), tagName, len(filtered))
+}
+
+func (m *AppModel) clearTagFilter() {
+	if m.activeTagFilter == "" {
+		return
+	}
+	m.activeTagFilter = ""
+	m.reloadEntries()
+	m.selectedEntry = 0
+	m.previewScrollY = 0
+	m.previewScrollX = 0
+	m.statusMsg = i18n.T("Filtro de categoría limpiado", "Category filter cleared")
+}
+
 func (m *AppModel) reloadEntries() {
+	if m.activeTagFilter != "" {
+		m.reloadNotes()
+		matchingNotes := views.NotesForTag(m.notes, m.activeTagFilter)
+		var filtered []storage.NoteEntry
+		for _, n := range matchingNotes {
+			noteCopy := n
+			filtered = append(filtered, storage.NoteEntry{
+				Type:    storage.EntryNote,
+				Name:    n.ID,
+				Path:    n.Path,
+				Note:    &noteCopy,
+				ModTime: n.ModTime,
+				Depth:   0,
+			})
+		}
+		m.entries = filtered
+		if m.selectedEntry >= len(m.entries) && len(m.entries) > 0 {
+			m.selectedEntry = len(m.entries) - 1
+		}
+		return
+	}
 	entries, err := m.storage.ListTreeEntries(m.expandedFolders)
 	if err == nil {
 		m.entries = entries
@@ -1826,7 +1942,7 @@ func (m *AppModel) View() string {
 	currY := 0
 
 	if hNotes > 0 {
-		notesView := views.RenderNoteList(m.entries, m.selectedPaths, m.selectedEntry, leftWidth, hNotes, m.activePanel == PanelNotes, m.hitTester, currY)
+		notesView := views.RenderNoteList(m.entries, m.selectedPaths, m.selectedEntry, leftWidth, hNotes, m.activePanel == PanelNotes, m.hitTester, currY, m.activeTagFilter)
 		leftStacked = append(leftStacked, notesView)
 		currY += hNotes
 	}
@@ -1891,11 +2007,11 @@ func (m *AppModel) View() string {
 	var actions []views.ActionBtn
 	switch m.activePanel {
 	case PanelNotes:
-		actions = views.GetNotesActions()
+		actions = views.GetNotesActions(m.activeTagFilter != "")
 	case PanelTasks:
 		actions = views.GetTaskActions(m.cfg.HideCompletedTasks)
 	case PanelTags:
-		actions = views.GetTagActions()
+		actions = views.GetTagActions(m.activeTagFilter != "")
 	case PanelPreview:
 		actions = views.GetPreviewActions()
 	}

@@ -4,7 +4,9 @@
 │   ▾  folder-11 (0)                 ││                                                                               │
 │   ▾  folder-6 (0)                  ││                                                                               │
 │   󰍔 00-Bienvenida.md 30 Sep         ││                                                                               │
-│   󰍔 Proyecto-Lazymark.md 29 Sep     ││                                                                               │
+│   󰍔 Proyecto-Lazymark.md 30 Sep     ││                                                                               │
+│                                     ││                                                                               │
+│                                     ││                                                                               │
 │                                     ││                                                                               │
 │                                     ││                                                                               │
 │                                     ││                                                                               │
@@ -19,17 +21,15 @@
 │ ▸ ☐ Crear el repositorio Homebrew t ││                                                                               │
 │   ☐ Publicar tag v0.1.0 para releas ││                                                                               │
 │   ☐ Probar instalación con curl en  ││                                                                               │
-│   ☑ Implementar soporte de ratón y  ││                                                                               │
+│   ☐ Implementar soporte de ratón y  ││                                                                               │
 │   ☑ Implementar pestaña [2] Categor ││                                                                               │
 │   ☑ Implementar pestaña [3] Tareas  ││                                                                               │
+│   ☑ Implementar pestaña [4] Galería ││                                                                               │
 └─────────────────────────────────────┘│                                                                               │
 ┌─ [3] Categories ─────────── 1 of 4 ─┐│                                                                               │
 │ ▸ #golang (1)                       ││                                                                               │
 │    #lazymark   (1)                  ││                                                                               │
 │    #productividad   (1)             ││                                                                               │
 │    #tui   (1)                       ││                                                                               │
-│                                     ││                                                                               │
-│                                     ││                                                                               │
-│                                     ││                                                                               │
 └─────────────────────────────────────┘└───────────────────────────────────────────────────────────────────────────────┘
  [x] 󰩹 (5)  [c] +Note  [F] +Folder  [v] Sel  [m] Move  [e] Edit  [d] Delete  [w] Zoom  [h] Keys  [?] Settings  [q] Quit 

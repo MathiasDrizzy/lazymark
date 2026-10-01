@@ -12,10 +12,13 @@ import (
 )
 
 // RenderNoteList genera el panel izquierdo con el explorador de notas y carpetas en árbol (Tree View)
-func RenderNoteList(entries []storage.NoteEntry, selectedPaths map[string]bool, selectedIndex int, width, height int, active bool, ht *mouse.HitTester, offsetY int) string {
+func RenderNoteList(entries []storage.NoteEntry, selectedPaths map[string]bool, selectedIndex int, width, height int, active bool, ht *mouse.HitTester, offsetY int, filterTag ...string) string {
 	var rows []string
 
 	title := i18n.T("[1] Notas", "[1] Notes")
+	if len(filterTag) > 0 && filterTag[0] != "" {
+		title = fmt.Sprintf("%s (#%s)", title, filterTag[0])
+	}
 	selCount := len(selectedPaths)
 	badge := "0 of 0"
 	if len(entries) > 0 {
@@ -26,7 +29,13 @@ func RenderNoteList(entries []storage.NoteEntry, selectedPaths map[string]bool, 
 	}
 
 	if len(entries) == 0 {
-		emptyMsg := theme.NormalItem.Copy().Italic(true).Render(i18n.T("  (Carpeta vacía. 'c': nueva nota, 'F': carpeta)", "  (Empty folder. 'c': new note, 'F': folder)"))
+		var emptyMsgText string
+		if len(filterTag) > 0 && filterTag[0] != "" {
+			emptyMsgText = fmt.Sprintf(i18n.T("  (Sin notas con tag #%s. 'Esc': limpiar)", "  (No notes with tag #%s. 'Esc': clear)"), filterTag[0])
+		} else {
+			emptyMsgText = i18n.T("  (Carpeta vacía. 'c': nueva nota, 'F': carpeta)", "  (Empty folder. 'c': new note, 'F': folder)")
+		}
+		emptyMsg := theme.NormalItem.Copy().Italic(true).Render(emptyMsgText)
 		rows = append(rows, emptyMsg)
 	}
 

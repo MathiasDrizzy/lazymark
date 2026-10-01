@@ -19,11 +19,10 @@ func main() {
 		NotesDir:       notesDir,
 		Editor:         "micro",
 		Theme:          "catppuccin-mocha",
-		MouseClick:     true,
-		ShowTagsTab:    true,
-		ShowTasksTab:   true,
-		ShowGalleryTab: true,
-		SidebarRatio:   0.33,
+		MouseClick:   true,
+		ShowTagsTab:  true,
+		ShowTasksTab: true,
+		SidebarRatio: 0.33,
 	}
 
 	appModel, err := app.New(cfg)

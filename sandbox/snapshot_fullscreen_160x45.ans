@@ -4,7 +4,10 @@
 │   ▾  folder-11 (0)                              ││                                                                                                          │
 │   ▾  folder-6 (0)                               ││                                                                                                          │
 │   󰍔 00-Bienvenida.md 30 Sep                      ││                                                                                                          │
-│   󰍔 Proyecto-Lazymark.md 29 Sep                  ││                                                                                                          │
+│   󰍔 Proyecto-Lazymark.md 30 Sep                  ││                                                                                                          │
+│                                                  ││                                                                                                          │
+│                                                  ││                                                                                                          │
+│                                                  ││                                                                                                          │
 │                                                  ││                                                                                                          │
 │                                                  ││                                                                                                          │
 │                                                  ││                                                                                                          │
@@ -24,22 +27,19 @@
 │ ▸ ☐ Crear el repositorio Homebrew tap `MathiasDr ││                                                                                                          │
 │   ☐ Publicar tag v0.1.0 para releases automática ││                                                                                                          │
 │   ☐ Probar instalación con curl en una máquina l ││                                                                                                          │
-│   ☑ Implementar soporte de ratón y HitTester (Pr ││                                                                                                          │
+│   ☐ Implementar soporte de ratón y HitTester (Pr ││                                                                                                          │
 │   ☑ Implementar pestaña [2] Categorías y Tags (P ││                                                                                                          │
 │   ☑ Implementar pestaña [3] Tareas agregadas (Pr ││                                                                                                          │
 │   ☑ Implementar pestaña [4] Galería de imágenes  ││                                                                                                          │
 │   ☑ Implementar 7 temas dinámicos con tecla 't'  ││                                                                                                          │
 │   ☑ Compatibilidad con navegación estilo Vim (j, ││                                                                                                          │
+│                                                  ││                                                                                                          │
+│                                                  ││                                                                                                          │
 └──────────────────────────────────────────────────┘│                                                                                                          │
 ┌─ [3] Categories ──────────────────────── 1 of 4 ─┐│                                                                                                          │
 │ ▸ #golang (1)                                    ││                                                                                                          │
 │    #lazymark   (1)                               ││                                                                                                          │
 │    #productividad   (1)                          ││                                                                                                          │
 │    #tui   (1)                                    ││                                                                                                          │
-│                                                  ││                                                                                                          │
-│                                                  ││                                                                                                          │
-│                                                  ││                                                                                                          │
-│                                                  ││                                                                                                          │
-│                                                  ││                                                                                                          │
 └──────────────────────────────────────────────────┘└──────────────────────────────────────────────────────────────────────────────────────────────────────────┘
  [x] 󰩹 (5)  [c] +Note  [F] +Folder  [v] Sel  [m] Move  [e] Edit  [d] Delete  [w] Zoom  [h] Keys  [?] Settings  [q] Quit                         2 notes loaded 
