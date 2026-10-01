@@ -242,3 +242,61 @@ func TestToggleTaskAtomic(t *testing.T) {
 		t.Errorf("La tarea en disco debería persistir como pendiente")
 	}
 }
+
+func TestUpdateTaskStage(t *testing.T) {
+	tempDir, err := os.MkdirTemp("", "lazymark-stage-test-*")
+	if err != nil {
+		t.Fatalf("Fallo al crear temp dir: %v", err)
+	}
+	defer os.RemoveAll(tempDir)
+
+	s := New(tempDir)
+	_, err = s.CreateNote("Kanban Stage Note")
+	if err != nil {
+		t.Fatalf("Error al crear nota: %v", err)
+	}
+
+	notes, err := s.ListNotes()
+	if err != nil || len(notes) == 0 || len(notes[0].Tasks) == 0 {
+		t.Fatalf("No se encontraron notas o tareas iniciales")
+	}
+
+	task := notes[0].Tasks[0]
+	if GetTaskStage(task) != StageTodo {
+		t.Fatalf("Se esperaba etapa inicial StageTodo, obtenido %v", GetTaskStage(task))
+	}
+
+	// 1. Mover a StageDoing
+	if err := s.UpdateTaskStage(task.NotePath, task.Line, StageDoing); err != nil {
+		t.Fatalf("Error al mover tarea a StageDoing: %v", err)
+	}
+
+	notesReloaded, _ := s.ListNotes()
+	taskReloaded := notesReloaded[0].Tasks[0]
+	if GetTaskStage(taskReloaded) != StageDoing {
+		t.Errorf("Se esperaba etapa StageDoing, obtenido %v (texto: %s)", GetTaskStage(taskReloaded), taskReloaded.Text)
+	}
+
+	// 2. Mover a StageDone
+	if err := s.UpdateTaskStage(task.NotePath, task.Line, StageDone); err != nil {
+		t.Fatalf("Error al mover tarea a StageDone: %v", err)
+	}
+
+	notesReloaded2, _ := s.ListNotes()
+	taskReloaded2 := notesReloaded2[0].Tasks[0]
+	if GetTaskStage(taskReloaded2) != StageDone {
+		t.Errorf("Se esperaba etapa StageDone, obtenido %v (texto: %s, done: %v)", GetTaskStage(taskReloaded2), taskReloaded2.Text, taskReloaded2.Done)
+	}
+
+	// 3. Mover de vuelta a StageTodo
+	if err := s.UpdateTaskStage(task.NotePath, task.Line, StageTodo); err != nil {
+		t.Fatalf("Error al mover tarea a StageTodo: %v", err)
+	}
+
+	notesReloaded3, _ := s.ListNotes()
+	taskReloaded3 := notesReloaded3[0].Tasks[0]
+	if GetTaskStage(taskReloaded3) != StageTodo {
+		t.Errorf("Se esperaba etapa StageTodo, obtenido %v (texto: %s, done: %v)", GetTaskStage(taskReloaded3), taskReloaded3.Text, taskReloaded3.Done)
+	}
+}
+

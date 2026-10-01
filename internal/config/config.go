@@ -104,16 +104,20 @@ func DefaultConfig(notesDir string) *Config {
 	}
 }
 
-// Load carga la configuración desde disco o crea una con valores por defecto.
-func Load(customDir string) (*Config, error) {
+// DefaultNotesDir devuelve la ruta por defecto del directorio de notas ($HOME/Documents/notes)
+func DefaultNotesDir() string {
 	home, err := os.UserHomeDir()
 	if err != nil {
 		home = "."
 	}
+	return filepath.Join(home, "Documents", "notes")
+}
 
+// Load carga la configuración desde disco o crea una con valores por defecto.
+func Load(customDir string) (*Config, error) {
 	notesDir := customDir
 	if notesDir == "" {
-		notesDir = filepath.Join(home, "Documents", "notes")
+		notesDir = DefaultNotesDir()
 	}
 
 	// Asegurar que el directorio de notas exista

@@ -454,3 +454,88 @@ func (s *Storage) ToggleTask(notePath string, lineNum int) (bool, error) {
 
 	return newDone, nil
 }
+
+// TaskStage define la columna del tablero Kanban (To Do, In Progress, Done)
+type TaskStage int
+
+const (
+	StageTodo TaskStage = iota // 0: Por Hacer (- [ ])
+	StageDoing                 // 1: En Progreso (- [ ] con #doing, #wip, #progreso)
+	StageDone                  // 2: Completado (- [x])
+)
+
+var inProgressTagRegex = regexp.MustCompile(`(?i)#(doing|wip|progreso|in-progress)\b`)
+
+// IsTaskDoing determina si una tarea está en progreso basándose en sus etiquetas
+func IsTaskDoing(taskText string) bool {
+	return inProgressTagRegex.MatchString(taskText)
+}
+
+// CleanTaskText devuelve el texto de la tarea sin las etiquetas de control Kanban (#doing, #wip)
+func CleanTaskText(taskText string) string {
+	cleaned := inProgressTagRegex.ReplaceAllString(taskText, "")
+	return strings.TrimSpace(cleaned)
+}
+
+// GetTaskStage devuelve la etapa Kanban de una tarea
+func GetTaskStage(task Task) TaskStage {
+	if task.Done {
+		return StageDone
+	}
+	if IsTaskDoing(task.Text) {
+		return StageDoing
+	}
+	return StageTodo
+}
+
+// UpdateTaskStage actualiza de forma atómica en disco el estado Kanban de una tarea
+func (s *Storage) UpdateTaskStage(notePath string, lineNum int, targetStage TaskStage) error {
+	contentBytes, err := os.ReadFile(notePath)
+	if err != nil {
+		return fmt.Errorf("error al leer archivo para actualizar etapa: %w", err)
+	}
+
+	info, err := os.Stat(notePath)
+	if err != nil {
+		return fmt.Errorf("error al obtener info de archivo: %w", err)
+	}
+
+	lines := strings.Split(string(contentBytes), "\n")
+	targetIdx := lineNum - 1
+	if targetIdx < 0 || targetIdx >= len(lines) {
+		return fmt.Errorf("índice de línea %d fuera de rango", lineNum)
+	}
+
+	matches := toggleTaskRegex.FindStringSubmatch(lines[targetIdx])
+	if len(matches) != 4 {
+		return fmt.Errorf("la línea %d no es una tarea válida de markdown", lineNum)
+	}
+
+	rest := strings.TrimPrefix(matches[3], "]")
+	restTrimmed := strings.TrimSpace(rest)
+	cleanText := CleanTaskText(restTrimmed)
+
+	var newLine string
+	switch targetStage {
+	case StageTodo:
+		newLine = fmt.Sprintf("%s ] %s", matches[1], cleanText)
+	case StageDoing:
+		newLine = fmt.Sprintf("%s ] %s #doing", matches[1], cleanText)
+	case StageDone:
+		newLine = fmt.Sprintf("%sx] %s", matches[1], cleanText)
+	}
+
+	lines[targetIdx] = newLine
+	newContent := strings.Join(lines, "\n")
+	tmpPath := notePath + ".tmp"
+	if err := os.WriteFile(tmpPath, []byte(newContent), info.Mode().Perm()); err != nil {
+		return fmt.Errorf("error al escribir archivo temporal: %w", err)
+	}
+
+	if err := os.Rename(tmpPath, notePath); err != nil {
+		_ = os.Remove(tmpPath)
+		return fmt.Errorf("error al renombrar archivo atómico: %w", err)
+	}
+
+	return nil
+}

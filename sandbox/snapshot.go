@@ -56,5 +56,16 @@ func main() {
 		} else {
 			fmt.Printf("Generado snapshot: %s (%dx%d, %d bytes)\n", outFile, res.w, res.h, len(view))
 		}
+
+		// Generar snapshot de la Hoja 2 (Tablero Kanban)
+		kanbanModel, _ := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'W'}})
+		km := kanbanModel.(*app.AppModel)
+		kanbanView := km.View()
+		kanbanOutFile := filepath.Join("sandbox", fmt.Sprintf("snapshot_kanban_%s.ans", res.name))
+		if err := os.WriteFile(kanbanOutFile, []byte(kanbanView), 0644); err != nil {
+			fmt.Fprintf(os.Stderr, "Error writing %s: %v\n", kanbanOutFile, err)
+		} else {
+			fmt.Printf("Generado snapshot: %s (%dx%d, %d bytes)\n", kanbanOutFile, res.w, res.h, len(kanbanView))
+		}
 	}
 }

@@ -30,6 +30,7 @@ func GetNotesActions(hasTagFilter ...bool) []ActionBtn {
 		ActionBtn{Key: "m", Action: i18n.T("Mover", "Move"), ID: "action-move"},
 		ActionBtn{Key: "e", Action: i18n.T("Editar", "Edit"), ID: "action-edit"},
 		ActionBtn{Key: "d", Action: i18n.T("Borrar", "Delete"), ID: "action-delete"},
+		ActionBtn{Key: "W", Action: i18n.T("Kanban", "Kanban"), ID: "action-toggle-kanban"},
 		ActionBtn{Key: "w", Action: i18n.T("Zoom", "Zoom"), ID: "action-zoom"},
 		ActionBtn{Key: "h", Action: i18n.T("Atajos", "Keys"), ID: "action-cheatsheet"},
 		ActionBtn{Key: "?", Action: i18n.T("Ajustes", "Settings"), ID: "action-config"},
@@ -47,6 +48,7 @@ func GetTagActions(hasTagFilter ...bool) []ActionBtn {
 	return []ActionBtn{
 		{Key: "Enter", Action: filterAction, ID: "action-view-tag"},
 		{Key: "e", Action: i18n.T("Editar", "Edit"), ID: "action-edit"},
+		{Key: "W", Action: i18n.T("Kanban", "Kanban"), ID: "action-toggle-kanban"},
 		{Key: "w", Action: i18n.T("Zoom", "Zoom"), ID: "action-zoom"},
 		{Key: "h", Action: i18n.T("Atajos", "Keys"), ID: "action-cheatsheet"},
 		{Key: "?", Action: i18n.T("Ajustes", "Settings"), ID: "action-config"},
@@ -64,7 +66,21 @@ func GetTaskActions(hideCompleted bool) []ActionBtn {
 		{Key: "space", Action: i18n.T("Completar", "Toggle"), ID: "action-toggle-task"},
 		{Key: "h", Action: hideLabel, ID: "action-hide-tasks"},
 		{Key: "Enter", Action: i18n.T("Abrir nota", "Open note"), ID: "action-open-task"},
+		{Key: "W", Action: i18n.T("Kanban", "Kanban"), ID: "action-toggle-kanban"},
 		{Key: "w", Action: i18n.T("Zoom", "Zoom"), ID: "action-zoom"},
+		{Key: "?", Action: i18n.T("Ajustes", "Settings"), ID: "action-config"},
+		{Key: "q", Action: i18n.T("Salir", "Quit"), ID: "action-quit"},
+	}
+}
+
+// GetKanbanActions devuelve los atajos contextuales del tablero Kanban (Hoja 2)
+func GetKanbanActions() []ActionBtn {
+	return []ActionBtn{
+		{Key: "h/l", Action: i18n.T("Columna", "Column"), ID: "action-kanban-col"},
+		{Key: "H/L", Action: i18n.T("Mover", "Move"), ID: "action-kanban-move"},
+		{Key: "space", Action: i18n.T("Completar", "Toggle"), ID: "action-toggle-task"},
+		{Key: "Enter", Action: i18n.T("Editar", "Edit"), ID: "action-open-task"},
+		{Key: "W", Action: i18n.T("Notas (Hoja 1)", "Notes (Sheet 1)"), ID: "action-toggle-kanban"},
 		{Key: "?", Action: i18n.T("Ajustes", "Settings"), ID: "action-config"},
 		{Key: "q", Action: i18n.T("Salir", "Quit"), ID: "action-quit"},
 	}

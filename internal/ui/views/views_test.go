@@ -408,3 +408,68 @@ func TestRenderPreviewPreservesNewLines(t *testing.T) {
 		t.Fatalf("Faltan líneas esperadas en el render: %s", clean)
 	}
 }
+
+func TestCollectKanbanAndRender(t *testing.T) {
+	notes := []storage.Note{
+		{
+			ID:    "nota1.md",
+			Title: "Sprint 1",
+			Path:  "/notes/sprint1.md",
+			Tasks: []storage.Task{
+				{NoteTitle: "Sprint 1", Line: 5, Text: "Escribir especificación", Done: false},
+				{NoteTitle: "Sprint 1", Line: 6, Text: "Implementar backend #doing", Done: false},
+				{NoteTitle: "Sprint 1", Line: 7, Text: "Diseñar logo", Done: true},
+			},
+		},
+		{
+			ID:    "nota2.md",
+			Title: "Sprint 2",
+			Path:  "/notes/sprint2.md",
+			Tasks: []storage.Task{
+				{NoteTitle: "Sprint 2", Line: 10, Text: "Configurar CI/CD #wip", Done: false},
+				{NoteTitle: "Sprint 2", Line: 11, Text: "Deploy en producción", Done: false},
+			},
+		},
+	}
+
+	board := CollectKanban(notes)
+
+	if len(board.Todo) != 2 {
+		t.Errorf("Se esperaban 2 tareas en Todo, obtenidas %d", len(board.Todo))
+	}
+	if len(board.Doing) != 2 {
+		t.Errorf("Se esperaban 2 tareas en Doing, obtenidas %d", len(board.Doing))
+	}
+	if len(board.Done) != 1 {
+		t.Errorf("Se esperaba 1 tarea en Done, obtenida %d", len(board.Done))
+	}
+
+	if board.TotalCards() != 5 {
+		t.Errorf("Total de tarjetas esperado 5, obtenido %d", board.TotalCards())
+	}
+
+	// Probar renderizado y registro de zonas
+	ht := mouse.NewHitTester()
+	selectedRows := [3]int{0, 1, 0}
+	rendered := RenderKanban(board, 1, selectedRows, 90, 20, ht, 1)
+
+	if !strings.Contains(rendered, "[1] Por Hacer") && !strings.Contains(rendered, "[1] To Do") {
+		t.Errorf("No se encontró cabecera de columna [1]")
+	}
+	if !strings.Contains(rendered, "[2] En Progreso") && !strings.Contains(rendered, "[2] In Progress") {
+		t.Errorf("No se encontró cabecera de columna [2]")
+	}
+	if !strings.Contains(rendered, "[3] Completado") && !strings.Contains(rendered, "[3] Done") {
+		t.Errorf("No se encontró cabecera de columna [3]")
+	}
+
+	// Verificar registro de zonas en HitTester
+	// Al hacer clic en columna 0 (x=5, y=5) debe detectar col 0 o tarjeta
+	zone, found := ht.Check(5, 5)
+	if !found {
+		t.Errorf("No se detectó zona para clic en kanban (x=5, y=5)")
+	} else if zone.Type != mouse.ZoneKanbanCol && zone.Type != mouse.ZoneKanbanCard {
+		t.Errorf("Tipo de zona inesperado: %v", zone.Type)
+	}
+}
+

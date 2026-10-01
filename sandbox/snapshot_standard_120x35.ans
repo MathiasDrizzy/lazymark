@@ -1,35 +1,35 @@
-┌─ [1] Notes ──────────────── 1 of 6 ─┐┌─ [4] Preview ─────────────────────────────────────────────────────────────────┐
-│ ▸ ▾  carpeta-7 (0)                 ││ Select a note to view content...                                              │
-│   ▾  folder-10 (0)                 ││                                                                               │
-│   ▾  folder-11 (0)                 ││                                                                               │
-│   ▾  folder-6 (0)                  ││                                                                               │
-│   󰍔 00-Bienvenida.md 30 Sep         ││                                                                               │
-│   󰍔 Proyecto-Lazymark.md 30 Sep     ││                                                                               │
-│                                     ││                                                                               │
-│                                     ││                                                                               │
-│                                     ││                                                                               │
-│                                     ││                                                                               │
-│                                     ││                                                                               │
-│                                     ││                                                                               │
-│                                     ││                                                                               │
-│                                     ││                                                                               │
-│                                     ││                                                                               │
-│                                     ││                                                                               │
-│                                     ││                                                                               │
-└─────────────────────────────────────┘│                                                                               │
-┌─ [2] Tasks ──────────────── 1 of 9 ─┐│                                                                               │
-│ ▸ ☐ Crear el repositorio Homebrew t ││                                                                               │
-│   ☐ Publicar tag v0.1.0 para releas ││                                                                               │
-│   ☐ Probar instalación con curl en  ││                                                                               │
-│   ☐ Implementar soporte de ratón y  ││                                                                               │
-│   ☑ Implementar pestaña [2] Categor ││                                                                               │
-│   ☑ Implementar pestaña [3] Tareas  ││                                                                               │
-│   ☑ Implementar pestaña [4] Galería ││                                                                               │
-└─────────────────────────────────────┘│                                                                               │
-┌─ [3] Categories ─────────── 1 of 4 ─┐│                                                                               │
-│ ▸ #golang (1)                       ││                                                                               │
-│    #lazymark   (1)                  ││                                                                               │
-│    #productividad   (1)             ││                                                                               │
-│    #tui   (1)                       ││                                                                               │
-└─────────────────────────────────────┘└───────────────────────────────────────────────────────────────────────────────┘
- [x] 󰩹 (5)  [c] +Note  [F] +Folder  [v] Sel  [m] Move  [e] Edit  [d] Delete  [w] Zoom  [h] Keys  [?] Settings  [q] Quit 
+┌─ [1] To Do ───────────────── 1 of 4 ─┐┌─ [2] In Progress ─────────── 0 of 0 ─┐┌─ [3] Done ────────────────── 1 of 5 ─┐
+│ ▸ ☐ Crear el repositorio Homebrew ta ││   (No tasks in progress. Move with L ││ ▸ ☑ Implementar pestaña [2] Categorí │
+│   ☐ Publicar tag v0.1.0 para release ││                                      ││   ☑ Implementar pestaña [3] Tareas a │
+│   ☐ Probar instalación con curl en u ││                                      ││   ☑ Implementar pestaña [4] Galería  │
+│   ☐ Implementar soporte de ratón y H ││                                      ││   ☑ Implementar 7 temas dinámicos co │
+│                                      ││                                      ││   ☑ Compatibilidad con navegación es │
+│                                      ││                                      ││                                      │
+│                                      ││                                      ││                                      │
+│                                      ││                                      ││                                      │
+│                                      ││                                      ││                                      │
+│                                      ││                                      ││                                      │
+│                                      ││                                      ││                                      │
+│                                      ││                                      ││                                      │
+│                                      ││                                      ││                                      │
+│                                      ││                                      ││                                      │
+│                                      ││                                      ││                                      │
+│                                      ││                                      ││                                      │
+│                                      ││                                      ││                                      │
+│                                      ││                                      ││                                      │
+│                                      ││                                      ││                                      │
+│                                      ││                                      ││                                      │
+│                                      ││                                      ││                                      │
+│                                      ││                                      ││                                      │
+│                                      ││                                      ││                                      │
+│                                      ││                                      ││                                      │
+│                                      ││                                      ││                                      │
+│                                      ││                                      ││                                      │
+│                                      ││                                      ││                                      │
+│                                      ││                                      ││                                      │
+│                                      ││                                      ││                                      │
+│                                      ││                                      ││                                      │
+│                                      ││                                      ││                                      │
+│                                      ││                                      ││                                      │
+└──────────────────────────────────────┘└──────────────────────────────────────┘└──────────────────────────────────────┘
+ [x] 󰩹 (5)  [h/l] Column  [H/L] Move  [space] Toggle  [Enter] Edit  [W] Notes (Sheet 1)  [?] Settings  [q] Quit         

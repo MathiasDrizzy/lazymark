@@ -25,6 +25,14 @@ type EditorFinishedMsg struct {
 	Err error
 }
 
+// AppSheet identifica la hoja o vista principal de la aplicación
+type AppSheet int
+
+const (
+	SheetLazygit AppSheet = iota // Hoja 1: Vista Lazygit estándar (Notas, Tareas, Tags, Preview)
+	SheetKanban                  // Hoja 2: Tablero Kanban interactivo (3 columnas de ancho completo)
+)
+
 // Constantes de identificación de paneles modulares estilo Lazygit
 const (
 	PanelNotes   = 0 // [1] Notas
@@ -40,6 +48,11 @@ type AppModel struct {
 	kitty     *image.Client
 	clipSaver *clipboard.Saver
 	hitTester *mouse.HitTester
+
+	currentSheet   AppSheet
+	kanbanBoard    views.KanbanBoard
+	kanbanCol      int    // Columna activa en tablero Kanban (0=Todo, 1=Doing, 2=Done)
+	kanbanSelected [3]int // Fila seleccionada en cada columna Kanban
 
 	notes        []storage.Note
 	selectedNote int
@@ -183,6 +196,18 @@ func (m *AppModel) rebuildDerivedData() {
 	m.tags = views.CollectTags(m.notes)
 	m.tasks = views.CollectTasks(m.notes, m.taskFilter)
 	m.images = views.CollectImages(m.notes)
+	m.kanbanBoard = views.CollectKanban(m.notes)
+
+	for c := 0; c < 3; c++ {
+		cards := m.kanbanBoard.ColumnCards(c)
+		if m.kanbanSelected[c] >= len(cards) {
+			if len(cards) > 0 {
+				m.kanbanSelected[c] = len(cards) - 1
+			} else {
+				m.kanbanSelected[c] = 0
+			}
+		}
+	}
 
 	if m.selectedTag >= len(m.tags) {
 		if len(m.tags) > 0 {
@@ -418,8 +443,79 @@ func (m *AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 
-		// Atajos globales fuera de configuración
+		// Si estamos en la Hoja 2 (Tablero Kanban)
+		if m.currentSheet == SheetKanban {
+			switch key {
+			case "esc", "W", "K":
+				m.currentSheet = SheetLazygit
+				m.statusMsg = i18n.T("Hoja 1: Vista Lazygit", "Sheet 1: Lazygit View")
+				return m, nil
+			case "q":
+				m.quitting = true
+				if m.kitty != nil && m.kitty.Supported {
+					fmt.Print(m.kitty.ClearAllCommand())
+				}
+				return m, tea.Quit
+			case "?", "F2":
+				m.showSettings = true
+				return m, nil
+			case "h", "left":
+				if m.kanbanCol > 0 {
+					m.kanbanCol--
+				} else {
+					m.kanbanCol = 2
+				}
+				return m, nil
+			case "l", "right":
+				if m.kanbanCol < 2 {
+					m.kanbanCol++
+				} else {
+					m.kanbanCol = 0
+				}
+				return m, nil
+			case "1":
+				m.kanbanCol = 0
+				return m, nil
+			case "2":
+				m.kanbanCol = 1
+				return m, nil
+			case "3":
+				m.kanbanCol = 2
+				return m, nil
+			case "j", "down":
+				cards := m.kanbanBoard.ColumnCards(m.kanbanCol)
+				if len(cards) > 0 && m.kanbanSelected[m.kanbanCol] < len(cards)-1 {
+					m.kanbanSelected[m.kanbanCol]++
+				}
+				return m, nil
+			case "k", "up":
+				if m.kanbanSelected[m.kanbanCol] > 0 {
+					m.kanbanSelected[m.kanbanCol]--
+				}
+				return m, nil
+			case "H":
+				return m.moveKanbanCard(m.kanbanCol - 1)
+			case "L":
+				return m.moveKanbanCard(m.kanbanCol + 1)
+			case " ", "x":
+				return m.toggleKanbanCard()
+			case "enter", "e":
+				return m.openKanbanCardEditor()
+			case "tab":
+				m.kanbanCol = (m.kanbanCol + 1) % 3
+				return m, nil
+			}
+			return m, nil
+		}
+
+		// Atajos globales fuera de configuración (Hoja 1: Lazygit)
 		switch key {
+		case "W", "K":
+			m.currentSheet = SheetKanban
+			m.kanbanBoard = views.CollectKanban(m.notes)
+			m.statusMsg = i18n.T("Hoja 2: Tablero Kanban (Taskell/Kaban)", "Sheet 2: Kanban Board (Taskell/Kaban)")
+			return m, nil
+
 		case "esc":
 			if m.activeTagFilter != "" {
 				m.clearTagFilter()
@@ -985,6 +1081,29 @@ func (m *AppModel) handleZoneClick(zone *mouse.Zone) (tea.Model, tea.Cmd) {
 			return m, m.openEditorForPath(m.images[m.selectedImage].NotePath)
 		}
 		m.selectedImage = zone.Index
+	case mouse.ZoneKanbanCol:
+		m.kanbanCol = zone.Index
+		return m, nil
+	case mouse.ZoneKanbanCard:
+		parts := strings.Split(zone.Payload, ":")
+		if len(parts) >= 3 {
+			var c, line int
+			fmt.Sscanf(parts[0], "%d", &c)
+			notePath := parts[1]
+			fmt.Sscanf(parts[2], "%d", &line)
+			m.kanbanCol = c
+			cards := m.kanbanBoard.ColumnCards(c)
+			for idx, card := range cards {
+				if card.NotePath == notePath && card.Task.Line == line {
+					m.kanbanSelected[c] = idx
+					break
+				}
+			}
+			if isDoubleClick {
+				return m, m.openEditorForPathAndLine(notePath, line)
+			}
+		}
+		return m, nil
 	case mouse.ZoneAction:
 		return m.handleActionClick(zone)
 	}
@@ -1125,11 +1244,35 @@ func (m *AppModel) handleActionClick(zone *mouse.Zone) (tea.Model, tea.Cmd) {
 			}
 		}
 		return m, nil
+	case "action-toggle-kanban":
+		if m.currentSheet == SheetKanban {
+			m.currentSheet = SheetLazygit
+			m.statusMsg = i18n.T("Hoja 1: Vista Lazygit", "Sheet 1: Lazygit View")
+		} else {
+			m.currentSheet = SheetKanban
+			m.kanbanBoard = views.CollectKanban(m.notes)
+			m.statusMsg = i18n.T("Hoja 2: Tablero Kanban (Taskell/Kaban)", "Sheet 2: Kanban Board (Taskell/Kaban)")
+		}
+		return m, nil
+	case "action-kanban-col":
+		m.kanbanCol = (m.kanbanCol + 1) % 3
+		return m, nil
+	case "action-kanban-move":
+		if m.kanbanCol < 2 {
+			return m.moveKanbanCard(m.kanbanCol + 1)
+		}
+		return m.moveKanbanCard(0)
 	case "action-toggle-task":
+		if m.currentSheet == SheetKanban {
+			return m.toggleKanbanCard()
+		}
 		return m.toggleCurrentTask()
 	case "action-hide-tasks":
 		return m.toggleHideCompletedTasks()
 	case "action-open-task":
+		if m.currentSheet == SheetKanban {
+			return m.openKanbanCardEditor()
+		}
 		if len(m.tasks) > 0 && m.selectedTask < len(m.tasks) {
 			return m, m.openEditorForPath(m.tasks[m.selectedTask].NotePath)
 		}
@@ -1525,6 +1668,10 @@ func (m *AppModel) openEditor() tea.Cmd {
 }
 
 func (m *AppModel) openEditorForPath(filePath string) tea.Cmd {
+	return m.openEditorForPathAndLine(filePath, 1)
+}
+
+func (m *AppModel) openEditorForPathAndLine(filePath string, lineNum int) tea.Cmd {
 	editorBin := config.ResolveEditorBin(m.cfg.Editor)
 
 	// Limpiar buffer gráfico antes de abrir editor
@@ -1532,11 +1679,130 @@ func (m *AppModel) openEditorForPath(filePath string) tea.Cmd {
 		fmt.Print(m.kitty.ClearAllCommand())
 	}
 
-	c := exec.Command(editorBin, filePath)
+	var args []string
+	lowerBin := strings.ToLower(editorBin)
+	if lineNum > 1 && (strings.Contains(lowerBin, "micro") || strings.Contains(lowerBin, "vim") || strings.Contains(lowerBin, "nano")) {
+		args = []string{fmt.Sprintf("+%d", lineNum), filePath}
+	} else {
+		args = []string{filePath}
+	}
+
+	c := exec.Command(editorBin, args...)
 	return tea.ExecProcess(c, func(err error) tea.Msg {
 		return EditorFinishedMsg{Err: err}
 	})
 }
+
+func (m *AppModel) moveKanbanCard(targetCol int) (tea.Model, tea.Cmd) {
+	if targetCol < 0 || targetCol > 2 {
+		return m, nil
+	}
+	cards := m.kanbanBoard.ColumnCards(m.kanbanCol)
+	if len(cards) == 0 {
+		return m, nil
+	}
+	selIdx := m.kanbanSelected[m.kanbanCol]
+	if selIdx >= len(cards) {
+		selIdx = len(cards) - 1
+	}
+	card := cards[selIdx]
+
+	var targetStage storage.TaskStage
+	switch targetCol {
+	case 0:
+		targetStage = storage.StageTodo
+	case 1:
+		targetStage = storage.StageDoing
+	case 2:
+		targetStage = storage.StageDone
+	}
+
+	err := m.storage.UpdateTaskStage(card.NotePath, card.Task.Line, targetStage)
+	if err != nil {
+		m.statusMsg = fmt.Sprintf(i18n.T("Error al mover tarjeta: %v", "Error moving card: %v"), err)
+		return m, nil
+	}
+
+	m.reloadNotes()
+	m.kanbanBoard = views.CollectKanban(m.notes)
+
+	// Cambiar foco a la columna de destino
+	m.kanbanCol = targetCol
+	newCards := m.kanbanBoard.ColumnCards(targetCol)
+	if len(newCards) > 0 {
+		m.kanbanSelected[targetCol] = len(newCards) - 1
+	} else {
+		m.kanbanSelected[targetCol] = 0
+	}
+
+	stageNames := []string{
+		i18n.T("Por Hacer", "To Do"),
+		i18n.T("En Progreso", "In Progress"),
+		i18n.T("Completado", "Done"),
+	}
+	m.statusMsg = fmt.Sprintf(i18n.T("Tarjeta movida a '%s'", "Card moved to '%s'"), stageNames[targetCol])
+	return m, nil
+}
+
+func (m *AppModel) toggleKanbanCard() (tea.Model, tea.Cmd) {
+	cards := m.kanbanBoard.ColumnCards(m.kanbanCol)
+	if len(cards) == 0 {
+		return m, nil
+	}
+	selIdx := m.kanbanSelected[m.kanbanCol]
+	if selIdx >= len(cards) {
+		selIdx = len(cards) - 1
+	}
+	card := cards[selIdx]
+
+	var targetStage storage.TaskStage
+	var targetCol int
+	if card.Stage == storage.StageDone {
+		targetStage = storage.StageTodo
+		targetCol = 0
+	} else {
+		targetStage = storage.StageDone
+		targetCol = 2
+	}
+
+	err := m.storage.UpdateTaskStage(card.NotePath, card.Task.Line, targetStage)
+	if err != nil {
+		m.statusMsg = fmt.Sprintf(i18n.T("Error al alternar tarjeta: %v", "Error toggling card: %v"), err)
+		return m, nil
+	}
+
+	m.reloadNotes()
+	m.kanbanBoard = views.CollectKanban(m.notes)
+
+	m.kanbanCol = targetCol
+	newCards := m.kanbanBoard.ColumnCards(targetCol)
+	if len(newCards) > 0 {
+		m.kanbanSelected[targetCol] = len(newCards) - 1
+	} else {
+		m.kanbanSelected[targetCol] = 0
+	}
+
+	if targetStage == storage.StageDone {
+		m.statusMsg = i18n.T("Tarea completada [✓]", "Task completed [✓]")
+	} else {
+		m.statusMsg = i18n.T("Tarea marcada como pendiente [ ]", "Task marked as pending [ ]")
+	}
+	return m, nil
+}
+
+func (m *AppModel) openKanbanCardEditor() (tea.Model, tea.Cmd) {
+	cards := m.kanbanBoard.ColumnCards(m.kanbanCol)
+	if len(cards) == 0 {
+		return m, nil
+	}
+	selIdx := m.kanbanSelected[m.kanbanCol]
+	if selIdx >= len(cards) {
+		selIdx = len(cards) - 1
+	}
+	card := cards[selIdx]
+	return m, m.openEditorForPathAndLine(card.NotePath, card.Task.Line)
+}
+
 
 func (m *AppModel) createQuickNote() tea.Cmd {
 	targetDir := m.storage.BaseDir
@@ -1905,6 +2171,24 @@ func (m *AppModel) View() string {
 	totalH := m.height - 1
 	if totalH < 3 {
 		totalH = 3
+	}
+
+	// Si estamos en la Hoja 2 (Tablero Kanban)
+	if m.currentSheet == SheetKanban {
+		mainView := views.RenderKanban(m.kanbanBoard, m.kanbanCol, m.kanbanSelected, m.width, totalH, m.hitTester, 0)
+		actions := views.GetKanbanActions()
+		footerView := views.RenderFooter(m.width, m.hitTester, m.height-1, m.statusMsg, m.storage.CountTrash(), actions)
+		fullView := lipgloss.JoinVertical(lipgloss.Left, mainView, footerView)
+
+		if m.showSettings {
+			modal := views.RenderSettingsModal(m.cfg, views.SettingsItem(m.settingsItem), m.width, m.height, m.hitTester)
+			return views.OverlayLayers(fullView, modal, m.width, m.height, true)
+		}
+		if m.showCheatsheet {
+			cheatsheet := views.RenderCheatsheet(m.width, m.height)
+			return views.OverlayLayers(fullView, cheatsheet, m.width, m.height, true)
+		}
+		return fullView
 	}
 
 	// 2. Dimensiones horizontales
