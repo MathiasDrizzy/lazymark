@@ -1,12 +1,8 @@
 package views
 
 import (
-	"fmt"
-	"strings"
-
 	"github.com/MathiasDrizzy/lazymark/internal/i18n"
 	"github.com/MathiasDrizzy/lazymark/internal/storage"
-	"github.com/MathiasDrizzy/lazymark/internal/ui/theme"
 )
 
 // TaskFilter define el tipo de filtro aplicado a las tareas
@@ -58,54 +54,4 @@ func TaskFilterLabel(filter TaskFilter) string {
 	default:
 		return i18n.T("Todas", "All")
 	}
-}
-
-// RenderTaskPreview muestra los detalles de la tarea seleccionada y su contexto
-func RenderTaskPreview(task *FlatTask, width, height int, active bool) string {
-	title := i18n.T("[4] Vista Previa", "[4] Preview")
-	badge := ""
-
-	if task == nil {
-		empty := theme.NormalItem.Copy().Italic(true).Render(i18n.T("Selecciona una tarea para ver detalles...", "Select a task to view details..."))
-		return theme.RenderBoxWithTitle(title, badge, empty, width, height, active)
-	}
-
-	badge = task.NoteTitle
-
-	var rows []string
-
-	// Estado
-	var statusLine string
-	if task.Done {
-		statusLine = theme.NormalItem.Copy().Foreground(theme.ColorGreen).Bold(true).Render("  " + i18n.T("☑ COMPLETADA", "☑ COMPLETED"))
-	} else {
-		statusLine = theme.NormalItem.Copy().Foreground(theme.ColorYellow).Bold(true).Render("  " + i18n.T("☐ PENDIENTE", "☐ PENDING"))
-	}
-	rows = append(rows, statusLine)
-	rows = append(rows, "")
-
-	// Texto de la tarea
-	taskLabel := theme.NormalItem.Copy().Foreground(theme.ColorPeach).Bold(true).Render("  " + i18n.T("Tarea:", "Task:"))
-	rows = append(rows, taskLabel)
-	rows = append(rows, fmt.Sprintf("  %s", theme.NormalItem.Render(task.Text)))
-	rows = append(rows, "")
-
-	// Nota de origen
-	noteLabel := theme.NormalItem.Copy().Foreground(theme.ColorBlue).Bold(true).Render("  " + i18n.T("Nota:", "Note:"))
-	rows = append(rows, noteLabel)
-	rows = append(rows, fmt.Sprintf("    %s", theme.NormalItem.Render(task.NoteTitle)))
-	rows = append(rows, "")
-
-	// Línea en el archivo
-	lineLabel := theme.NormalItem.Copy().Foreground(theme.ColorMauve).Render(fmt.Sprintf("  %s: %d", i18n.T("Línea", "Line"), task.Line))
-	rows = append(rows, lineLabel)
-	rows = append(rows, "")
-
-	// Tip
-	tipLabel := theme.NormalItem.Copy().Foreground(theme.ColorOverlay0).Italic(true).
-		Render(i18n.T("  Presiona Enter para abrir la nota en el editor", "  Press Enter to open note in editor"))
-	rows = append(rows, tipLabel)
-
-	content := strings.Join(rows, "\n")
-	return theme.RenderBoxWithTitle(title, badge, content, width, height, active)
 }

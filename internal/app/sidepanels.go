@@ -1,9 +1,11 @@
 package app
 
 import (
+	"errors"
 	"fmt"
 	"path/filepath"
 	"strings"
+	"time"
 
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
@@ -41,28 +43,8 @@ func (p *tasksPanel) key(a Action, reload func()) tea.Cmd {
 		p.list.move(-10, n)
 	case actPageDown:
 		p.list.move(10, n)
-	case actEnter:
-		if t := p.current(); t != nil {
-			return p.c.openEditor(t.NotePath, t.Line)
-		}
 	case actToggleTask:
-		t := p.current()
-		if t == nil {
-			return nil
-		}
-		done, err := p.c.store.ToggleTask(t.NotePath, t.Line)
-		if err != nil {
-			p.c.errStatus("No se pudo actualizar la tarea", "Could not update task", err)
-			return nil
-		}
-		text := t.Text
-		reload()
-		p.list.set(p.list.cursor, len(p.c.tasks))
-		if done {
-			p.c.setStatus(i18n.T("Tarea completada: %s", "Task completed: %s"), text)
-		} else {
-			p.c.setStatus(i18n.T("Tarea reabierta: %s", "Task reopened: %s"), text)
-		}
+		return p.toggle(reload)
 	case actHideDone:
 		p.c.cfg.HideCompletedTasks = !p.c.cfg.HideCompletedTasks
 		p.c.save()
@@ -82,14 +64,80 @@ func (p *tasksPanel) key(a Action, reload func()) tea.Cmd {
 	return nil
 }
 
-func (p *tasksPanel) click(row int, double bool) tea.Cmd {
+// noteMod devuelve el mtime con el que se cargó la nota.
+func (p *tasksPanel) noteMod(path string) time.Time {
+	for _, n := range p.c.notes {
+		if n.Path == path {
+			return n.ModTime
+		}
+	}
+	return time.Time{}
+}
+
+// selectTask pone el cursor sobre la tarea (nota, línea); si ya no está en la
+// lista (p. ej. una hecha con las hechas ocultas) deja el cursor en una fila válida.
+func (p *tasksPanel) selectTask(path string, line int) {
+	for i, t := range p.c.tasks {
+		if t.NotePath == path && t.Line == line {
+			p.list.set(i, len(p.c.tasks))
+			return
+		}
+	}
+	p.list.set(p.list.cursor, len(p.c.tasks))
+}
+
+// toggle alterna la tarea bajo el cursor reescribiendo solo su línea. Como la
+// nota pasa a ser la más reciente y la lista se reordena, el cursor sigue a la
+// tarea alternada. Si la nota cambió por fuera no la pisa: avisa y recarga.
+func (p *tasksPanel) toggle(reload func()) tea.Cmd {
+	t := p.current()
+	if t == nil {
+		return nil
+	}
+	path, line, text := t.NotePath, t.Line, t.Text
+	done, err := p.c.store.ToggleTaskIfUnchanged(path, line, p.noteMod(path))
+	if errors.Is(err, storage.ErrNoteChanged) {
+		reload()
+		p.selectTask(path, line)
+		p.c.setStatus("%s", i18n.T("La nota cambió por fuera: se recargó, vuelve a intentarlo", "The note changed outside: reloaded, try again"))
+		return nil
+	}
+	if err != nil {
+		p.c.errStatus("No se pudo actualizar la tarea", "Could not update task", err)
+		return nil
+	}
+	reload()
+	p.selectTask(path, line)
+	if done {
+		p.c.setStatus(i18n.T("Tarea completada: %s", "Task completed: %s"), text)
+	} else {
+		p.c.setStatus(i18n.T("Tarea reabierta: %s", "Task reopened: %s"), text)
+	}
+	return nil
+}
+
+// Posición de la casilla dentro de la fila (columna relativa al borde del
+// panel): borde(0) + margen(1) + casilla(2). La zona de clic abarca margen,
+// casilla y el espacio que la sigue.
+const (
+	checkboxCol     = 2
+	checkboxHitFrom = 1
+	checkboxHitTo   = 3
+)
+
+// click selecciona la fila clicada; si el clic cae en la casilla, además la
+// alterna (X7). Un doble clic en el texto abre la nota.
+func (p *tasksPanel) click(relX, row int, double bool, reload func()) tea.Cmd {
 	i := p.list.offset + row
 	if row < 0 || i >= len(p.c.tasks) {
 		return nil
 	}
 	p.list.set(i, len(p.c.tasks))
+	if relX >= checkboxHitFrom && relX <= checkboxHitTo {
+		return p.toggle(reload)
+	}
 	if double {
-		return p.key(actEnter, nil)
+		return p.c.openEditor(p.c.tasks[i].NotePath, p.c.tasks[i].Line)
 	}
 	return nil
 }

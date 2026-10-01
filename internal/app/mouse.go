@@ -56,7 +56,7 @@ func (m *AppModel) handleClick(msg tea.MouseClickMsg) tea.Cmd {
 	case l.Tasks.Contains(x, y):
 		m.setFocus(panelTasks)
 		row := y - l.Tasks.Y - 1
-		return m.tasks.click(row, m.clicks.hit(rowZone("t", m.tasks.list.offset+row), time.Now()))
+		return m.afterPanel(m.tasks.click(x-l.Tasks.X, row, m.clicks.hit(rowZone("t", m.tasks.list.offset+row), time.Now()), m.afterChange))
 	case l.Tags.Contains(x, y):
 		m.setFocus(panelTags)
 		m.tags.click(y-l.Tags.Y-1, m.filterTag)

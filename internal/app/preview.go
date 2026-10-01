@@ -14,6 +14,7 @@ import (
 	"github.com/MathiasDrizzy/lazymark/internal/storage"
 	"github.com/MathiasDrizzy/lazymark/internal/ui/textwidth"
 	"github.com/MathiasDrizzy/lazymark/internal/ui/theme"
+	"github.com/MathiasDrizzy/lazymark/internal/ui/views"
 )
 
 var mdImage = regexp.MustCompile(`!\[(.*?)\]\((.*?)\)`)
@@ -184,4 +185,36 @@ func (d *doubleClick) hit(zone string, now time.Time) bool {
 		d.zone = ""
 	}
 	return double
+}
+
+// taskKey es la huella de una tarea para buscarla en el markdown renderizado:
+// sus primeras palabras sin marcas de énfasis ni de enlace.
+func taskKey(text string) string {
+	clean := strings.NewReplacer("*", "", "_", "", "`", "", "[", "", "]", "").Replace(storage.CleanTaskText(text))
+	words := strings.Fields(clean)
+	return strings.Join(words[:min(3, len(words))], " ")
+}
+
+// taskRenderedLine devuelve la fila del markdown ya renderizado donde está la
+// tarea t. Si el texto se repite en la nota, usa la ocurrencia que corresponde
+// por orden de línea; si no la encuentra, estima la posición proporcional.
+func taskRenderedLine(lines []string, note *storage.Note, t views.FlatTask) int {
+	if key := taskKey(t.Text); key != "" {
+		nth := 0
+		for _, other := range note.Tasks {
+			if other.Line < t.Line && taskKey(other.Text) == key {
+				nth++
+			}
+		}
+		for i, l := range lines {
+			if strings.Contains(textwidth.Strip(l), key) {
+				if nth == 0 {
+					return i
+				}
+				nth--
+			}
+		}
+	}
+	total := max(1, strings.Count(note.Content, "\n")+1)
+	return t.Line * len(lines) / total
 }

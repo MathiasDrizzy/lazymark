@@ -74,7 +74,8 @@ func (m *AppModel) renderPreview() string {
 	r, active := m.layout.Preview, m.focus == panelPreview
 	switch m.lastLeft {
 	case panelTasks:
-		return views.RenderTaskPreview(m.tasks.current(), r.W, r.H, active)
+		// la nota de la tarea seleccionada, posicionada en su línea
+		return m.preview.view(m.previewNote(), r, active)
 	case panelTags:
 		return views.RenderTagPreview(m.c.notes, m.tags.current(), r.W, r.H, active)
 	}

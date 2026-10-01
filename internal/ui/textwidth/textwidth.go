@@ -17,6 +17,11 @@ func Width(s string) int {
 	return ansi.StringWidth(s)
 }
 
+// Strip quita las secuencias ANSI de s.
+func Strip(s string) string {
+	return ansi.Strip(s)
+}
+
 // Truncate corta s a w celdas como máximo; si corta, termina en tail.
 func Truncate(s string, w int, tail string) string {
 	if w <= 0 {

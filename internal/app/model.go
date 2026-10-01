@@ -89,6 +89,29 @@ func (m *AppModel) relayout() {
 	if (m.focus == panelTasks && m.layout.Tasks.Empty()) || (m.focus == panelTags && m.layout.Tags.Empty()) {
 		m.setFocus(panelNotes)
 	}
+	m.syncPreviewToTask()
+}
+
+// syncPreviewToTask posiciona el preview en la línea de la tarea seleccionada
+// mientras el foco está en el panel Tareas (H2-4). Al pasar el foco al preview
+// ya no se toca el scroll, así se puede leer y desplazar desde ahí.
+func (m *AppModel) syncPreviewToTask() {
+	if m.focus != panelTasks || m.kanbanOn || m.layout.TooSmall {
+		return
+	}
+	t := m.tasks.current()
+	if t == nil {
+		m.preview.reset()
+		return
+	}
+	note := m.noteByPath(t.NotePath)
+	inner, h := m.layout.Preview.W-2, m.layout.Preview.H-2
+	if note == nil || inner < 8 || h < 1 {
+		return
+	}
+	line := taskRenderedLine(m.preview.lines(note, inner-1), note, *t)
+	m.preview.scrollX = 0
+	m.preview.scrollY = max(0, line-h/3) // la tarea queda en el tercio superior, con contexto arriba
 }
 
 func (m *AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
@@ -249,6 +272,10 @@ func (m *AppModel) panelAction(a Action) tea.Cmd {
 		}
 		return m.afterPanel(cmd)
 	case panelTasks:
+		if a == actEnter { // como en lazygit: Enter entra al panel de la derecha
+			m.setFocus(panelPreview)
+			return nil
+		}
 		return m.afterPanel(m.tasks.key(a, m.afterChange))
 	case panelTags:
 		return m.afterPanel(m.tags.key(a, m.filterTag))
@@ -268,6 +295,11 @@ func (m *AppModel) panelAction(a Action) tea.Cmd {
 		case actBottom:
 			m.preview.scroll(1<<20, 0)
 		case actEdit:
+			if m.lastLeft == panelTasks {
+				if t := m.tasks.current(); t != nil {
+					return m.c.openEditor(t.NotePath, t.Line)
+				}
+			}
 			if note := m.previewNote(); note != nil {
 				return m.c.openEditor(note.Path, 1)
 			}
@@ -307,6 +339,9 @@ func (m *AppModel) setFocus(p panelID) {
 		return
 	}
 	m.focus = p
+	if p == panelTasks {
+		m.syncPreviewToTask()
+	}
 	if p != panelPreview {
 		m.lastLeft = p
 	}

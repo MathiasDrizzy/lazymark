@@ -2,6 +2,7 @@ package storage
 
 import (
 	"bufio"
+	"errors"
 	"fmt"
 	"io/fs"
 	"os"
@@ -417,50 +418,72 @@ func (s *Storage) ListFolders() ([]string, error) {
 
 var toggleTaskRegex = regexp.MustCompile(`^(\s*[-*]\s+\[)([ xX])(\]\s*.*)$`)
 
-// ToggleTask modifica de forma atómica el estado de una tarea (- [ ] <-> - [x]) en el archivo markdown
+// ToggleTask alterna una tarea (- [ ] <-> - [x]) reescribiendo solo esa línea.
 func (s *Storage) ToggleTask(notePath string, lineNum int) (bool, error) {
-	contentBytes, err := os.ReadFile(notePath)
+	return s.ToggleTaskIfUnchanged(notePath, lineNum, time.Time{})
+}
+
+// ToggleTaskIfUnchanged alterna la tarea solo si la nota conserva el mtime con
+// el que se cargó (expected); si cambió por fuera devuelve ErrNoteChanged y no
+// escribe nada (X10). Un expected cero omite esa comprobación.
+func (s *Storage) ToggleTaskIfUnchanged(notePath string, lineNum int, expected time.Time) (bool, error) {
+	var newDone bool
+	err := rewriteLine(notePath, lineNum, expected, func(line string) (string, error) {
+		m := toggleTaskRegex.FindStringSubmatch(line)
+		if len(m) != 4 {
+			return "", fmt.Errorf("la línea %d no es una tarea válida de markdown", lineNum)
+		}
+		newDone = m[2] != "x" && m[2] != "X"
+		mark := " "
+		if newDone {
+			mark = "x"
+		}
+		return m[1] + mark + m[3], nil
+	})
+	return newDone, err
+}
+
+// rewriteLine reemplaza la línea lineNum (desde 1) de la nota con fn(línea),
+// dejando el resto del archivo idéntico byte a byte, y lo guarda de forma
+// atómica. Si expected no es cero y el mtime en disco es otro, no escribe. Si
+// la nota cambia entre la lectura y la escritura, tampoco (X10).
+func rewriteLine(notePath string, lineNum int, expected time.Time, fn func(line string) (string, error)) error {
+	before, err := os.Stat(notePath)
 	if err != nil {
-		return false, fmt.Errorf("error al leer archivo para alternar tarea: %w", err)
+		return fmt.Errorf("error al obtener info de archivo: %w", err)
 	}
-
-	info, err := os.Stat(notePath)
+	if !expected.IsZero() && !before.ModTime().Equal(expected) {
+		return ErrNoteChanged
+	}
+	data, err := os.ReadFile(notePath)
 	if err != nil {
-		return false, fmt.Errorf("error al obtener info de archivo: %w", err)
+		return fmt.Errorf("error al leer la nota: %w", err)
 	}
-
-	lines := strings.Split(string(contentBytes), "\n")
-	targetIdx := lineNum - 1
-	if targetIdx < 0 || targetIdx >= len(lines) {
-		return false, fmt.Errorf("índice de línea %d fuera de rango", lineNum)
+	lines := strings.Split(string(data), "\n")
+	idx := lineNum - 1
+	if idx < 0 || idx >= len(lines) {
+		return fmt.Errorf("índice de línea %d fuera de rango", lineNum)
 	}
-
-	matches := toggleTaskRegex.FindStringSubmatch(lines[targetIdx])
-	if len(matches) != 4 {
-		return false, fmt.Errorf("la línea %d no es una tarea válida de markdown", lineNum)
+	newLine, err := fn(lines[idx])
+	if err != nil {
+		return err
 	}
+	lines[idx] = newLine
 
-	isDone := matches[2] == "x" || matches[2] == "X"
-	newDone := !isDone
-
-	newMark := " "
-	if newDone {
-		newMark = "x"
+	tmp := notePath + ".tmp"
+	if err := os.WriteFile(tmp, []byte(strings.Join(lines, "\n")), before.Mode().Perm()); err != nil {
+		return fmt.Errorf("error al escribir archivo temporal: %w", err)
 	}
-	lines[targetIdx] = matches[1] + newMark + matches[3]
-
-	newContent := strings.Join(lines, "\n")
-	tmpPath := notePath + ".tmp"
-	if err := os.WriteFile(tmpPath, []byte(newContent), info.Mode().Perm()); err != nil {
-		return false, fmt.Errorf("error al escribir archivo temporal: %w", err)
+	after, err := os.Stat(notePath)
+	if err != nil || !after.ModTime().Equal(before.ModTime()) || after.Size() != before.Size() {
+		_ = os.Remove(tmp)
+		return ErrNoteChanged
 	}
-
-	if err := os.Rename(tmpPath, notePath); err != nil {
-		_ = os.Remove(tmpPath)
-		return false, fmt.Errorf("error al renombrar archivo atómico: %w", err)
+	if err := os.Rename(tmp, notePath); err != nil {
+		_ = os.Remove(tmp)
+		return fmt.Errorf("error al renombrar archivo atómico: %w", err)
 	}
-
-	return newDone, nil
+	return nil
 }
 
 // TaskStage define la columna del tablero Kanban (To Do, In Progress, Done)
@@ -498,54 +521,20 @@ func GetTaskStage(task Task) TaskStage {
 
 // UpdateTaskStage actualiza de forma atómica en disco el estado Kanban de una tarea
 func (s *Storage) UpdateTaskStage(notePath string, lineNum int, targetStage TaskStage) error {
-	contentBytes, err := os.ReadFile(notePath)
-	if err != nil {
-		return fmt.Errorf("error al leer archivo para actualizar etapa: %w", err)
-	}
-
-	info, err := os.Stat(notePath)
-	if err != nil {
-		return fmt.Errorf("error al obtener info de archivo: %w", err)
-	}
-
-	lines := strings.Split(string(contentBytes), "\n")
-	targetIdx := lineNum - 1
-	if targetIdx < 0 || targetIdx >= len(lines) {
-		return fmt.Errorf("índice de línea %d fuera de rango", lineNum)
-	}
-
-	matches := toggleTaskRegex.FindStringSubmatch(lines[targetIdx])
-	if len(matches) != 4 {
-		return fmt.Errorf("la línea %d no es una tarea válida de markdown", lineNum)
-	}
-
-	rest := strings.TrimPrefix(matches[3], "]")
-	restTrimmed := strings.TrimSpace(rest)
-	cleanText := CleanTaskText(restTrimmed)
-
-	var newLine string
-	switch targetStage {
-	case StageTodo:
-		newLine = fmt.Sprintf("%s ] %s", matches[1], cleanText)
-	case StageDoing:
-		newLine = fmt.Sprintf("%s ] %s #doing", matches[1], cleanText)
-	case StageDone:
-		newLine = fmt.Sprintf("%sx] %s", matches[1], cleanText)
-	}
-
-	lines[targetIdx] = newLine
-	newContent := strings.Join(lines, "\n")
-	tmpPath := notePath + ".tmp"
-	if err := os.WriteFile(tmpPath, []byte(newContent), info.Mode().Perm()); err != nil {
-		return fmt.Errorf("error al escribir archivo temporal: %w", err)
-	}
-
-	if err := os.Rename(tmpPath, notePath); err != nil {
-		_ = os.Remove(tmpPath)
-		return fmt.Errorf("error al renombrar archivo atómico: %w", err)
-	}
-
-	return nil
+	return rewriteLine(notePath, lineNum, time.Time{}, func(line string) (string, error) {
+		m := toggleTaskRegex.FindStringSubmatch(line)
+		if len(m) != 4 {
+			return "", fmt.Errorf("la línea %d no es una tarea válida de markdown", lineNum)
+		}
+		clean := CleanTaskText(strings.TrimSpace(strings.TrimPrefix(m[3], "]")))
+		switch targetStage {
+		case StageDoing:
+			return fmt.Sprintf("%s ] %s #doing", m[1], clean), nil
+		case StageDone:
+			return fmt.Sprintf("%sx] %s", m[1], clean), nil
+		}
+		return fmt.Sprintf("%s ] %s", m[1], clean), nil
+	})
 }
 
 // slug convierte un nombre visible en un nombre de archivo seguro.
@@ -580,3 +569,6 @@ func (s *Storage) Rename(path, newName string) (string, error) {
 	}
 	return dest, os.Rename(path, dest)
 }
+
+// ErrNoteChanged indica que la nota cambió en disco desde que se cargó.
+var ErrNoteChanged = errors.New("la nota cambió por fuera; recarga antes de editarla")
