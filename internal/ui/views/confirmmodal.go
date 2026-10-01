@@ -55,7 +55,7 @@ func RenderConfirmModal(title, message string, width, height int, ht *mouse.HitT
 
 	body := strings.Join(rows, "\n")
 	return theme.ActivePanelBorder.
-		Width(modalWidth).
+		Width(modalWidth + 2).
 		BorderForeground(theme.ColorRed).
 		Render(body)
 }

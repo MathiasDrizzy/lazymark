@@ -7,8 +7,8 @@ import (
 	"strings"
 	"testing"
 
+	tea "charm.land/bubbletea/v2"
 	"github.com/MathiasDrizzy/lazymark/internal/config"
-	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/x/ansi"
 )
 
@@ -68,7 +68,7 @@ func TestViewFitsTerminal(t *testing.T) {
 				m.Update(tea.WindowSizeMsg{Width: sz.w, Height: sz.h})
 				st.setup(m)
 
-				lines := strings.Split(m.View(), "\n")
+				lines := strings.Split(m.View().Content, "\n")
 				if len(lines) != sz.h {
 					t.Errorf("altura = %d líneas, se esperaban %d", len(lines), sz.h)
 				}
@@ -107,9 +107,9 @@ func TestPopupKeepsRightFrame(t *testing.T) {
 				m.Update(tea.WindowSizeMsg{Width: sz.w, Height: sz.h})
 				m.currentSheet = sh.sheet
 
-				base := strings.Split(m.View(), "\n")
+				base := strings.Split(m.View().Content, "\n")
 				m.showCheatsheet = true
-				withPopup := strings.Split(m.View(), "\n")
+				withPopup := strings.Split(m.View().Content, "\n")
 
 				// La última fila es el footer, que no tiene marco.
 				for y := 0; y < sz.h-1; y++ {

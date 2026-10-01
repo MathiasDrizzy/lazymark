@@ -54,7 +54,7 @@ func RenderCheatsheetPopup(width, height int) string {
 
 	body := strings.Join(rows, "\n")
 	return theme.ActivePanelBorder.
-		Width(boxWidth).
+		Width(boxWidth + 2).
 		Render(body)
 }
 

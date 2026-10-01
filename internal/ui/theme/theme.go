@@ -1,26 +1,28 @@
 package theme
 
 import (
-	"github.com/charmbracelet/lipgloss"
+	"image/color"
+
+	"charm.land/lipgloss/v2"
 )
 
 // Palette define los colores de un tema
 type Palette struct {
 	Name     string
-	Base     lipgloss.Color
-	Mantle   lipgloss.Color
-	Surface0 lipgloss.Color
-	Surface1 lipgloss.Color
-	Overlay0 lipgloss.Color
-	Text     lipgloss.Color
-	Subtext0 lipgloss.Color
-	Peach    lipgloss.Color
-	Mauve    lipgloss.Color
-	Teal     lipgloss.Color
-	Green    lipgloss.Color
-	Red      lipgloss.Color
-	Blue     lipgloss.Color
-	Yellow   lipgloss.Color
+	Base     color.Color
+	Mantle   color.Color
+	Surface0 color.Color
+	Surface1 color.Color
+	Overlay0 color.Color
+	Text     color.Color
+	Subtext0 color.Color
+	Peach    color.Color
+	Mauve    color.Color
+	Teal     color.Color
+	Green    color.Color
+	Red      color.Color
+	Blue     color.Color
+	Yellow   color.Color
 }
 
 // ─── Paletas disponibles ───────────────────────────────────────────

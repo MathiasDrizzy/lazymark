@@ -6,11 +6,11 @@ import (
 	"regexp"
 	"strings"
 
+	"charm.land/glamour/v2"
 	"github.com/MathiasDrizzy/lazymark/internal/i18n"
 	"github.com/MathiasDrizzy/lazymark/internal/image"
 	"github.com/MathiasDrizzy/lazymark/internal/storage"
 	"github.com/MathiasDrizzy/lazymark/internal/ui/theme"
-	"github.com/charmbracelet/glamour"
 	"github.com/charmbracelet/x/ansi"
 )
 

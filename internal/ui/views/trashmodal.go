@@ -151,6 +151,6 @@ func RenderTrashModal(items []storage.TrashItem, selectedIndex int, width, heigh
 
 	body := strings.Join(rows, "\n")
 	return theme.ActivePanelBorder.
-		Width(modalWidth).
+		Width(modalWidth + 2).
 		Render(body)
 }

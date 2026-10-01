@@ -6,11 +6,11 @@ import (
 	"os"
 	"strings"
 
+	tea "charm.land/bubbletea/v2"
 	"github.com/MathiasDrizzy/lazymark/internal/app"
 	"github.com/MathiasDrizzy/lazymark/internal/cli"
 	"github.com/MathiasDrizzy/lazymark/internal/config"
 	"github.com/MathiasDrizzy/lazymark/internal/mcp"
-	tea "github.com/charmbracelet/bubbletea"
 )
 
 func extractDirArg(args []string) string {
@@ -124,14 +124,8 @@ func main() {
 		os.Exit(1)
 	}
 
-	var opts []tea.ProgramOption
-	opts = append(opts, tea.WithAltScreen())
-
-	if cfg.MouseClick {
-		opts = append(opts, tea.WithMouseCellMotion())
-	}
-
-	p := tea.NewProgram(appModel, opts...)
+	// Pantalla alternativa y mouse se declaran en AppModel.View (Bubble Tea v2)
+	p := tea.NewProgram(appModel)
 	if _, err := p.Run(); err != nil {
 		fmt.Fprintf(os.Stderr, "Error durante la ejecución: %v\n", err)
 		os.Exit(1)

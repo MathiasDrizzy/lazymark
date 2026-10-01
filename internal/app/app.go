@@ -8,6 +8,8 @@ import (
 	"strings"
 	"time"
 
+	tea "charm.land/bubbletea/v2"
+	"charm.land/lipgloss/v2"
 	"github.com/MathiasDrizzy/lazymark/internal/clipboard"
 	"github.com/MathiasDrizzy/lazymark/internal/config"
 	"github.com/MathiasDrizzy/lazymark/internal/i18n"
@@ -16,8 +18,6 @@ import (
 	"github.com/MathiasDrizzy/lazymark/internal/ui/mouse"
 	"github.com/MathiasDrizzy/lazymark/internal/ui/theme"
 	"github.com/MathiasDrizzy/lazymark/internal/ui/views"
-	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/lipgloss"
 )
 
 // EditorFinishedMsg se emite cuando el editor externo (micro, vim, etc.) finaliza
@@ -263,61 +263,61 @@ func (m *AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.statusMsg = i18n.T("Nota actualizada", "Note updated")
 		}
 
-		cmds := []tea.Cmd{tea.ClearScreen}
-		if m.cfg.MouseClick {
-			cmds = append(cmds, tea.EnableMouseCellMotion)
-		}
-		return m, tea.Batch(cmds...)
+		return m, tea.ClearScreen
 
-	case tea.MouseMsg:
+	case tea.MouseMotionMsg:
+		if m.cfg.MouseClick && m.isDraggingDivider {
+			m.hasDraggedDivider = true
+			m.updateSidebarRatioFromMouseX(msg.X)
+		}
+		return m, nil
+
+	case tea.MouseReleaseMsg:
 		if !m.cfg.MouseClick {
 			return m, nil
 		}
-		if msg.Action == tea.MouseActionMotion && m.isDraggingDivider {
-			m.hasDraggedDivider = true
-			m.updateSidebarRatioFromMouseX(msg.X)
-			return m, nil
+		if m.isDraggingDivider && !m.hasDraggedDivider {
+			m.cycleSidebarRatio()
 		}
-		if msg.Action == tea.MouseActionRelease {
-			if m.isDraggingDivider && !m.hasDraggedDivider {
-				m.cycleSidebarRatio()
-			}
-			m.isDraggingDivider = false
-			m.hasDraggedDivider = false
-			return m, nil
-		}
-		if msg.Action == tea.MouseActionPress {
-			if msg.Button == tea.MouseButtonWheelUp {
-				if m.previewScrollY > 0 {
-					m.previewScrollY -= 3
-					if m.previewScrollY < 0 {
-						m.previewScrollY = 0
-					}
-				}
-				return m, nil
-			}
-			if msg.Button == tea.MouseButtonWheelDown {
-				m.previewScrollY += 3
-				return m, nil
-			}
-			if msg.Button == tea.MouseButtonLeft {
-				if !m.isModalOpen() {
-					_, _, _, divX := m.calcLayout()
-					if msg.X >= divX-1 && msg.X <= divX+2 && msg.Y >= 0 && msg.Y < m.height-1 {
-						m.isDraggingDivider = true
-						m.hasDraggedDivider = false
-						return m, nil
-					}
-				}
-				m.isDraggingDivider = false
-				m.hasDraggedDivider = false
-				if zone, ok := m.hitTester.Check(msg.X, msg.Y); ok {
-					return m.handleZoneClick(zone)
-				}
-			}
-		}
+		m.isDraggingDivider = false
+		m.hasDraggedDivider = false
+		return m, nil
 
-	case tea.KeyMsg:
+	case tea.MouseWheelMsg:
+		if !m.cfg.MouseClick {
+			return m, nil
+		}
+		switch msg.Button {
+		case tea.MouseWheelUp:
+			m.previewScrollY -= 3
+			if m.previewScrollY < 0 {
+				m.previewScrollY = 0
+			}
+		case tea.MouseWheelDown:
+			m.previewScrollY += 3
+		}
+		return m, nil
+
+	case tea.MouseClickMsg:
+		if !m.cfg.MouseClick || msg.Button != tea.MouseLeft {
+			return m, nil
+		}
+		if !m.isModalOpen() {
+			_, _, _, divX := m.calcLayout()
+			if msg.X >= divX-1 && msg.X <= divX+2 && msg.Y >= 0 && msg.Y < m.height-1 {
+				m.isDraggingDivider = true
+				m.hasDraggedDivider = false
+				return m, nil
+			}
+		}
+		m.isDraggingDivider = false
+		m.hasDraggedDivider = false
+		if zone, ok := m.hitTester.Check(msg.X, msg.Y); ok {
+			return m.handleZoneClick(zone)
+		}
+		return m, nil
+
+	case tea.KeyPressMsg:
 		key := msg.String()
 
 		// Salir de la aplicación
@@ -397,7 +397,7 @@ func (m *AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					m.settingsItem = 0
 				}
 				return m, nil
-			case "enter", " ", "right", "l":
+			case "enter", "space", "right", "l":
 				m.toggleConfigItem(m.settingsItem, true)
 				return m, nil
 			case "left", "h":
@@ -497,7 +497,7 @@ func (m *AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				return m.moveKanbanCard(m.kanbanCol - 1)
 			case "L":
 				return m.moveKanbanCard(m.kanbanCol + 1)
-			case " ", "x":
+			case "space", "x":
 				return m.toggleKanbanCard()
 			case "enter", "e":
 				return m.openKanbanCardEditor()
@@ -630,7 +630,7 @@ func (m *AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 // updateForActivePanel delega la lógica de teclado según el panel enfocado
-func (m *AppModel) updateForActivePanel(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+func (m *AppModel) updateForActivePanel(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	switch m.activePanel {
 	case PanelNotes:
 		return m.updateNotesTab(msg)
@@ -646,7 +646,7 @@ func (m *AppModel) updateForActivePanel(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 
 // ─── Panel [1] Notas ───────────────────────────────────────────────
 
-func (m *AppModel) updateNotesTab(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+func (m *AppModel) updateNotesTab(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	switch msg.String() {
 	case "esc":
 		if m.activeTagFilter != "" {
@@ -691,7 +691,7 @@ func (m *AppModel) updateNotesTab(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, m.openEditorForPath(entry.Path)
 	case "e":
 		return m, m.openEditor()
-	case " ":
+	case "space":
 		if len(m.entries) > 0 && m.selectedEntry < len(m.entries) {
 			entry := m.entries[m.selectedEntry]
 			if entry.Type == storage.EntryFolder {
@@ -754,7 +754,7 @@ func (m *AppModel) updateNotesTab(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 
 // ─── Panel [2] Tareas ──────────────────────────────────────────────
 
-func (m *AppModel) updateTasksTab(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+func (m *AppModel) updateTasksTab(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	switch msg.String() {
 	case "up", "k":
 		if m.selectedTask > 0 {
@@ -780,7 +780,7 @@ func (m *AppModel) updateTasksTab(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			return m, m.openEditorForPath(task.NotePath)
 		}
 		return m, nil
-	case " ", "x":
+	case "space", "x":
 		return m.toggleCurrentTask()
 	case "h":
 		return m.toggleHideCompletedTasks()
@@ -848,7 +848,7 @@ func (m *AppModel) toggleHideCompletedTasks() (tea.Model, tea.Cmd) {
 
 // ─── Panel [3] Categorías/Tags ─────────────────────────────────────
 
-func (m *AppModel) updateTagsTab(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+func (m *AppModel) updateTagsTab(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	switch msg.String() {
 	case "up", "k":
 		if m.selectedTag > 0 {
@@ -896,7 +896,7 @@ func (m *AppModel) updateTagsTab(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 
 // ─── Panel [4] Vista Previa ────────────────────────────────────────
 
-func (m *AppModel) updatePreviewPanel(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+func (m *AppModel) updatePreviewPanel(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	switch msg.String() {
 	case "up", "k":
 		if m.previewScrollY > 0 {
@@ -961,7 +961,7 @@ func (m *AppModel) updatePreviewPanel(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 
 // ─── Pestaña [4] Galería ───────────────────────────────────────────
 
-func (m *AppModel) updateGalleryTab(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+func (m *AppModel) updateGalleryTab(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	switch msg.String() {
 	case "up", "k":
 		if m.selectedImage > 0 {
@@ -2159,7 +2159,17 @@ func (m *AppModel) reloadNotes() {
 
 // ─── View ──────────────────────────────────────────────────────────
 
-func (m *AppModel) View() string {
+func (m *AppModel) View() tea.View {
+	v := tea.NewView(m.render())
+	v.AltScreen = true
+	if m.cfg.MouseClick {
+		v.MouseMode = tea.MouseModeCellMotion
+	}
+	return v
+}
+
+// render compone la pantalla completa como texto con estilos
+func (m *AppModel) render() string {
 	if m.quitting {
 		return i18n.T("¡Hasta luego!\n", "Goodbye!\n")
 	}
