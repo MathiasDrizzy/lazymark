@@ -406,3 +406,51 @@ func (s *Storage) ListFolders() ([]string, error) {
 	})
 	return folders, err
 }
+
+var toggleTaskRegex = regexp.MustCompile(`^(\s*[-*]\s+\[)([ xX])(\]\s*.*)$`)
+
+// ToggleTask modifica de forma atómica el estado de una tarea (- [ ] <-> - [x]) en el archivo markdown
+func (s *Storage) ToggleTask(notePath string, lineNum int) (bool, error) {
+	contentBytes, err := os.ReadFile(notePath)
+	if err != nil {
+		return false, fmt.Errorf("error al leer archivo para alternar tarea: %w", err)
+	}
+
+	info, err := os.Stat(notePath)
+	if err != nil {
+		return false, fmt.Errorf("error al obtener info de archivo: %w", err)
+	}
+
+	lines := strings.Split(string(contentBytes), "\n")
+	targetIdx := lineNum - 1
+	if targetIdx < 0 || targetIdx >= len(lines) {
+		return false, fmt.Errorf("índice de línea %d fuera de rango", lineNum)
+	}
+
+	matches := toggleTaskRegex.FindStringSubmatch(lines[targetIdx])
+	if len(matches) != 4 {
+		return false, fmt.Errorf("la línea %d no es una tarea válida de markdown", lineNum)
+	}
+
+	isDone := matches[2] == "x" || matches[2] == "X"
+	newDone := !isDone
+
+	newMark := " "
+	if newDone {
+		newMark = "x"
+	}
+	lines[targetIdx] = matches[1] + newMark + matches[3]
+
+	newContent := strings.Join(lines, "\n")
+	tmpPath := notePath + ".tmp"
+	if err := os.WriteFile(tmpPath, []byte(newContent), info.Mode().Perm()); err != nil {
+		return false, fmt.Errorf("error al escribir archivo temporal: %w", err)
+	}
+
+	if err := os.Rename(tmpPath, notePath); err != nil {
+		_ = os.Remove(tmpPath)
+		return false, fmt.Errorf("error al renombrar archivo atómico: %w", err)
+	}
+
+	return newDone, nil
+}

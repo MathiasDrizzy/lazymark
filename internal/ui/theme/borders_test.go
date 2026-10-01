@@ -39,13 +39,13 @@ func TestRenderBoxWithTitle(t *testing.T) {
 			}
 		}
 
-		// Validar bordes
+		// Validar bordes filosos estilo Lazygit
 		topClean := ansi.Strip(lines[0])
-		if !strings.HasPrefix(topClean, "╭") || !strings.HasSuffix(topClean, "╮") {
+		if !strings.HasPrefix(topClean, "┌") || !strings.HasSuffix(topClean, "┐") {
 			t.Errorf("Línea superior sin esquinas correctas: %s", topClean)
 		}
 		bottomClean := ansi.Strip(lines[len(lines)-1])
-		if !strings.HasPrefix(bottomClean, "╰") || !strings.HasSuffix(bottomClean, "╯") {
+		if !strings.HasPrefix(bottomClean, "└") || !strings.HasSuffix(bottomClean, "┘") {
 			t.Errorf("Línea inferior sin esquinas correctas: %s", bottomClean)
 		}
 	}

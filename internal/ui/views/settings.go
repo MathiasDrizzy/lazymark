@@ -24,6 +24,7 @@ const (
 	ItemKeybindings
 	ItemSidebarRatio
 	ItemConfirmDelete
+	ItemHideDoneTasks
 	ItemTabTags
 	ItemTabTasks
 	ItemTabGallery
@@ -104,6 +105,16 @@ func RenderSettingsModal(cfg *config.Config, selectedItem SettingsItem, totalWid
 			label: i18n.T("Confirmar Borrado", "Confirm Delete"),
 			val: func() string {
 				if cfg.ConfirmDelete {
+					return "[✓] " + i18n.T("Activa", "Enabled")
+				}
+				return "[ ] " + i18n.T("Desactivada", "Disabled")
+			}(),
+		},
+		{
+			id:    ItemHideDoneTasks,
+			label: i18n.T("Ocultar Tareas Hechas", "Hide Done Tasks"),
+			val: func() string {
+				if cfg.HideCompletedTasks {
 					return "[✓] " + i18n.T("Activa", "Enabled")
 				}
 				return "[ ] " + i18n.T("Desactivada", "Disabled")

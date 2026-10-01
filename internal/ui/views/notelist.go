@@ -17,9 +17,12 @@ func RenderNoteList(entries []storage.NoteEntry, selectedPaths map[string]bool, 
 
 	title := i18n.T("[1] Notas", "[1] Notes")
 	selCount := len(selectedPaths)
-	badge := fmt.Sprintf("(%d)", len(entries))
-	if selCount > 0 {
-		badge = fmt.Sprintf("[%d sel]", selCount)
+	badge := "0 of 0"
+	if len(entries) > 0 {
+		badge = fmt.Sprintf("%d of %d", selectedIndex+1, len(entries))
+		if selCount > 0 {
+			badge = fmt.Sprintf("[%d sel] %d of %d", selCount, selectedIndex+1, len(entries))
+		}
 	}
 
 	if len(entries) == 0 {
@@ -47,16 +50,14 @@ func RenderNoteList(entries []storage.NoteEntry, selectedPaths map[string]bool, 
 		contentWidth = 4
 	}
 
+	selStyle := theme.SelectedLineInactive
+	if active {
+		selStyle = theme.SelectedLineActive
+	}
+
 	for i := startIdx; i < endIdx; i++ {
 		entry := entries[i]
 		isSelected := i == selectedIndex
-
-		cursor := "  "
-		itemStyle := theme.NormalItem
-		if isSelected {
-			cursor = theme.SelectedItem.Render("❯ ")
-			itemStyle = theme.SelectedItem
-		}
 
 		// Sangría proporcional al nivel de profundidad del árbol
 		indent := strings.Repeat("  ", entry.Depth)
@@ -64,24 +65,19 @@ func RenderNoteList(entries []storage.NoteEntry, selectedPaths map[string]bool, 
 		var rowText string
 
 		if entry.Type == storage.EntryFolder {
-			// Flecha indicadora de árbol
 			arrow := "▾ "
 			if !entry.Expanded {
 				arrow = "▸ "
 			}
-			arrowStyled := theme.NormalItem.Copy().Foreground(theme.ColorPeach).Render(arrow)
-			folderIcon := theme.NormalItem.Copy().Foreground(theme.ColorPeach).Render(" ")
 
-			badge := ""
+			folderBadge := ""
 			badgeLen := 0
-			// Solo mostrar contador de carpeta si hay ancho suficiente
 			if contentWidth-len(indent) >= 18 {
 				cntStr := fmt.Sprintf("(%d)", entry.Children)
-				badge = theme.NormalItem.Copy().Foreground(theme.ColorOverlay0).Render(cntStr)
+				folderBadge = cntStr
 				badgeLen = len(cntStr) + 1
 			}
 
-			// Ajustar sangría si el espacio es muy estrecho para garantizar nombre visible
 			effIndent := indent
 			fixedPrefix := 2 + 4 + badgeLen // cursor(2) + arrow(2) + icon(2) + badge
 			if contentWidth-fixedPrefix-len(effIndent) < 3 && len(effIndent) > 0 {
@@ -108,35 +104,49 @@ func RenderNoteList(entries []storage.NoteEntry, selectedPaths map[string]bool, 
 				}
 			}
 
-			if badge != "" {
-				rowText = fmt.Sprintf("%s%s%s%s%s %s", cursor, effIndent, arrowStyled, folderIcon, itemStyle.Render(name), badge)
+			if isSelected {
+				cursor := "▸ "
+				rawLine := fmt.Sprintf("%s%s%s %s", cursor, effIndent, arrow, name)
+				if folderBadge != "" {
+					rawLine += " " + folderBadge
+				}
+				rawLine = ansi.Truncate(rawLine, contentWidth, "")
+				lineW := ansi.StringWidth(rawLine)
+				if lineW < contentWidth {
+					rawLine += strings.Repeat(" ", contentWidth-lineW)
+				}
+				rowText = selStyle.Render(rawLine)
 			} else {
-				rowText = fmt.Sprintf("%s%s%s%s%s", cursor, effIndent, arrowStyled, folderIcon, itemStyle.Render(name))
+				cursor := "  "
+				arrowStyled := theme.NormalItem.Copy().Foreground(theme.ColorPeach).Render(arrow)
+				folderIcon := theme.NormalItem.Copy().Foreground(theme.ColorPeach).Render(" ")
+				styledName := theme.NormalItem.Render(name)
+				if folderBadge != "" {
+					badgeStyled := theme.NormalItem.Copy().Foreground(theme.ColorOverlay0).Render(folderBadge)
+					rowText = fmt.Sprintf("%s%s%s%s%s %s", cursor, effIndent, arrowStyled, folderIcon, styledName, badgeStyled)
+				} else {
+					rowText = fmt.Sprintf("%s%s%s%s%s", cursor, effIndent, arrowStyled, folderIcon, styledName)
+				}
+				rowText = ansi.Truncate(rowText, contentWidth, "")
 			}
 		} else {
-			// Indicador de selección múltiple
+			// Nota Markdown
 			selBox := ""
 			selLen := 0
 			if selectedPaths != nil && selectedPaths[entry.Path] {
-				selBox = theme.SelectedItem.Copy().Foreground(theme.ColorGreen).Bold(true).Render("✓ ")
+				selBox = "✓ "
 				selLen = 2
 			}
 
-			// Icono Markdown estilo nerd font en color teal
-			noteIcon := theme.NormalItem.Copy().Foreground(theme.ColorTeal).Bold(true).Render("󰍔 ")
-
-			badge := ""
+			timeStr := ""
 			badgeLen := 0
-			// Solo mostrar fecha si el panel tiene ancho suficiente para que no desborde hacia abajo
 			if contentWidth-len(indent) >= 22 {
-				timeStr := entry.ModTime.Format("02 Jan")
-				badge = theme.NormalItem.Copy().Foreground(theme.ColorOverlay0).Render(timeStr)
+				timeStr = entry.ModTime.Format("02 Jan")
 				badgeLen = 7 // " " + "02 Jan"
 			}
 
-			// Ajustar sangría si el espacio es muy estrecho para garantizar nombre visible
 			effIndent := indent
-			fixedPrefix := 2 + selLen + 2 + badgeLen // cursor(2) + selBox + noteIcon(2) + badge
+			fixedPrefix := 2 + selLen + 2 + badgeLen
 			if contentWidth-fixedPrefix-len(effIndent) < 3 && len(effIndent) > 0 {
 				maxIndent := contentWidth - fixedPrefix - 3
 				if maxIndent < 0 {
@@ -161,14 +171,35 @@ func RenderNoteList(entries []storage.NoteEntry, selectedPaths map[string]bool, 
 				}
 			}
 
-			if badge != "" {
-				rowText = fmt.Sprintf("%s%s%s%s%s %s", cursor, effIndent, selBox, noteIcon, itemStyle.Render(name), badge)
+			if isSelected {
+				cursor := "▸ "
+				rawLine := fmt.Sprintf("%s%s%s󰍔 %s", cursor, effIndent, selBox, name)
+				if timeStr != "" {
+					rawLine += " " + timeStr
+				}
+				rawLine = ansi.Truncate(rawLine, contentWidth, "")
+				lineW := ansi.StringWidth(rawLine)
+				if lineW < contentWidth {
+					rawLine += strings.Repeat(" ", contentWidth-lineW)
+				}
+				rowText = selStyle.Render(rawLine)
 			} else {
-				rowText = fmt.Sprintf("%s%s%s%s%s", cursor, effIndent, selBox, noteIcon, itemStyle.Render(name))
+				cursor := "  "
+				styledSel := ""
+				if selBox != "" {
+					styledSel = theme.SelectedItem.Copy().Foreground(theme.ColorGreen).Bold(true).Render(selBox)
+				}
+				noteIcon := theme.NormalItem.Copy().Foreground(theme.ColorTeal).Bold(true).Render("󰍔 ")
+				styledName := theme.NormalItem.Render(name)
+				if timeStr != "" {
+					badgeStyled := theme.NormalItem.Copy().Foreground(theme.ColorOverlay0).Render(timeStr)
+					rowText = fmt.Sprintf("%s%s%s%s%s %s", cursor, effIndent, styledSel, noteIcon, styledName, badgeStyled)
+				} else {
+					rowText = fmt.Sprintf("%s%s%s%s%s", cursor, effIndent, styledSel, noteIcon, styledName)
+				}
+				rowText = ansi.Truncate(rowText, contentWidth, "")
 			}
 		}
-
-		rowText = ansi.Truncate(rowText, contentWidth, "")
 
 		// Registrar zona de clic del mouse
 		if ht != nil {

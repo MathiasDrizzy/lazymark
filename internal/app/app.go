@@ -142,9 +142,14 @@ func New(cfg *config.Config) (*AppModel, error) {
 		activePanel:     PanelNotes,
 		lastLeftPanel:   PanelNotes,
 		isMaximized:     false,
-		taskFilter:      views.TaskFilterAll,
-		sidebarRatio:    cfg.SidebarRatio,
-		statusMsg:       fmt.Sprintf(i18n.T("%d notas cargadas", "%d notes loaded"), len(notes)),
+		taskFilter: func() views.TaskFilter {
+			if cfg.HideCompletedTasks {
+				return views.TaskFilterPending
+			}
+			return views.TaskFilterAll
+		}(),
+		sidebarRatio: cfg.SidebarRatio,
+		statusMsg:    fmt.Sprintf(i18n.T("%d notas cargadas", "%d notes loaded"), len(notes)),
 	}
 	if m.sidebarRatio < 0.15 || m.sidebarRatio > 0.75 {
 		m.sidebarRatio = 0.33
@@ -425,6 +430,9 @@ func (m *AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil
 
 		case "x":
+			if m.activePanel == PanelTasks {
+				return m.toggleCurrentTask()
+			}
 			return m, m.openTrashModal()
 
 		case "[", "<", "-", "alt+left":
@@ -436,6 +444,9 @@ func (m *AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil
 
 		case "h":
+			if m.activePanel == PanelTasks {
+				return m.toggleHideCompletedTasks()
+			}
 			if m.cfg.KeybindingMode == "vim" && m.activePanel == 1 {
 				m.activePanel = 0
 				return m, nil
@@ -650,6 +661,10 @@ func (m *AppModel) updateTasksTab(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			return m, m.openEditorForPath(task.NotePath)
 		}
 		return m, nil
+	case " ", "x":
+		return m.toggleCurrentTask()
+	case "h":
+		return m.toggleHideCompletedTasks()
 	case "f":
 		switch m.taskFilter {
 		case views.TaskFilterAll:
@@ -667,6 +682,48 @@ func (m *AppModel) updateTasksTab(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.activePanel = PanelPreview
 		return m, nil
 	}
+	return m, nil
+}
+
+func (m *AppModel) toggleCurrentTask() (tea.Model, tea.Cmd) {
+	if len(m.tasks) == 0 || m.selectedTask >= len(m.tasks) {
+		return m, nil
+	}
+	task := m.tasks[m.selectedTask]
+	newDone, err := m.storage.ToggleTask(task.NotePath, task.Line)
+	if err != nil {
+		m.statusMsg = fmt.Sprintf("%s: %v", i18n.T("Error al actualizar tarea", "Error updating task"), err)
+		return m, nil
+	}
+
+	// Recargar notas y tareas inmediatamente
+	m.reloadNotes()
+
+	// Preservar o ajustar la posición seleccionada
+	if m.selectedTask >= len(m.tasks) && len(m.tasks) > 0 {
+		m.selectedTask = len(m.tasks) - 1
+	}
+
+	statusText := i18n.T("Tarea completada", "Task completed")
+	if !newDone {
+		statusText = i18n.T("Tarea reabierta", "Task reopened")
+	}
+	m.statusMsg = fmt.Sprintf("%s: %s", statusText, task.Text)
+	return m, nil
+}
+
+func (m *AppModel) toggleHideCompletedTasks() (tea.Model, tea.Cmd) {
+	m.cfg.HideCompletedTasks = !m.cfg.HideCompletedTasks
+	_ = m.cfg.Save()
+	if m.cfg.HideCompletedTasks {
+		m.taskFilter = views.TaskFilterPending
+		m.statusMsg = i18n.T("Tareas completadas ocultas", "Completed tasks hidden")
+	} else {
+		m.taskFilter = views.TaskFilterAll
+		m.statusMsg = i18n.T("Mostrando todas las tareas", "Showing all tasks")
+	}
+	m.selectedTask = 0
+	m.tasks = views.CollectTasks(m.notes, m.taskFilter)
 	return m, nil
 }
 
@@ -1017,6 +1074,15 @@ func (m *AppModel) handleActionClick(zone *mouse.Zone) (tea.Model, tea.Cmd) {
 	case "action-zoom":
 		m.isMaximized = !m.isMaximized
 		return m, nil
+	case "action-toggle-task":
+		return m.toggleCurrentTask()
+	case "action-hide-tasks":
+		return m.toggleHideCompletedTasks()
+	case "action-open-task":
+		if len(m.tasks) > 0 && m.selectedTask < len(m.tasks) {
+			return m, m.openEditorForPath(m.tasks[m.selectedTask].NotePath)
+		}
+		return m, nil
 	case "c", "action-new":
 		return m, m.createQuickNote()
 	case "F", "action-folder":
@@ -1227,6 +1293,22 @@ func (m *AppModel) toggleConfigItem(item views.SettingsItem, forward bool) {
 			state = i18n.T("Desactivada", "Disabled")
 		}
 		m.statusMsg = fmt.Sprintf("%s: %s", i18n.T("Confirmar borrado", "Confirm deletion"), state)
+
+	case views.ItemHideDoneTasks:
+		m.cfg.HideCompletedTasks = !m.cfg.HideCompletedTasks
+		_ = m.cfg.Save()
+		if m.cfg.HideCompletedTasks {
+			m.taskFilter = views.TaskFilterPending
+		} else {
+			m.taskFilter = views.TaskFilterAll
+		}
+		m.selectedTask = 0
+		m.tasks = views.CollectTasks(m.notes, m.taskFilter)
+		state := i18n.T("Ocultas", "Hidden")
+		if !m.cfg.HideCompletedTasks {
+			state = i18n.T("Visibles", "Visible")
+		}
+		m.statusMsg = fmt.Sprintf("%s: %s", i18n.T("Tareas hechas", "Done tasks"), state)
 	}
 }
 
@@ -1811,7 +1893,7 @@ func (m *AppModel) View() string {
 	case PanelNotes:
 		actions = views.GetNotesActions()
 	case PanelTasks:
-		actions = views.GetTaskActions()
+		actions = views.GetTaskActions(m.cfg.HideCompletedTasks)
 	case PanelTags:
 		actions = views.GetTagActions()
 	case PanelPreview:

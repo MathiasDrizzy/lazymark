@@ -186,3 +186,59 @@ func TestTrashLifecycle(t *testing.T) {
 		t.Errorf("La papelera debería estar vacía tras restaurar")
 	}
 }
+
+func TestToggleTaskAtomic(t *testing.T) {
+	tempDir, err := os.MkdirTemp("", "lazymark-toggle-test-*")
+	if err != nil {
+		t.Fatalf("Fallo al crear temp dir: %v", err)
+	}
+	defer os.RemoveAll(tempDir)
+
+	s := New(tempDir)
+	_, err = s.CreateNote("Nota Con Tareas")
+	if err != nil {
+		t.Fatalf("Error al crear nota: %v", err)
+	}
+
+	notes, err := s.ListNotes()
+	if err != nil || len(notes) == 0 || len(notes[0].Tasks) == 0 {
+		t.Fatalf("No se encontraron notas o tareas iniciales")
+	}
+
+	task := notes[0].Tasks[0]
+	if task.Done {
+		t.Errorf("La tarea inicial debería estar pendiente")
+	}
+
+	// 1. Toggle a completada (Done = true)
+	newStatus, err := s.ToggleTask(task.NotePath, task.Line)
+	if err != nil {
+		t.Fatalf("Error al alternar tarea a completada: %v", err)
+	}
+	if !newStatus {
+		t.Errorf("Se esperaba que la tarea estuviera completada (true), obtenido false")
+	}
+
+	// Recargar y verificar
+	notesReloaded, err := s.ListNotes()
+	if err != nil || len(notesReloaded[0].Tasks) == 0 {
+		t.Fatalf("Fallo al recargar notas tras toggle")
+	}
+	if !notesReloaded[0].Tasks[0].Done {
+		t.Errorf("La tarea en disco debería persistir como completada")
+	}
+
+	// 2. Toggle de vuelta a pendiente (Done = false)
+	newStatus2, err := s.ToggleTask(task.NotePath, task.Line)
+	if err != nil {
+		t.Fatalf("Error al alternar tarea a pendiente: %v", err)
+	}
+	if newStatus2 {
+		t.Errorf("Se esperaba que la tarea estuviera pendiente (false), obtenido true")
+	}
+
+	notesReloaded2, err := s.ListNotes()
+	if err != nil || notesReloaded2[0].Tasks[0].Done {
+		t.Errorf("La tarea en disco debería persistir como pendiente")
+	}
+}

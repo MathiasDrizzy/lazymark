@@ -208,13 +208,18 @@ var (
 	InactivePanelBorder lipgloss.Style
 	TabActive          lipgloss.Style
 	TabInactive        lipgloss.Style
-	SelectedItem       lipgloss.Style
-	NormalItem         lipgloss.Style
-	TagBadge           lipgloss.Style
-	TaskDone           lipgloss.Style
-	TaskPending        lipgloss.Style
-	FooterBar          lipgloss.Style
-	FooterKey          lipgloss.Style
+	SelectedItem lipgloss.Style
+	NormalItem   lipgloss.Style
+
+	// Barra de selección sólida estilo Lazygit a todo lo ancho
+	SelectedLineActive   lipgloss.Style
+	SelectedLineInactive lipgloss.Style
+
+	TagBadge    lipgloss.Style
+	TaskDone    lipgloss.Style
+	TaskPending lipgloss.Style
+	FooterBar   lipgloss.Style
+	FooterKey   lipgloss.Style
 )
 
 // CurrentThemeName almacena el nombre del tema actualmente aplicado
@@ -269,6 +274,15 @@ func ApplyPalette(p Palette) {
 	SelectedItem = lipgloss.NewStyle().
 		Foreground(ColorPeach).
 		Bold(true)
+
+	SelectedLineActive = lipgloss.NewStyle().
+		Background(ColorPeach).
+		Foreground(ColorBase).
+		Bold(true)
+
+	SelectedLineInactive = lipgloss.NewStyle().
+		Background(ColorSurface1).
+		Foreground(ColorText)
 
 	NormalItem = lipgloss.NewStyle().
 		Foreground(ColorText)

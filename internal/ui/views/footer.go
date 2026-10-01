@@ -46,12 +46,16 @@ func GetTagActions() []ActionBtn {
 }
 
 // GetTaskActions devuelve los atajos contextuales del panel Tareas
-func GetTaskActions() []ActionBtn {
+func GetTaskActions(hideCompleted bool) []ActionBtn {
+	hideLabel := i18n.T("Ocultar hechas", "Hide done")
+	if hideCompleted {
+		hideLabel = i18n.T("Mostrar hechas", "Show done")
+	}
 	return []ActionBtn{
-		{Key: "f", Action: i18n.T("Filtro", "Filter"), ID: "action-filter"},
+		{Key: "space", Action: i18n.T("Completar", "Toggle"), ID: "action-toggle-task"},
+		{Key: "h", Action: hideLabel, ID: "action-hide-tasks"},
 		{Key: "Enter", Action: i18n.T("Abrir nota", "Open note"), ID: "action-open-task"},
 		{Key: "w", Action: i18n.T("Zoom", "Zoom"), ID: "action-zoom"},
-		{Key: "h", Action: i18n.T("Atajos", "Keys"), ID: "action-cheatsheet"},
 		{Key: "?", Action: i18n.T("Ajustes", "Settings"), ID: "action-config"},
 		{Key: "q", Action: i18n.T("Salir", "Quit"), ID: "action-quit"},
 	}

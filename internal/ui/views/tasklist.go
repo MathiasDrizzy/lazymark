@@ -8,6 +8,7 @@ import (
 	"github.com/MathiasDrizzy/lazymark/internal/storage"
 	"github.com/MathiasDrizzy/lazymark/internal/ui/mouse"
 	"github.com/MathiasDrizzy/lazymark/internal/ui/theme"
+	"github.com/charmbracelet/lipgloss"
 	"github.com/charmbracelet/x/ansi"
 )
 
@@ -68,7 +69,13 @@ func RenderTaskList(tasks []FlatTask, selectedIndex int, filter TaskFilter, widt
 
 	filterLabel := TaskFilterLabel(filter)
 	title := i18n.T("[2] Tareas", "[2] Tasks")
-	badge := fmt.Sprintf("(%d) [%s]", len(tasks), filterLabel)
+	if filter != TaskFilterAll {
+		title = fmt.Sprintf("%s [%s]", title, filterLabel)
+	}
+	badge := "0 of 0"
+	if len(tasks) > 0 {
+		badge = fmt.Sprintf("%d of %d", selectedIndex+1, len(tasks))
+	}
 
 	if len(tasks) == 0 {
 		var emptyText string
@@ -98,49 +105,55 @@ func RenderTaskList(tasks []FlatTask, selectedIndex int, filter TaskFilter, widt
 		endIdx = len(tasks)
 	}
 
+	contentWidth := width - 4
+	if contentWidth < 4 {
+		contentWidth = 4
+	}
+
 	for i := startIdx; i < endIdx; i++ {
 		task := tasks[i]
 		isSelected := i == selectedIndex
 
-		cursor := "  "
+		var selStyle lipgloss.Style
 		if isSelected {
-			cursor = theme.SelectedItem.Render("❯ ")
-		}
-
-		var checkbox string
-		var textStyle string
-		if task.Done {
-			checkbox = theme.NormalItem.Copy().Foreground(theme.ColorGreen).Render("☑")
-			textStyle = theme.TaskDone.Render(task.Text)
-		} else {
-			checkbox = theme.NormalItem.Copy().Foreground(theme.ColorYellow).Render("☐")
-			textStyle = theme.TaskPending.Render(task.Text)
-		}
-
-		// Truncar texto de tarea si es necesario
-		maxLen := width - 12
-		if maxLen < 5 {
-			maxLen = 5
-		}
-		displayText := task.Text
-		if len(displayText) > maxLen {
-			displayText = displayText[:maxLen-3] + "..."
-			if task.Done {
-				textStyle = theme.TaskDone.Render(displayText)
+			if active {
+				selStyle = theme.SelectedLineActive
 			} else {
-				textStyle = theme.TaskPending.Render(displayText)
+				selStyle = theme.SelectedLineInactive
 			}
 		}
 
-		// Nota origen en sutil
-		originLabel := theme.NormalItem.Copy().Foreground(theme.ColorOverlay0).Render(fmt.Sprintf("(%s)", task.NoteTitle))
+		displayText := task.Text
 
-		contentWidth := width - 4
-		if contentWidth < 4 {
-			contentWidth = 4
+		var rowText string
+		if isSelected {
+			cursor := "▸ "
+			checkbox := "☐"
+			if task.Done {
+				checkbox = "☑"
+			}
+			rawLine := fmt.Sprintf("%s%s %s (%s)", cursor, checkbox, displayText, task.NoteTitle)
+			rawLine = ansi.Truncate(rawLine, contentWidth, "")
+			lineW := ansi.StringWidth(rawLine)
+			if lineW < contentWidth {
+				rawLine += strings.Repeat(" ", contentWidth-lineW)
+			}
+			rowText = selStyle.Render(rawLine)
+		} else {
+			cursor := "  "
+			var checkbox string
+			var textStyle string
+			if task.Done {
+				checkbox = theme.NormalItem.Copy().Foreground(theme.ColorGreen).Render("☑")
+				textStyle = theme.TaskDone.Render(displayText)
+			} else {
+				checkbox = theme.NormalItem.Copy().Foreground(theme.ColorYellow).Render("☐")
+				textStyle = theme.TaskPending.Render(displayText)
+			}
+			originLabel := theme.NormalItem.Copy().Foreground(theme.ColorOverlay0).Render(fmt.Sprintf("(%s)", task.NoteTitle))
+			rowText = fmt.Sprintf("%s%s %s %s", cursor, checkbox, textStyle, originLabel)
+			rowText = ansi.Truncate(rowText, contentWidth, "")
 		}
-		rowText := fmt.Sprintf("%s%s %s %s", cursor, checkbox, textStyle, originLabel)
-		rowText = ansi.Truncate(rowText, contentWidth, "")
 
 		// Registrar zona de clic
 		if ht != nil {

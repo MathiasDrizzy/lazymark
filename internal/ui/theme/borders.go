@@ -34,78 +34,87 @@ func RenderBoxWithTitle(title, badge, content string, width, height int, active 
 	titleStyle := lipgloss.NewStyle().Foreground(titleCol).Bold(isBold)
 	badgeStyle := lipgloss.NewStyle().Foreground(badgeCol).Bold(isBold)
 
-	cornerTL := borderStyle.Render("╭")
-	cornerTR := borderStyle.Render("╮")
-	cornerBL := borderStyle.Render("╰")
-	cornerBR := borderStyle.Render("╯")
+	cornerTL := borderStyle.Render("┌")
+	cornerTR := borderStyle.Render("┐")
+	cornerBL := borderStyle.Render("└")
+	cornerBR := borderStyle.Render("┘")
 	borderVLeft := borderStyle.Render("│ ")
 	borderVRight := borderStyle.Render(" │")
 
-	// 2. Construir Borde Superior con Título Embebido
+	// 2. Construir Borde Superior con Título a la Izquierda y Contador a la Extrema Derecha
+	// Formato: ┌─ [N] Titulo ────────────────────────────────────────── 1 of 6 ─┐
 	var topRow string
-	availTop := width - 2 // Descontando ╭ y ╮
+	availTop := width - 2 // Descontando ┌ y ┐
 
-	if title == "" {
+	if title == "" && badge == "" {
 		topRow = cornerTL + borderStyle.Render(strings.Repeat("─", availTop)) + cornerTR
 	} else {
-		// Formato: ╭─ [N] Titulo (Badge) ─────╮
-		// Prefijo ─  (2 columnas)
-		prefix := borderStyle.Render("─ ")
-		usedLen := 2 // prefix
+		titleStr := title
+		badgeStr := badge
 
-		styledTitle := titleStyle.Render(title)
-		titleLen := ansi.StringWidth(title)
+		titleLen := ansi.StringWidth(titleStr)
+		badgeLen := ansi.StringWidth(badgeStr)
 
-		styledBadge := ""
-		badgeLen := 0
-		if badge != "" {
-			styledBadge = " " + badgeStyle.Render(badge)
-			badgeLen = 1 + ansi.StringWidth(badge)
-		}
-
-		totalHeaderLen := titleLen + badgeLen
-		maxHeaderLen := availTop - 4 // Dejar espacio para prefix (2), sufijo " " (1) y al menos 1 guion
-		if maxHeaderLen < 4 {
-			maxHeaderLen = 4
-		}
-
-		if totalHeaderLen > maxHeaderLen {
-			// Truncar si el título excede el espacio superior disponible
-			if badgeLen > 0 && maxHeaderLen > badgeLen+3 {
-				truncTitle := ansi.Truncate(title, maxHeaderLen-badgeLen, "…")
-				styledTitle = titleStyle.Render(truncTitle)
-				titleLen = ansi.StringWidth(truncTitle)
-			} else {
-				styledBadge = ""
-				badgeLen = 0
-				truncTitle := ansi.Truncate(title, maxHeaderLen, "…")
-				styledTitle = titleStyle.Render(truncTitle)
-				titleLen = ansi.StringWidth(truncTitle)
+		// Verificar si caben título y badge con al menos 1 guion intermedio
+		// overhead: cornerTL(1) + "─ "(2) + " "(1) + " "(1) + " ─"(2) + cornerTR(1) = 8 + 1 guion = 9
+		if badgeStr != "" {
+			minNeeded := titleLen + badgeLen + 9
+			if width < minNeeded {
+				// Espacio insuficiente: intentar truncar el título preservando el badge si es posible
+				availForTitle := width - badgeLen - 9
+				if availForTitle >= 4 {
+					titleStr = ansi.Truncate(titleStr, availForTitle, "…")
+					titleLen = ansi.StringWidth(titleStr)
+				} else {
+					// Si es demasiado estrecho, omitir badge y truncar título
+					badgeStr = ""
+					badgeLen = 0
+					availForTitleOnly := width - 6
+					if availForTitleOnly >= 2 && titleLen > availForTitleOnly {
+						titleStr = ansi.Truncate(titleStr, availForTitleOnly, "…")
+						titleLen = ansi.StringWidth(titleStr)
+					}
+				}
+			}
+		} else if titleStr != "" {
+			availForTitleOnly := width - 6
+			if availForTitleOnly >= 2 && titleLen > availForTitleOnly {
+				titleStr = ansi.Truncate(titleStr, availForTitleOnly, "…")
+				titleLen = ansi.StringWidth(titleStr)
 			}
 		}
 
-		headerContent := styledTitle + styledBadge
-		usedLen += titleLen + badgeLen + 1 // +1 por el espacio posterior " "
-
-		remainingDashes := availTop - usedLen
-		if remainingDashes < 1 {
-			remainingDashes = 1
+		// Construir parte izquierda
+		var leftPart string
+		var leftLen int
+		if titleStr != "" {
+			styledTitle := titleStyle.Render(titleStr)
+			leftPart = cornerTL + borderStyle.Render("─ ") + styledTitle + borderStyle.Render(" ")
+			leftLen = 1 + 2 + titleLen + 1
+		} else {
+			leftPart = cornerTL
+			leftLen = 1
 		}
 
-		// Rellenar con guiones hasta completar exactamente availTop
-		// Compensar diferencias por redondeo
-		currentLen := 2 + (titleLen + badgeLen) + 1 + remainingDashes
-		if currentLen < availTop {
-			remainingDashes += availTop - currentLen
-		} else if currentLen > availTop {
-			remainingDashes -= (currentLen - availTop)
-			if remainingDashes < 0 {
-				remainingDashes = 0
-			}
+		// Construir parte derecha
+		var rightPart string
+		var rightLen int
+		if badgeStr != "" {
+			styledBadge := badgeStyle.Render(badgeStr)
+			rightPart = borderStyle.Render(" ") + styledBadge + borderStyle.Render(" ─") + cornerTR
+			rightLen = 1 + badgeLen + 2 + 1
+		} else {
+			rightPart = cornerTR
+			rightLen = 1
 		}
 
-		dashes := borderStyle.Render(strings.Repeat("─", remainingDashes))
-		topRow = cornerTL + prefix + headerContent + " " + dashes + cornerTR
+		// Guiones intermedios
+		middleLen := width - leftLen - rightLen
+		if middleLen < 0 {
+			middleLen = 0
+		}
+		dashes := borderStyle.Render(strings.Repeat("─", middleLen))
+		topRow = leftPart + dashes + rightPart
 	}
 
 	// 3. Procesar Contenido Interior

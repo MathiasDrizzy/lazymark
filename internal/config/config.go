@@ -53,11 +53,12 @@ type Config struct {
 	ShowTagsTab    bool              `json:"show_tags_tab"`
 	ShowTasksTab   bool              `json:"show_tasks_tab"`
 	ShowGalleryTab bool              `json:"show_gallery_tab"`
-	ConfirmDelete  bool              `json:"confirm_delete"`
-	SidebarRatio   float64           `json:"sidebar_ratio"`
-	KeybindingMode string            `json:"keybinding_mode"`
-	Keybindings    KeybindingsConfig `json:"keybindings"`
-	configPath     string            `json:"-"`
+	ConfirmDelete      bool              `json:"confirm_delete"`
+	HideCompletedTasks bool              `json:"hide_completed_tasks"`
+	SidebarRatio       float64           `json:"sidebar_ratio"`
+	KeybindingMode     string            `json:"keybinding_mode"`
+	Keybindings        KeybindingsConfig `json:"keybindings"`
+	configPath         string            `json:"-"`
 }
 
 func configFilePath() string {
@@ -89,18 +90,19 @@ func DefaultConfig(notesDir string) *Config {
 	}
 
 	return &Config{
-		NotesDir:       notesDir,
-		Editor:         editor,
-		MouseClick:     true,
-		Theme:          "catppuccin-mocha",
-		Language:       "auto",
-		ShowTagsTab:    true,
-		ShowTasksTab:   true,
-		ShowGalleryTab: false,
-		ConfirmDelete:  true,
-		SidebarRatio:   0.33,
-		KeybindingMode: "dual",
-		Keybindings:    DefaultKeybindings(),
+		NotesDir:           notesDir,
+		Editor:             editor,
+		MouseClick:         true,
+		Theme:              "catppuccin-mocha",
+		Language:           "auto",
+		ShowTagsTab:        true,
+		ShowTasksTab:       true,
+		ShowGalleryTab:     false,
+		ConfirmDelete:      true,
+		HideCompletedTasks: false,
+		SidebarRatio:       0.33,
+		KeybindingMode:     "dual",
+		Keybindings:        DefaultKeybindings(),
 	}
 }
 

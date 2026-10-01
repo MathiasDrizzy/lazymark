@@ -9,6 +9,7 @@ import (
 	"github.com/MathiasDrizzy/lazymark/internal/storage"
 	"github.com/MathiasDrizzy/lazymark/internal/ui/mouse"
 	"github.com/MathiasDrizzy/lazymark/internal/ui/theme"
+	"github.com/charmbracelet/lipgloss"
 	"github.com/charmbracelet/x/ansi"
 )
 
@@ -59,7 +60,10 @@ func RenderTagList(tags []TagInfo, selectedIndex int, width, height int, active 
 	var rows []string
 
 	title := i18n.T("[3] Categorías", "[3] Categories")
-	badge := fmt.Sprintf("(%d)", len(tags))
+	badge := "0 of 0"
+	if len(tags) > 0 {
+		badge = fmt.Sprintf("%d of %d", selectedIndex+1, len(tags))
+	}
 
 	if len(tags) == 0 {
 		emptyMsg := theme.NormalItem.Copy().Italic(true).Render(i18n.T("  (No hay tags. Usa #tag en tus notas)", "  (No tags yet. Use #tag in your notes)"))
@@ -80,24 +84,41 @@ func RenderTagList(tags []TagInfo, selectedIndex int, width, height int, active 
 		endIdx = len(tags)
 	}
 
+	contentWidth := width - 4
+	if contentWidth < 4 {
+		contentWidth = 4
+	}
+
 	for i := startIdx; i < endIdx; i++ {
 		tag := tags[i]
 		isSelected := i == selectedIndex
 
-		cursor := "  "
+		var selStyle lipgloss.Style
 		if isSelected {
-			cursor = theme.SelectedItem.Render("❯ ")
+			if active {
+				selStyle = theme.SelectedLineActive
+			} else {
+				selStyle = theme.SelectedLineInactive
+			}
 		}
 
-		tagBadge := theme.TagBadge.Render(fmt.Sprintf("#%s", tag.Name))
-		countStr := theme.NormalItem.Copy().Foreground(theme.ColorOverlay0).Render(fmt.Sprintf("(%d)", tag.NoteCount))
-
-		contentWidth := width - 4
-		if contentWidth < 4 {
-			contentWidth = 4
+		var rowText string
+		if isSelected {
+			cursor := "▸ "
+			rawLine := fmt.Sprintf("%s#%s (%d)", cursor, tag.Name, tag.NoteCount)
+			rawLine = ansi.Truncate(rawLine, contentWidth, "")
+			lineW := ansi.StringWidth(rawLine)
+			if lineW < contentWidth {
+				rawLine += strings.Repeat(" ", contentWidth-lineW)
+			}
+			rowText = selStyle.Render(rawLine)
+		} else {
+			cursor := "  "
+			tagBadge := theme.TagBadge.Render(fmt.Sprintf("#%s", tag.Name))
+			countStr := theme.NormalItem.Copy().Foreground(theme.ColorOverlay0).Render(fmt.Sprintf("(%d)", tag.NoteCount))
+			rowText = fmt.Sprintf("%s%s %s", cursor, tagBadge, countStr)
+			rowText = ansi.Truncate(rowText, contentWidth, "")
 		}
-		rowText := fmt.Sprintf("%s%s %s", cursor, tagBadge, countStr)
-		rowText = ansi.Truncate(rowText, contentWidth, "")
 
 		// Registrar zona de clic para esta fila
 		if ht != nil {
