@@ -4,12 +4,9 @@ import (
 	"fmt"
 	"strings"
 
-	"charm.land/lipgloss/v2"
 	"github.com/MathiasDrizzy/lazymark/internal/i18n"
 	"github.com/MathiasDrizzy/lazymark/internal/storage"
-	"github.com/MathiasDrizzy/lazymark/internal/ui/mouse"
 	"github.com/MathiasDrizzy/lazymark/internal/ui/theme"
-	"github.com/charmbracelet/x/ansi"
 )
 
 // TaskFilter define el tipo de filtro aplicado a las tareas
@@ -61,111 +58,6 @@ func TaskFilterLabel(filter TaskFilter) string {
 	default:
 		return i18n.T("Todas", "All")
 	}
-}
-
-// RenderTaskList genera el panel izquierdo con la lista de tareas y registra clics
-func RenderTaskList(tasks []FlatTask, selectedIndex int, filter TaskFilter, width, height int, active bool, ht *mouse.HitTester, offsetY int) string {
-	var rows []string
-
-	filterLabel := TaskFilterLabel(filter)
-	title := i18n.T("[2] Tareas", "[2] Tasks")
-	if filter != TaskFilterAll {
-		title = fmt.Sprintf("%s [%s]", title, filterLabel)
-	}
-	badge := "0 of 0"
-	if len(tasks) > 0 {
-		badge = fmt.Sprintf("%d of %d", selectedIndex+1, len(tasks))
-	}
-
-	if len(tasks) == 0 {
-		var emptyText string
-		switch filter {
-		case TaskFilterPending:
-			emptyText = i18n.T("  ¡Sin tareas pendientes! 🎉", "  No pending tasks! 🎉")
-		case TaskFilterDone:
-			emptyText = i18n.T("  (Sin tareas completadas aún)", "  (No completed tasks yet)")
-		default:
-			emptyText = i18n.T("  (Sin tareas. Usa - [ ] en tus notas)", "  (No tasks. Use - [ ] in your notes)")
-		}
-		emptyMsg := theme.NormalItem.Copy().Italic(true).Render(emptyText)
-		rows = append(rows, emptyMsg)
-	}
-
-	usableHeight := height - 2
-	if usableHeight < 1 {
-		usableHeight = 1
-	}
-
-	startIdx := 0
-	if selectedIndex >= usableHeight {
-		startIdx = selectedIndex - usableHeight + 1
-	}
-	endIdx := startIdx + usableHeight
-	if endIdx > len(tasks) {
-		endIdx = len(tasks)
-	}
-
-	contentWidth := width - 4
-	if contentWidth < 4 {
-		contentWidth = 4
-	}
-
-	for i := startIdx; i < endIdx; i++ {
-		task := tasks[i]
-		isSelected := i == selectedIndex
-
-		var selStyle lipgloss.Style
-		if isSelected {
-			if active {
-				selStyle = theme.SelectedLineActive
-			} else {
-				selStyle = theme.SelectedLineInactive
-			}
-		}
-
-		displayText := task.Text
-
-		var rowText string
-		if isSelected {
-			cursor := "▸ "
-			checkbox := "☐"
-			if task.Done {
-				checkbox = "☑"
-			}
-			rawLine := fmt.Sprintf("%s%s %s (%s)", cursor, checkbox, displayText, task.NoteTitle)
-			rawLine = ansi.Truncate(rawLine, contentWidth, "")
-			lineW := ansi.StringWidth(rawLine)
-			if lineW < contentWidth {
-				rawLine += strings.Repeat(" ", contentWidth-lineW)
-			}
-			rowText = selStyle.Render(rawLine)
-		} else {
-			cursor := "  "
-			var checkbox string
-			var textStyle string
-			if task.Done {
-				checkbox = theme.NormalItem.Copy().Foreground(theme.ColorGreen).Render("☑")
-				textStyle = theme.TaskDone.Render(displayText)
-			} else {
-				checkbox = theme.NormalItem.Copy().Foreground(theme.ColorYellow).Render("☐")
-				textStyle = theme.TaskPending.Render(displayText)
-			}
-			originLabel := theme.NormalItem.Copy().Foreground(theme.ColorOverlay0).Render(fmt.Sprintf("(%s)", task.NoteTitle))
-			rowText = fmt.Sprintf("%s%s %s %s", cursor, checkbox, textStyle, originLabel)
-			rowText = ansi.Truncate(rowText, contentWidth, "")
-		}
-
-		// Registrar zona de clic
-		if ht != nil {
-			rowY := offsetY + 1 + (i - startIdx)
-			ht.Register(fmt.Sprintf("task-%d", i), mouse.ZoneTask, 0, rowY, width, rowY, i, task.NotePath)
-		}
-
-		rows = append(rows, rowText)
-	}
-
-	content := strings.Join(rows, "\n")
-	return theme.RenderBoxWithTitle(title, badge, content, width, height, active)
 }
 
 // RenderTaskPreview muestra los detalles de la tarea seleccionada y su contexto

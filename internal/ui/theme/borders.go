@@ -1,157 +1,110 @@
 package theme
 
 import (
+	"image/color"
+	"regexp"
+	"strconv"
 	"strings"
 
 	"charm.land/lipgloss/v2"
-	"github.com/charmbracelet/x/ansi"
+	"github.com/MathiasDrizzy/lazymark/internal/ui/textwidth"
 )
 
-// RenderBoxWithTitle genera un panel rectangular estilo Lazygit con el título y badge embebidos
-// directamente en el borde superior: ╭─ [N] Título (Badge) ────────╮
-func RenderBoxWithTitle(title, badge, content string, width, height int, active bool) string {
-	if width < 10 {
-		width = 10
+// RenderPanel dibuja un panel estilo lazygit de exactamente width x height celdas:
+//
+//	╭─[1]─Notas──────────────╮
+//	│contenido               │
+//	╰──────────────── 1 of 3─╯
+//
+// El título va embebido en el borde superior y footer (el contador) en el borde
+// inferior derecho. Cada línea se corta con "…" o se rellena al ancho interior.
+// El panel activo resalta el borde y el título con el color de acento.
+func RenderPanel(title, footer string, lines []string, width, height int, active bool) string {
+	if width < 4 {
+		width = 4
 	}
-	if height < 3 {
-		height = 3
+	if height < 2 {
+		height = 2
 	}
-
-	// 1. Estilos según estado de foco (Activo = Verde Lazygit, Inactivo = Surface1)
-	borderCol := ColorSurface1
-	titleCol := ColorSubtext0
-	badgeCol := ColorOverlay0
-	isBold := false
-
+	borderCol, titleCol := ColorOverlay0, ColorSubtext0
 	if active {
-		borderCol = ColorGreen
-		titleCol = ColorGreen
-		badgeCol = ColorPeach
-		isBold = true
+		borderCol, titleCol = ColorGreen, ColorGreen
 	}
+	border := lipgloss.NewStyle().Foreground(borderCol)
+	titleStyle := lipgloss.NewStyle().Foreground(titleCol).Bold(active)
+	inner := width - 2
 
-	borderStyle := lipgloss.NewStyle().Foreground(borderCol)
-	titleStyle := lipgloss.NewStyle().Foreground(titleCol).Bold(isBold)
-	badgeStyle := lipgloss.NewStyle().Foreground(badgeCol).Bold(isBold)
-
-	cornerTL := borderStyle.Render("┌")
-	cornerTR := borderStyle.Render("┐")
-	cornerBL := borderStyle.Render("└")
-	cornerBR := borderStyle.Render("┘")
-	borderVLeft := borderStyle.Render("│ ")
-	borderVRight := borderStyle.Render(" │")
-
-	// 2. Construir Borde Superior con Título a la Izquierda y Contador a la Extrema Derecha
-	// Formato: ┌─ [N] Titulo ────────────────────────────────────────── 1 of 6 ─┐
-	var topRow string
-	availTop := width - 2 // Descontando ┌ y ┐
-
-	if title == "" && badge == "" {
-		topRow = cornerTL + borderStyle.Render(strings.Repeat("─", availTop)) + cornerTR
-	} else {
-		titleStr := title
-		badgeStr := badge
-
-		titleLen := ansi.StringWidth(titleStr)
-		badgeLen := ansi.StringWidth(badgeStr)
-
-		// Verificar si caben título y badge con al menos 1 guion intermedio
-		// overhead: cornerTL(1) + "─ "(2) + " "(1) + " "(1) + " ─"(2) + cornerTR(1) = 8 + 1 guion = 9
-		if badgeStr != "" {
-			minNeeded := titleLen + badgeLen + 9
-			if width < minNeeded {
-				// Espacio insuficiente: intentar truncar el título preservando el badge si es posible
-				availForTitle := width - badgeLen - 9
-				if availForTitle >= 4 {
-					titleStr = ansi.Truncate(titleStr, availForTitle, "…")
-					titleLen = ansi.StringWidth(titleStr)
-				} else {
-					// Si es demasiado estrecho, omitir badge y truncar título
-					badgeStr = ""
-					badgeLen = 0
-					availForTitleOnly := width - 6
-					if availForTitleOnly >= 2 && titleLen > availForTitleOnly {
-						titleStr = ansi.Truncate(titleStr, availForTitleOnly, "…")
-						titleLen = ansi.StringWidth(titleStr)
-					}
-				}
-			}
-		} else if titleStr != "" {
-			availForTitleOnly := width - 6
-			if availForTitleOnly >= 2 && titleLen > availForTitleOnly {
-				titleStr = ansi.Truncate(titleStr, availForTitleOnly, "…")
-				titleLen = ansi.StringWidth(titleStr)
-			}
+	rows := make([]string, 0, height)
+	rows = append(rows, border.Render("╭")+edge(border, titleStyle, title, inner, false)+border.Render("╮"))
+	for i := 0; i < height-2; i++ {
+		line := ""
+		if i < len(lines) {
+			line = lines[i]
 		}
-
-		// Construir parte izquierda
-		var leftPart string
-		var leftLen int
-		if titleStr != "" {
-			styledTitle := titleStyle.Render(titleStr)
-			leftPart = cornerTL + borderStyle.Render("─ ") + styledTitle + borderStyle.Render(" ")
-			leftLen = 1 + 2 + titleLen + 1
-		} else {
-			leftPart = cornerTL
-			leftLen = 1
-		}
-
-		// Construir parte derecha
-		var rightPart string
-		var rightLen int
-		if badgeStr != "" {
-			styledBadge := badgeStyle.Render(badgeStr)
-			rightPart = borderStyle.Render(" ") + styledBadge + borderStyle.Render(" ─") + cornerTR
-			rightLen = 1 + badgeLen + 2 + 1
-		} else {
-			rightPart = cornerTR
-			rightLen = 1
-		}
-
-		// Guiones intermedios
-		middleLen := width - leftLen - rightLen
-		if middleLen < 0 {
-			middleLen = 0
-		}
-		dashes := borderStyle.Render(strings.Repeat("─", middleLen))
-		topRow = leftPart + dashes + rightPart
+		rows = append(rows, border.Render("│")+textwidth.Fit(line, inner)+"\x1b[0m"+border.Render("│"))
 	}
+	rows = append(rows, border.Render("╰")+edge(border, titleStyle, footer, inner, true)+border.Render("╯"))
+	return strings.Join(rows, "\n")
+}
 
-	// 3. Procesar Contenido Interior
-	contentWidth := width - 4 // 2 de borderVLeft ("│ ") y 2 de borderVRight (" │")
-	if contentWidth < 1 {
-		contentWidth = 1
+// edge construye un borde horizontal de n celdas con label embebido: a la
+// izquierda ("─label───") o a la derecha ("───label─").
+func edge(border, label lipgloss.Style, text string, n int, right bool) string {
+	if text == "" || n < 4 {
+		return border.Render(textwidth.Repeat("─", n))
 	}
-	contentHeight := height - 2 // Descontando borde superior e inferior
-
-	contentLines := strings.Split(content, "\n")
-	var bodyRows []string
-
-	for i := 0; i < contentHeight; i++ {
-		var line string
-		if i < len(contentLines) {
-			line = contentLines[i]
-		}
-		// Truncar o rellenar la línea para que mida exactamente contentWidth
-		lineW := ansi.StringWidth(line)
-		if lineW > contentWidth {
-			line = ansi.Truncate(line, contentWidth, "")
-			lineW = ansi.StringWidth(line)
-		}
-		if lineW < contentWidth {
-			line = line + strings.Repeat(" ", contentWidth-lineW)
-		}
-		bodyRows = append(bodyRows, borderVLeft+line+borderVRight)
+	text = textwidth.Truncate(text, n-2, textwidth.Ellipsis)
+	dashes := border.Render(textwidth.Repeat("─", n-1-textwidth.Width(text)))
+	styled := label.Render(text)
+	if right {
+		return dashes + styled + border.Render("─")
 	}
+	return border.Render("─") + styled + dashes
+}
 
-	// 4. Borde Inferior
-	bottomRow := cornerBL + borderStyle.Render(strings.Repeat("─", availTop)) + cornerBR
+// RenderBoxWithTitle es RenderPanel con un margen de una columna a cada lado
+// del contenido (ancho útil width-4). Lo usan Kanban y las vistas previas.
+func RenderBoxWithTitle(title, badge, content string, width, height int, active bool) string {
+	inner := width - 4
+	src := strings.Split(content, "\n")
+	lines := make([]string, len(src))
+	for i, l := range src {
+		lines[i] = " " + textwidth.Fit(l, inner) + " "
+	}
+	return RenderPanel(title, badge, lines, width, height, active)
+}
 
-	// 5. Ensamblaje final
-	allRows := make([]string, 0, height)
-	allRows = append(allRows, topRow)
-	allRows = append(allRows, bodyRows...)
-	allRows = append(allRows, bottomRow)
+// RenderPopup dibuja un popup con esquinas redondeadas que pinta todas sus
+// celdas con el fondo del tema: cada segmento lleva su propio fondo, así un
+// reset interno no deja huecos. hint va alineado a la derecha del borde inferior.
+func RenderPopup(title, hint string, lines []string, width int) string {
+	bg := ColorMantle
+	border := lipgloss.NewStyle().Foreground(ColorPeach).Background(bg)
+	titleStyle := lipgloss.NewStyle().Foreground(ColorPeach).Background(bg).Bold(true)
+	hintStyle := lipgloss.NewStyle().Foreground(ColorOverlay0).Background(bg)
+	inner := width - 2
 
-	return strings.Join(allRows, "\n")
+	rows := make([]string, 0, len(lines)+2)
+	rows = append(rows, border.Render("╭")+edge(border, titleStyle, title, inner, false)+border.Render("╮"))
+	for _, l := range lines {
+		rows = append(rows, border.Render("│")+Paint(textwidth.Fit(" "+l, inner), bg)+border.Render("│"))
+	}
+	rows = append(rows, border.Render("╰")+edge(border, hintStyle, hint, inner, true)+border.Render("╯"))
+	return strings.Join(rows, "\n")
+}
+
+// bgReset encuentra las secuencias SGR que apagan el color de fondo.
+var bgReset = regexp.MustCompile(`\x1b\[(0?|49)m`)
+
+// Paint pinta el fondo bg en toda la línea y lo reaplica después de cada reset
+// interno, así ningún segmento con estilo propio deja un hueco sin fondo.
+func Paint(line string, bg color.Color) string {
+	seq := bgSeq(bg)
+	return seq + bgReset.ReplaceAllString(line, "${0}"+seq) + "\x1b[0m"
+}
+
+// bgSeq devuelve la secuencia SGR que activa el color de fondo c.
+func bgSeq(c color.Color) string {
+	r, g, b, _ := c.RGBA()
+	return "\x1b[48;2;" + strconv.Itoa(int(r>>8)) + ";" + strconv.Itoa(int(g>>8)) + ";" + strconv.Itoa(int(b>>8)) + "m"
 }

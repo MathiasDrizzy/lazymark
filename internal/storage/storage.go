@@ -319,9 +319,10 @@ func (s *Storage) CreateNoteInDir(dir, title string) (*Note, error) {
 	if dir == "" {
 		dir = s.BaseDir
 	}
-	cleanName := strings.ToLower(title)
-	cleanName = strings.ReplaceAll(cleanName, " ", "-")
-	cleanName = unsafeChars.ReplaceAllString(cleanName, "")
+	cleanName := slug(title)
+	if cleanName == "" {
+		return nil, fmt.Errorf("nombre de nota vacío")
+	}
 	fileName := fmt.Sprintf("%s.md", cleanName)
 	fullPath := filepath.Join(dir, fileName)
 
@@ -356,10 +357,14 @@ func (s *Storage) CreateFolderInDir(parentDir, name string) (string, error) {
 	if parentDir == "" {
 		parentDir = s.BaseDir
 	}
-	cleanName := strings.ToLower(name)
-	cleanName = strings.ReplaceAll(cleanName, " ", "-")
-	cleanName = unsafeChars.ReplaceAllString(cleanName, "")
+	cleanName := slug(name)
+	if cleanName == "" {
+		return "", fmt.Errorf("nombre de carpeta vacío")
+	}
 	fullPath := filepath.Join(parentDir, cleanName)
+	if _, err := os.Stat(fullPath); err == nil {
+		return "", fmt.Errorf("ya existe: %s", cleanName)
+	}
 	return fullPath, os.MkdirAll(fullPath, 0755)
 }
 
@@ -380,6 +385,9 @@ func (s *Storage) MoveNote(notePath, targetFolderPath string) error {
 	destPath := filepath.Join(targetFolderPath, baseName)
 	if destPath == notePath {
 		return nil
+	}
+	if _, err := os.Stat(destPath); err == nil {
+		return fmt.Errorf("ya existe %s en el destino", baseName)
 	}
 	return os.Rename(notePath, destPath)
 }
@@ -538,4 +546,37 @@ func (s *Storage) UpdateTaskStage(notePath string, lineNum int, targetStage Task
 	}
 
 	return nil
+}
+
+// slug convierte un nombre visible en un nombre de archivo seguro.
+func slug(name string) string {
+	clean := strings.ToLower(strings.TrimSpace(name))
+	clean = strings.TrimSuffix(clean, ".md")
+	clean = unsafeChars.ReplaceAllString(clean, "")
+	clean = strings.Join(strings.Fields(clean), "-")
+	return strings.Trim(clean, ".-")
+}
+
+// Rename cambia el nombre de una nota o carpeta sin tocar su contenido y sin
+// pisar otro archivo. Devuelve la ruta nueva.
+func (s *Storage) Rename(path, newName string) (string, error) {
+	fi, err := os.Stat(path)
+	if err != nil {
+		return "", err
+	}
+	clean := slug(newName)
+	if clean == "" {
+		return "", fmt.Errorf("nombre vacío")
+	}
+	if !fi.IsDir() {
+		clean += ".md"
+	}
+	dest := filepath.Join(filepath.Dir(path), clean)
+	if dest == path {
+		return path, nil
+	}
+	if _, err := os.Stat(dest); err == nil {
+		return "", fmt.Errorf("ya existe: %s", clean)
+	}
+	return dest, os.Rename(path, dest)
 }

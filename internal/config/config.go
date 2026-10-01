@@ -11,6 +11,10 @@ import (
 const (
 	Version = "0.1.0"
 	AppName = "lazymark"
+
+	// KeymapVersion sube cuando cambian los atajos por defecto; un config.json
+	// de una versión anterior se migra a los atajos nuevos.
+	KeymapVersion = 2
 )
 
 // KeybindingsConfig almacena los atajos de teclado configurables
@@ -37,8 +41,8 @@ func DefaultKeybindings() KeybindingsConfig {
 		Move:        "m",
 		PasteImage:  "ctrl+v",
 		TogglePanel: "tab",
-		Settings:    "?",
-		Cheatsheet:  "h",
+		Settings:    ",",
+		Cheatsheet:  "?",
 		Quit:        "q",
 	}
 }
@@ -57,6 +61,8 @@ type Config struct {
 	SidebarRatio       float64           `json:"sidebar_ratio"`
 	KeybindingMode     string            `json:"keybinding_mode"`
 	Keybindings        KeybindingsConfig `json:"keybindings"`
+	KeymapVersion      int               `json:"keymap_version"`
+	TaskScope          string            `json:"task_scope"`
 	configPath         string            `json:"-"`
 }
 
@@ -101,6 +107,8 @@ func DefaultConfig(notesDir string) *Config {
 		SidebarRatio:       0.33,
 		KeybindingMode:     "dual",
 		Keybindings:        DefaultKeybindings(),
+		KeymapVersion:      KeymapVersion,
+		TaskScope:          "all",
 	}
 }
 
@@ -133,76 +141,39 @@ func Load(customDir string) (*Config, error) {
 	cfgPath := configFilePath()
 	cfg.configPath = cfgPath
 
-	// Intentar leer archivo de configuración existente
+	// Leer el archivo encima de los defaults: un campo ausente conserva su
+	// valor por defecto en vez de quedar en cero.
 	if data, err := os.ReadFile(cfgPath); err == nil {
-		var diskCfg Config
-		if err := json.Unmarshal(data, &diskCfg); err == nil {
-			if diskCfg.Editor != "" {
-				cfg.Editor = diskCfg.Editor
+		disk := *cfg
+		disk.KeymapVersion = 0
+		if err := json.Unmarshal(data, &disk); err == nil {
+			if disk.KeymapVersion < KeymapVersion {
+				// Atajos de una versión anterior: se reemplazan por los nuevos.
+				disk.Keybindings = DefaultKeybindings()
+			} else {
+				disk.Keybindings = mergeKeybindings(DefaultKeybindings(), disk.Keybindings)
 			}
-			if diskCfg.Theme != "" {
-				cfg.Theme = diskCfg.Theme
+			disk.KeymapVersion = KeymapVersion
+			if disk.SidebarRatio < 0.15 || disk.SidebarRatio > 0.75 {
+				disk.SidebarRatio = cfg.SidebarRatio
 			}
-			if diskCfg.Language != "" {
-				cfg.Language = diskCfg.Language
+			if disk.TaskScope == "" {
+				disk.TaskScope = "all"
 			}
-			if diskCfg.KeybindingMode != "" {
-				cfg.KeybindingMode = diskCfg.KeybindingMode
+			if customDir != "" || disk.NotesDir == "" {
+				disk.NotesDir = notesDir
 			}
-			if diskCfg.Keybindings.NewNote != "" {
-				cfg.Keybindings.NewNote = diskCfg.Keybindings.NewNote
-			}
-			if diskCfg.Keybindings.NewFolder != "" {
-				cfg.Keybindings.NewFolder = diskCfg.Keybindings.NewFolder
-			}
-			if diskCfg.Keybindings.Edit != "" {
-				cfg.Keybindings.Edit = diskCfg.Keybindings.Edit
-			}
-			if diskCfg.Keybindings.Delete != "" {
-				cfg.Keybindings.Delete = diskCfg.Keybindings.Delete
-			}
-			if diskCfg.Keybindings.Move != "" {
-				cfg.Keybindings.Move = diskCfg.Keybindings.Move
-			}
-			if diskCfg.Keybindings.PasteImage != "" {
-				cfg.Keybindings.PasteImage = diskCfg.Keybindings.PasteImage
-			}
-			if diskCfg.Keybindings.TogglePanel != "" {
-				cfg.Keybindings.TogglePanel = diskCfg.Keybindings.TogglePanel
-			}
-			if diskCfg.Keybindings.Settings != "" {
-				cfg.Keybindings.Settings = diskCfg.Keybindings.Settings
-			}
-			if diskCfg.Keybindings.Cheatsheet != "" {
-				cfg.Keybindings.Cheatsheet = diskCfg.Keybindings.Cheatsheet
-			}
-			if diskCfg.Keybindings.Quit != "" {
-				cfg.Keybindings.Quit = diskCfg.Keybindings.Quit
-			}
-			cfg.MouseClick = diskCfg.MouseClick
-			cfg.ShowTagsTab = diskCfg.ShowTagsTab
-			cfg.ShowTasksTab = diskCfg.ShowTasksTab
-			if diskCfg.SidebarRatio >= 0.15 && diskCfg.SidebarRatio <= 0.75 {
-				cfg.SidebarRatio = diskCfg.SidebarRatio
-			}
-			if customDir == "" && diskCfg.NotesDir != "" {
-				cfg.NotesDir = diskCfg.NotesDir
-			}
+			disk.configPath = cfgPath
+			*cfg = disk
 		}
 	}
 
-	// Validar que el editor configurado realmente exista; si no, hacer fallback a uno instalado
-	installed := DetectInstalledEditors()
-	editorValid := false
-	for _, ed := range installed {
-		if strings.Contains(strings.ToLower(cfg.Editor), ed) {
-			editorValid = true
-			break
+	// El editor configurado se respeta tal cual (H1-5). Solo se reemplaza si su
+	// ejecutable no existe en ningún lado.
+	if !EditorExists(cfg.Editor) {
+		if installed := DetectInstalledEditors(); len(installed) > 0 {
+			cfg.Editor = installed[0]
 		}
-	}
-	if !editorValid && len(installed) > 0 {
-		cfg.Editor = installed[0]
-		_ = cfg.Save()
 	}
 
 	return cfg, nil
@@ -224,6 +195,21 @@ func DetectInstalledEditors() []string {
 		list = append(list, "micro")
 	}
 	return list
+}
+
+// EditorExists indica si el ejecutable del editor (primera palabra, sin
+// argumentos) existe como ruta o en el PATH.
+func EditorExists(editor string) bool {
+	fields := strings.Fields(editor)
+	if len(fields) == 0 {
+		return false
+	}
+	bin := ResolveEditorBin(fields[0])
+	if _, err := os.Stat(bin); err == nil {
+		return true
+	}
+	_, err := exec.LookPath(bin)
+	return err == nil
 }
 
 // Save persiste la configuración actual en ~/.config/lazymark/config.json
@@ -273,4 +259,26 @@ func ResolveEditorBin(name string) string {
 	}
 
 	return name
+}
+
+// mergeKeybindings completa con los defaults los atajos que vienen vacíos.
+func mergeKeybindings(def, user KeybindingsConfig) KeybindingsConfig {
+	pick := func(u, d string) string {
+		if u != "" {
+			return u
+		}
+		return d
+	}
+	return KeybindingsConfig{
+		NewNote:     pick(user.NewNote, def.NewNote),
+		NewFolder:   pick(user.NewFolder, def.NewFolder),
+		Edit:        pick(user.Edit, def.Edit),
+		Delete:      pick(user.Delete, def.Delete),
+		Move:        pick(user.Move, def.Move),
+		PasteImage:  pick(user.PasteImage, def.PasteImage),
+		TogglePanel: pick(user.TogglePanel, def.TogglePanel),
+		Settings:    pick(user.Settings, def.Settings),
+		Cheatsheet:  pick(user.Cheatsheet, def.Cheatsheet),
+		Quit:        pick(user.Quit, def.Quit),
+	}
 }

@@ -2,6 +2,7 @@ package views
 
 import (
 	"fmt"
+	"github.com/MathiasDrizzy/lazymark/internal/ui/textwidth"
 	"strings"
 
 	"charm.land/lipgloss/v2"
@@ -9,7 +10,6 @@ import (
 	"github.com/MathiasDrizzy/lazymark/internal/storage"
 	"github.com/MathiasDrizzy/lazymark/internal/ui/mouse"
 	"github.com/MathiasDrizzy/lazymark/internal/ui/theme"
-	"github.com/charmbracelet/x/ansi"
 )
 
 // KanbanCard representa una tarjeta individual en el tablero Kanban
@@ -188,8 +188,8 @@ func RenderKanban(board KanbanBoard, activeCol int, selectedRows [3]int, width, 
 						checkbox = "◓"
 					}
 					rawLine := fmt.Sprintf("%s%s %s (%s)", cursor, checkbox, displayText, noteOrigin)
-					rawLine = ansi.Truncate(rawLine, contentWidth, "")
-					lineW := ansi.StringWidth(rawLine)
+					rawLine = textwidth.Truncate(rawLine, contentWidth, "")
+					lineW := textwidth.Width(rawLine)
 					if lineW < contentWidth {
 						rawLine += strings.Repeat(" ", contentWidth-lineW)
 					}
@@ -211,7 +211,7 @@ func RenderKanban(board KanbanBoard, activeCol int, selectedRows [3]int, width, 
 					}
 					originLabel := theme.NormalItem.Copy().Foreground(theme.ColorOverlay0).Render(fmt.Sprintf("(%s)", noteOrigin))
 					rowText = fmt.Sprintf("%s%s %s %s", cursor, checkbox, textStyle, originLabel)
-					rowText = ansi.Truncate(rowText, contentWidth, "")
+					rowText = textwidth.Truncate(rowText, contentWidth, "")
 				}
 
 				lines = append(lines, rowText)
