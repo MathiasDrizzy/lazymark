@@ -8,12 +8,14 @@ import (
 	"strings"
 )
 
+// Version la inyecta GoReleaser con -ldflags "-X …/config.Version=…".
+var Version = "0.1.0"
+
 const (
 	// Valores de Config.PopupBackground.
 	PopupBackgroundNone  = "none"
 	PopupBackgroundTheme = "theme"
 
-	Version = "0.1.0"
 	AppName = "lazymark"
 
 	// KeymapVersion sube cuando cambian los atajos por defecto; un config.json

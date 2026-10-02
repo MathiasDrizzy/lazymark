@@ -1,5 +1,5 @@
-# .goreleaser.yaml
-# Configuración oficial de GoReleaser para releases públicas y Homebrew Tap
+# GoReleaser v2. Docs: https://goreleaser.com/customization/homebrew_casks/
+# `brews` está deprecado; el cask es el camino vigente para binarios precompilados.
 version: 2
 
 project_name: lazymark
@@ -10,35 +10,41 @@ builds:
     binary: lazymark
     env:
       - CGO_ENABLED=0
-    goos:
-      - darwin
-      - linux
-      - windows
-    goarch:
-      - amd64
-      - arm64
+    goos: [darwin, linux, windows]
+    goarch: [amd64, arm64]
+    ldflags:
+      - -s -w -X github.com/MathiasDrizzy/lazymark/internal/config.Version={{ .Version }}
 
 archives:
   - id: default
-    format: tar.gz
+    formats: [tar.gz]
     format_overrides:
       - goos: windows
-        format: zip
-    name_template: "{{ .ProjectName }}_{{ .Os }}_{{ .Arch }}"
+        formats: [zip]
+    name_template: "{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
     files:
       - README.md
       - LICENSE*
 
-brews:
-  - repository:
+homebrew_casks:
+  - name: lazymark
+    repository:
       owner: MathiasDrizzy
       name: homebrew-tap
       branch: main
+      token: "{{ .Env.HOMEBREW_TAP_GITHUB_TOKEN }}"
     homepage: "https://github.com/MathiasDrizzy/lazymark"
-    description: "Terminal Markdown powerhouse & task manager inspired by lazygit"
-    license: "MIT"
-    install: |
-      bin.install "lazymark"
+    description: "Terminal Markdown notes and task manager"
+    binaries:
+      - lazymark
+    # El binario no está firmado ni notarizado: quita la cuarentena de macOS.
+    hooks:
+      post:
+        install: |
+          if OS.mac?
+            system_command "/usr/bin/xattr",
+                           args: ["-dr", "com.apple.quarantine", "#{staged_path}/lazymark"]
+          end
 
 checksum:
   name_template: "checksums.txt"
