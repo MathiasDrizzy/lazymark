@@ -292,7 +292,19 @@ func (m *AppModel) renderFooter() string {
 			break
 		}
 	}
-	if pinned { // el estado ocupa solo lo que dejan los botones
+	if pinned { // el estado ocupa lo que dejan los botones; un aviso corto (→ En progreso) cabe siempre
+		need := min(textwidth.Width(m.c.status), 18) + gap
+		for _, drop := range []Action{actQuit, actCheatsheet} {
+			if f.W-trashW-span(hints) >= need {
+				break
+			}
+			for i, h := range hints {
+				if h.action == drop {
+					hints = append(append([]shown{}, hints[:i]...), hints[i+1:]...)
+					break
+				}
+			}
+		}
 		left := f.W - trashW - span(hints)
 		if left <= gap {
 			status = ""

@@ -137,3 +137,16 @@ func TestKanbanCheatsheetHasKanbanSection(t *testing.T) {
 		t.Error("el cheatsheet de la vista de notas no debe decir Kanban en el título")
 	}
 }
+
+// TestKanbanToastFitsAt80 (K4): a 80 columnas el aviso de destino también se lee completo,
+// sin quitar ninguno de los 4 botones.
+func TestKanbanToastFitsAt80(t *testing.T) {
+	m := newTestModel(t, 80, 24)
+	press(m, "W", "shift+right")
+	row := lastRow(m)
+	for _, want := range []string{"→ En progreso", "← (H)", "→ (L)", "Listo (Espacio)", "Editar (Enter)"} {
+		if !strings.Contains(row, want) {
+			t.Errorf("la barra a 80 columnas no muestra %q: %q", want, row)
+		}
+	}
+}
