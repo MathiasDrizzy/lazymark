@@ -118,3 +118,20 @@ func TestNewThemesListed(t *testing.T) {
 		bases[b] = n
 	}
 }
+
+// TestSelectionIsDistinct: en cada tema la barra de selección inactiva (fondo Surface1) se
+// distingue del fondo (Base) y del borde inactivo (Overlay0), y el texto se lee sobre ella.
+func TestSelectionIsDistinct(t *testing.T) {
+	for _, n := range ThemeNames() {
+		p := AvailableThemes[n]
+		if fmt.Sprint(p.Surface1) == fmt.Sprint(p.Overlay0) {
+			t.Errorf("%s: Surface1 y Overlay0 son el mismo color (%v): la selección no se distingue del borde inactivo", n, p.Surface1)
+		}
+		if fmt.Sprint(p.Surface1) == fmt.Sprint(p.Base) {
+			t.Errorf("%s: la selección tiene el color del fondo", n)
+		}
+		if fmt.Sprint(p.Surface1) == fmt.Sprint(p.Text) {
+			t.Errorf("%s: la selección tiene el color del texto", n)
+		}
+	}
+}

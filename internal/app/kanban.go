@@ -84,7 +84,14 @@ func (k *kanbanSheet) setStage(card *views.KanbanCard, target int) {
 	}
 	k.c.reload()
 	k.col = target
+	// el cursor sigue a la tarjeta movida (la misma nota y línea), no a la última de la columna
 	k.selected[target] = max(0, len(k.c.board.ColumnCards(target))-1)
+	for i, c := range k.c.board.ColumnCards(target) {
+		if c.NotePath == card.NotePath && c.Task.Line == card.Task.Line {
+			k.selected[target] = i
+			break
+		}
+	}
 	k.clampSelection()
 	names := []string{i18n.T("Por hacer", "To do"), i18n.T("En progreso", "In progress"), i18n.T("Completado", "Done")}
 	k.c.setStatus("→ %s", names[target])

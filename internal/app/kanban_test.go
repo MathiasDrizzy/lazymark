@@ -5,6 +5,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/MathiasDrizzy/lazymark/internal/ui/theme"
+	"github.com/MathiasDrizzy/lazymark/internal/ui/views"
 	"github.com/charmbracelet/x/ansi"
 )
 
@@ -33,7 +35,7 @@ func TestKanbanActionsAreVisible(t *testing.T) {
 	for _, sz := range []struct {
 		w, h int
 		want []string
-	}{{120, 35, long}, {100, 30, long}, {80, 24, short}} {
+	}{{120, 35, long}, {100, 30, short}, {80, 24, short}} {
 		m := newTestModel(t, sz.w, sz.h)
 		if !strings.Contains(lastRow(m), "Kanban (W)") {
 			t.Errorf("%dx%d notas: falta el botón Kanban (W) en la barra: %q", sz.w, sz.h, lastRow(m))
@@ -44,6 +46,9 @@ func TestKanbanActionsAreVisible(t *testing.T) {
 		}
 		if row0 := ansi.Strip(screen(m)[0]); !strings.Contains(row0, "← Notas (Esc)") {
 			t.Errorf("%dx%d Kanban: falta el botón de volver arriba: %q", sz.w, sz.h, row0)
+		}
+		if !strings.Contains(lastRow(m), "Notas (W)") {
+			t.Errorf("%dx%d Kanban: falta el botón Notas (W) en la barra: %q", sz.w, sz.h, lastRow(m))
 		}
 		for _, label := range sz.want {
 			if !strings.Contains(lastRow(m), label) {
@@ -147,6 +152,56 @@ func TestKanbanToastFitsAt80(t *testing.T) {
 	for _, want := range []string{"→ En progreso", "← (H)", "→ (L)", "Listo (Espacio)", "Editar (Enter)"} {
 		if !strings.Contains(row, want) {
 			t.Errorf("la barra a 80 columnas no muestra %q: %q", want, row)
+		}
+	}
+}
+
+// TestKanbanFooterBackButton (K6): la barra inferior del Kanban tiene el botón "Notas (W)", igual
+// que "Kanban (W)" en notas (mismo estilo, mismo lugar entre los globales, clickeable), y vuelve a
+// las notas; el botón de arriba, "← Notas (Esc)", sigue funcionando.
+func TestKanbanFooterBackButton(t *testing.T) {
+	m := newTestModel(t, 120, 35)
+	xNotes, y, _ := cellOf(m, "Kanban (W)")
+	press(m, "W")
+	x, y2, ok := cellOf(m, "Notas (W)")
+	if !ok || y2 != y {
+		t.Fatalf("no se ve Notas (W) en la última fila: %v (%d,%d)", ok, x, y2)
+	}
+	if x < xNotes {
+		t.Errorf("Notas (W) (x=%d) debe ir tan a la derecha como Kanban (W) (x=%d) o más: son el primer global tras las acciones", x, xNotes)
+	}
+	click(m, x+3, y2)
+	if m.kanbanOn {
+		t.Error("el clic en Notas (W) no volvió a las notas")
+	}
+	press(m, "W")
+	bx, by, _ := cellOf(m, "← Notas (Esc)")
+	click(m, bx+3, by)
+	if m.kanbanOn {
+		t.Error("el botón de arriba dejó de funcionar")
+	}
+	// mismo estilo: el texto de ambos botones usa el estilo de botón del pie
+	press(m, "W")
+	if !strings.Contains(m.View().Content, theme.FooterKey.Render("Notas (W)")) {
+		t.Error("Notas (W) no usa el estilo de botón del pie")
+	}
+}
+
+// TestKanbanCursorFollowsCard (auditoría de K4): tras mover una tarjeta (Shift+←/→, H/L o Espacio) el
+// cursor queda sobre ESA tarjeta en su columna nueva, no en la última de la columna.
+func TestKanbanCursorFollowsCard(t *testing.T) {
+	m := newTestModel(t, 120, 35)
+	press(m, "W")
+	if len(m.c.board.Todo) < 3 {
+		t.Fatalf("la fixture necesita al menos 3 tareas por hacer, tiene %d", len(m.c.board.Todo))
+	}
+	same := func(a, b views.KanbanCard) bool { return a.NotePath == b.NotePath && a.Task.Line == b.Task.Line }
+	card := *m.kanban.current()
+	for step, key := range []string{"shift+right", "shift+left", "L", "H", "space", "space"} {
+		press(m, key)
+		cur := m.kanban.current()
+		if cur == nil || !same(*cur, card) {
+			t.Fatalf("paso %d (%s): el cursor está en %+v, se esperaba la tarjeta movida %q", step, key, cur, card.CleanText)
 		}
 	}
 }

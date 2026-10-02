@@ -175,16 +175,18 @@ var Nord = Palette{
 // paleta y se dice en el comentario.
 
 // Dracula, https://draculatheme.com/contribute y https://spec.draculatheme.com/
-// (dark, purple). Mantle es el AnsiBlack de la especificación; Surface0 es Selection y
-// Surface1 es Current Line/Comment. Dracula no tiene un gris de texto secundario:
-// Subtext0 repite Foreground.
+// (dark, purple). Mantle es el AnsiBlack de la especificación; Surface0 y Surface1 son
+// Selection (#44475a, "Selection" de la especificación) y Overlay0 es Comment (#6272a4), así
+// la barra de selección se distingue del borde inactivo. (La página de contribución rotula
+// #6272a4 como "Current Line"; la especificación lo llama Comment.) Dracula no tiene un gris
+// de texto secundario: Subtext0 repite Foreground.
 var Dracula = Palette{
 	Name:     "dracula",
 	Source:   "https://draculatheme.com/contribute",
 	Base:     lipgloss.Color("#282a36"),
 	Mantle:   lipgloss.Color("#21222c"),
 	Surface0: lipgloss.Color("#44475a"),
-	Surface1: lipgloss.Color("#6272a4"),
+	Surface1: lipgloss.Color("#44475a"),
 	Overlay0: lipgloss.Color("#6272a4"),
 	Text:     lipgloss.Color("#f8f8f2"),
 	Subtext0: lipgloss.Color("#f8f8f2"),
@@ -285,7 +287,8 @@ var EverforestDark = Palette{
 }
 
 // SolarizedDark, https://ethanschoonover.com/solarized/ (dark). Solarized no tiene
-// un tono más oscuro que base03: Mantle lo repite; Surface1 y Overlay0 son base01.
+// un tono más oscuro que base03: Mantle lo repite; Surface1 es base01 y Overlay0 base00,
+// para que la selección se distinga del borde inactivo.
 var SolarizedDark = Palette{
 	Name:     "solarized-dark",
 	Source:   "https://ethanschoonover.com/solarized/",
@@ -293,7 +296,7 @@ var SolarizedDark = Palette{
 	Mantle:   lipgloss.Color("#002b36"),
 	Surface0: lipgloss.Color("#073642"),
 	Surface1: lipgloss.Color("#586e75"),
-	Overlay0: lipgloss.Color("#586e75"),
+	Overlay0: lipgloss.Color("#657b83"),
 	Text:     lipgloss.Color("#839496"),
 	Subtext0: lipgloss.Color("#657b83"),
 	Peach:    lipgloss.Color("#cb4b16"),
