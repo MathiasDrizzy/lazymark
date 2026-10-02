@@ -1,6 +1,6 @@
 # 🔬 TUI Architecture Research: Diseño e Implementación de TUIs Modernas en Go
 
-> **Proyecto:** `lazymark` (TUI para Markdown, Tareas e Imágenes estilo Lazygit)  
+> **Proyecto:** `lazymark` (TUI para Markdown, Tareas e Imágenes)  
 > **Arquitectura:** Lazymark Core Architecture  
 > **Target:** Multiplataforma (macOS, Linux, Windows) en terminales modernas (Ghostty, WezTerm, Kitty).  
 

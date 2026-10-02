@@ -26,3 +26,14 @@ func TestUsageIsAccurate(t *testing.T) {
 	}
 	i18n.SetLanguage("es")
 }
+
+// TestHelpIsLazyNotLazygit (L2): lazymark es "lazy", no "estilo lazygit": la ayuda, en español y en inglés, no
+// menciona lazygit.
+func TestHelpIsLazyNotLazygit(t *testing.T) {
+	for _, lang := range []string{"es", "en"} {
+		i18n.SetLanguage(lang)
+		if text := usageHeader() + usageFooter(); strings.Contains(strings.ToLower(text), "lazygit") {
+			t.Errorf("%s: la ayuda menciona lazygit:\n%s", lang, text)
+		}
+	}
+}

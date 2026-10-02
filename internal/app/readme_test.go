@@ -246,3 +246,22 @@ func TestBrandLayers(t *testing.T) {
 		}
 	}
 }
+
+// TestNoLazygitIdentity (L2): el README y los documentos no presentan lazymark como "estilo lazygit". La
+// única mención que se queda es el dato técnico de compatibilidad: la config `keybinding_mode: lazygit` de
+// v0.1.0 se sigue leyendo (docs/configuration.md).
+func TestNoLazygitIdentity(t *testing.T) {
+	files, _ := filepath.Glob(repoFile("docs/*.md"))
+	files = append(files, repoFile("README.md"))
+	for _, f := range files {
+		b, err := os.ReadFile(f)
+		if err != nil {
+			t.Fatal(err)
+		}
+		for i, line := range strings.Split(string(b), "\n") {
+			if strings.Contains(strings.ToLower(line), "lazygit") && !strings.Contains(line, "keybinding_mode") {
+				t.Errorf("%s:%d presenta lazymark con lazygit: %q", filepath.Base(f), i+1, line)
+			}
+		}
+	}
+}

@@ -32,7 +32,7 @@ func extractDirArg(args []string) string {
 // usageHeader es la ayuda de `lazymark --help` antes de la lista de opciones.
 func usageHeader() string {
 	return i18n.T("Uso: ", "Usage: ") + config.AppName + i18n.T(" [opciones] [subcomando]\n\n", " [options] [command]\n\n") +
-		config.AppName + i18n.T(" — notas Markdown, tareas y tablero Kanban en la terminal, al estilo de lazygit\n\n", ": markdown notes, tasks and a Kanban board in the terminal, in the style of lazygit\n\n") +
+		config.AppName + i18n.T(" — notas Markdown, tareas y tablero Kanban en la terminal, sin esfuerzo (lazy)\n\n", ": markdown notes, tasks and a Kanban board in the terminal, the lazy way\n\n") +
 		i18n.T("Subcomandos (sin interfaz, para scripts y agentes):\n", "Commands (headless, for scripts and agents):\n") +
 		"  task list [--json] [--pending] [--dir <dir>]\n" +
 		"  task toggle --path <note> --line <n> [--dir <dir>]\n" +

@@ -4,7 +4,7 @@
 
 # lazymark
 
-**Markdown notes, tasks and a Kanban board in your terminal, in the style of lazygit.**
+**Lazy markdown notes, tasks and a Kanban board in your terminal.**
 
 Plain markdown files. Keyboard and mouse. Inline images.
 
@@ -21,7 +21,7 @@ Plain markdown files. Keyboard and mouse. Inline images.
 ## Why lazymark
 
 - **Your notes stay yours.** They are plain markdown files in one folder. Edit them with any editor; lazymark only rewrites the line you change and never overwrites a note that changed outside it.
-- **Learn it by looking at it.** Panels, rounded borders and a bar of keys at the bottom, like lazygit. Press `?` for the keys of the panel you are in.
+- **Learn it by looking at it.** Panels, rounded borders and a bar of keys at the bottom. Press `?` for the keys of the panel you are in.
 - **Keyboard or mouse.** Every action has a key. You can also click rows and the keys in the bottom bar, drag the divider between the columns and use the scroll wheel.
 - **Tasks come from your notes.** The Tasks panel lists the checkboxes you already wrote, and ticking one changes only that line.
 - **Safe by default.** Deleted notes go to a trash for 20 days, and folders with content always ask first.
