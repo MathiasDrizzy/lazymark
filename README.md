@@ -82,7 +82,13 @@ cd lazymark
 go build -o lazymark ./cmd/lazymark
 ```
 
-**Homebrew and prebuilt binaries:** coming soon.
+**Homebrew (macOS)**
+
+```sh
+brew install mathiasdrizzy/tap/lazymark
+```
+
+**Prebuilt binaries** for macOS, Linux and Windows are on the [Releases page](https://github.com/MathiasDrizzy/lazymark/releases).
 
 ## Quick start
 
