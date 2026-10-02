@@ -318,3 +318,35 @@ func TestMascotKittyAnimationTransmitsOnce(t *testing.T) {
 		t.Errorf("la segunda vez no debe transmitirse nada: %d", second)
 	}
 }
+
+// TestCellSizeIsClamped: un tamaño de celda absurdo contestado por la terminal se ignora (no se reserva una imagen enorme).
+func TestCellSizeIsClamped(t *testing.T) {
+	r := newEmptyRig(t, 120, 35, true)
+	r.Update(uv.CellSizeEvent{Width: 18, Height: 36})
+	for _, bad := range []uv.CellSizeEvent{{Width: 1 << 20, Height: 1 << 20}, {Width: 0, Height: 0}, {Width: -4, Height: 9}, {Width: 300, Height: 20}} {
+		r.Update(bad)
+		if r.cellW != 18 || r.cellH != 36 {
+			t.Errorf("%+v cambió el tamaño de celda a %dx%d", bad, r.cellW, r.cellH)
+		}
+	}
+	_ = r.View()
+}
+
+// TestEmbeddedMascotHasSleepFrame: los dos sprites tienen el cuadro "sleep" (el de reposo) con el tamaño esperado.
+func TestEmbeddedMascotHasSleepFrame(t *testing.T) {
+	for name, f := range map[string]*sprite.Frames{"cuadrantes": frames(), "kitty": frames36()} {
+		if f.Grids["sleep"] == nil {
+			t.Errorf("%s: falta el cuadro sleep", name)
+		}
+		for _, a := range f.Anims {
+			for _, fr := range a.Frames {
+				if f.Grids[fr] == nil {
+					t.Errorf("%s/%s: falta el cuadro %s", name, a.Name, fr)
+				}
+			}
+		}
+	}
+	if w, h := frames().Grids["sleep"].Size(); w != 2*mascotCols || h != 2*mascotRows {
+		t.Errorf("el sprite de cuadrantes mide %dx%d y %dx%d celdas piden %dx%d", w, h, mascotCols, mascotRows, 2*mascotCols, 2*mascotRows)
+	}
+}

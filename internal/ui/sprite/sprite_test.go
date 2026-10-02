@@ -1,6 +1,8 @@
 package sprite
 
 import (
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -8,8 +10,18 @@ import (
 	"github.com/charmbracelet/x/ansi"
 )
 
+// logoSVG lee el logo de reposo (el SVG ya no va dentro del binario: solo lo usan los tests).
+func logoSVG(t *testing.T) string {
+	t.Helper()
+	b, err := os.ReadFile(filepath.Join("..", "..", "..", "assets", "brand", "reposo", "lazymark.svg"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	return string(b)
+}
+
 func TestParseEmbeddedSVG(t *testing.T) {
-	g, err := ParseSVG(brand.SleepingSVG)
+	g, err := ParseSVG(logoSVG(t))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -208,7 +220,7 @@ func TestSprites(t *testing.T) {
 			t.Errorf("%s tiene %d cuadros: faltan cuadros intermedios", a.Name, len(a.Frames))
 		}
 	}
-	logo, _ := ParseSVG(brand.SleepingSVG)
+	logo, _ := ParseSVG(logoSVG(t))
 	sleep := f36.Grids["sleep"]
 	for y := range sleep {
 		for x := range sleep[y] {
@@ -226,5 +238,26 @@ func TestSprites(t *testing.T) {
 	}
 	if _, k := sleep.Image(8*9, 4*18); k != 2 {
 		t.Errorf("a 72x72 px el factor debe ser 2: %d", k)
+	}
+}
+
+// TestRobustAgainstBadGrids: una grilla vacía o con filas desiguales no hace entrar en pánico a Image ni a
+// QuadrantCells, y un lienzo absurdo no reserva memoria (hallazgos de la segunda opinión del agente de apoyo).
+func TestRobustAgainstBadGrids(t *testing.T) {
+	p := px(1, 2, 3)
+	var empty Grid
+	if img, k := empty.Image(10, 10); k != 1 || img.Bounds().Dx() != 1 {
+		t.Errorf("grilla vacía: %v %d", img.Bounds(), k)
+	}
+	uneven := Grid{{p, p, p, p}, {p}}
+	if img, k := uneven.Image(10, 10); k != 1 || img.Bounds().Dx() != 1 {
+		t.Errorf("filas desiguales: %v %d", img.Bounds(), k)
+	}
+	if QuadrantCells(uneven) != nil || QuadrantCells(empty) != nil && len(QuadrantCells(empty)) != 0 {
+		t.Error("QuadrantCells no debe dibujar una grilla mal formada")
+	}
+	ok := Grid{{p, p}, {p, p}}
+	if img, _ := ok.Image(1<<30, 1<<30); img.Bounds().Dx() != 1 {
+		t.Errorf("un lienzo de 1<<30 px no debe reservarse: %v", img.Bounds())
 	}
 }

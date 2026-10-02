@@ -23,6 +23,8 @@ const (
 	mascotInterval = 60 * time.Millisecond
 	// Tamaño de celda que se supone mientras la terminal no contesta a CSI 16 t.
 	defaultCellW, defaultCellH = 9, 18
+	// maxCellPx es el mayor lado de celda que se acepta de la terminal.
+	maxCellPx = 256
 )
 
 var (

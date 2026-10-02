@@ -70,6 +70,11 @@ var quadrant = [16]string{" ", "▘", "▝", "▀", "▖", "▌", "▞", "▛", 
 // split of its four pixels into two colors that loses the least.
 func QuadrantCells(g Grid) [][]string {
 	w, h := g.Size()
+	for _, r := range g { // una grilla con filas de otro ancho no se dibuja (en vez de salirse de rango)
+		if len(r) != w {
+			return nil
+		}
+	}
 	rows := make([][]string, 0, h/2)
 	for y := 0; y+1 < h; y += 2 {
 		row := make([]string, 0, w/2)
@@ -232,11 +237,22 @@ func ParseFrames(text string) (*Frames, error) {
 	return out, nil
 }
 
+// maxCanvas es el lado máximo, en píxeles, del lienzo de Image (una celda de terminal no mide cientos de píxeles).
+const maxCanvas = 4096
+
 // Image scales g by an integer factor (nearest neighbor, so every pixel stays a sharp square) and
 // puts it on a transparent canvas of w x h pixels, centered sideways and resting on the bottom edge (the feet).
 // The factor is the largest that fits.
 func (g Grid) Image(w, h int) (*image.NRGBA, int) {
 	gw, gh := g.Size()
+	if gw == 0 || gh == 0 || w <= 0 || h <= 0 || w > maxCanvas || h > maxCanvas {
+		return image.NewNRGBA(image.Rect(0, 0, 1, 1)), 1 // sin cuadro o con un lienzo absurdo: una imagen vacía
+	}
+	for _, r := range g {
+		if len(r) != gw {
+			return image.NewNRGBA(image.Rect(0, 0, 1, 1)), 1
+		}
+	}
 	k := max(1, min(w/gw, h/gh))
 	img := image.NewNRGBA(image.Rect(0, 0, max(w, gw*k), max(h, gh*k)))
 	ox, oy := (img.Bounds().Dx()-gw*k)/2, img.Bounds().Dy()-gh*k

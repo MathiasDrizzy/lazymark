@@ -146,7 +146,10 @@ func (m *AppModel) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case imageLoadedMsg:
 		m.c.kitty.Done(msg.sel, msg.job, msg.tmpl, msg.err)
 	case uv.CellSizeEvent:
-		m.cellW, m.cellH = msg.Width, msg.Height
+		// la contesta la terminal: una celda mide unas decenas de píxeles; un valor absurdo no debe pedir una imagen enorme
+		if msg.Width > 0 && msg.Height > 0 && msg.Width <= maxCellPx && msg.Height <= maxCellPx {
+			m.cellW, m.cellH = msg.Width, msg.Height
+		}
 	case mascotTickMsg:
 		return m, m.mascotTick(msg)
 	case uv.KittyGraphicsEvent:

@@ -26,3 +26,4 @@ Thumbs.db
 CLAUDE.local.md
 .claude/
 ESTADO.md
+__pycache__/
