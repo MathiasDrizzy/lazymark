@@ -231,7 +231,7 @@ func (p *settingsPopup) render(l Layout) string {
 		val := "‹ " + p.value(id) + " ›"
 		return lipgloss.NewStyle().Foreground(theme.ColorText).Render(textwidth.Pad(p.label(id), labelW)) + accent(val)
 	})...)
-	lines = append(lines, "", dim(i18n.T("←/→ cambiar · clic: seleccionar, 2.º clic: cambiar", "←/→ change · click: select, 2nd click: change")))
+	lines = append(lines, dim(i18n.T("←/→ cambiar · clic: seleccionar, 2.º clic: cambiar", "←/→ change · click: select, 2nd click: change")))
 	return theme.RenderPopup(i18n.T("Ajustes", "Settings"), escHint, lines, w)
 }
 
