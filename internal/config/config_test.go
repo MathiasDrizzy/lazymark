@@ -165,3 +165,29 @@ func TestSplitEditor(t *testing.T) {
 		t.Error("EditorExists debería ser falso para un editor inexistente o vacío")
 	}
 }
+
+// TestPopupBackgroundSetting (H1-11): por defecto "none"; "theme" se conserva al
+// recargar y cualquier otro valor vuelve a "none".
+func TestPopupBackgroundSetting(t *testing.T) {
+	isolate(t)
+	cfg, err := Load(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg.PopupBackground != PopupBackgroundNone {
+		t.Fatalf("por defecto = %q, se esperaba none", cfg.PopupBackground)
+	}
+	cfg.PopupBackground = PopupBackgroundTheme
+	if err := cfg.Save(); err != nil {
+		t.Fatal(err)
+	}
+	if again, _ := Load(cfg.NotesDir); again.PopupBackground != PopupBackgroundTheme {
+		t.Errorf("tras recargar = %q, se esperaba theme", again.PopupBackground)
+	}
+	for _, bad := range []string{`"rojo"`, `""`, `3`} {
+		writeDiskConfig(t, `{"keymap_version":2,"popup_background":`+bad+`}`)
+		if got, _ := Load(t.TempDir()); got.PopupBackground != PopupBackgroundNone {
+			t.Errorf("valor %s -> %q, se esperaba none", bad, got.PopupBackground)
+		}
+	}
+}

@@ -26,6 +26,7 @@ const (
 	setKeys
 	setTaskScope
 	setConfirmDelete
+	setPopupBg
 	settingCount
 )
 
@@ -81,6 +82,8 @@ func (p *settingsPopup) label(id settingID) string {
 		return i18n.T("Alcance de tareas", "Task scope")
 	case setConfirmDelete:
 		return i18n.T("Confirmar al borrar", "Confirm deletion")
+	case setPopupBg:
+		return i18n.T("Fondo de popups", "Popup background")
 	}
 	return ""
 }
@@ -109,6 +112,11 @@ func (p *settingsPopup) value(id settingID) string {
 			return i18n.T("Sí", "Yes")
 		}
 		return "No"
+	case setPopupBg:
+		if cfg.PopupBackground == config.PopupBackgroundTheme {
+			return i18n.T("tema", "theme")
+		}
+		return i18n.T("sin fondo", "none")
 	}
 	return ""
 }
@@ -137,6 +145,12 @@ func (p *settingsPopup) change(id settingID, dir int) {
 		cfg.TaskScope = cycle(p.scopes(), cfg.TaskScope, dir)
 	case setConfirmDelete:
 		cfg.ConfirmDelete = !cfg.ConfirmDelete
+	case setPopupBg:
+		if cfg.PopupBackground == config.PopupBackgroundTheme {
+			cfg.PopupBackground = config.PopupBackgroundNone
+		} else {
+			cfg.PopupBackground = config.PopupBackgroundTheme
+		}
 	}
 	p.c.save()
 	p.c.setStatus("%s: %s", p.label(id), p.value(id))
@@ -188,7 +202,7 @@ func (p *settingsPopup) render(l Layout) string {
 	p.top, p.height = 2, p.n
 	labelW := 22
 	lines := []string{""}
-	lines = append(lines, p.rows(w-4, func(i int) string {
+	lines = append(lines, p.rows(w-3, func(i int) string {
 		id := settingID(i)
 		val := "‹ " + p.value(id) + " ›"
 		return lipgloss.NewStyle().Foreground(theme.ColorText).Render(textwidth.Pad(p.label(id), labelW)) + accent(val)
@@ -319,7 +333,7 @@ func (p *trashPopup) render(l Layout) string {
 	if p.n == 0 {
 		lines = append(lines, "  "+dim(i18n.T("La papelera está vacía", "Trash is empty")))
 	} else {
-		lines = append(lines, p.rows(w-4, func(i int) string {
+		lines = append(lines, p.rows(w-3, func(i int) string {
 			it := p.items[i]
 			icon := iconNote
 			if it.IsDir {

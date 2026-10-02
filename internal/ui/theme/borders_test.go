@@ -1,6 +1,7 @@
 package theme
 
 import (
+	"image/color"
 	"strings"
 	"testing"
 
@@ -48,27 +49,44 @@ func TestRenderPanelGeometry(t *testing.T) {
 	}
 }
 
-// TestRenderPopupPaintsEveryCell comprueba celda por celda que el popup no deja
-// huecos sin fondo, aunque el contenido traiga resets de estilo.
+// TestRenderPopupPaintsEveryCell comprueba celda por celda que el popup cubre
+// todo su rectángulo aunque el contenido traiga resets de estilo. Con PopupSolid
+// cada celda lleva el color base del tema; sin él, ninguna lleva fondo (así se
+// respeta la transparencia de la terminal) pero todas están pintadas.
 func TestRenderPopupPaintsEveryCell(t *testing.T) {
-	ApplyPalette(CatppuccinMocha)
-	styled := lipgloss.NewStyle().Foreground(ColorRed).Render("rojo") + " normal " + lipgloss.NewStyle().Bold(true).Render("negrita")
-	out := RenderPopup("Título", "[Esc]", []string{styled, "", "texto ⚠️ ancho"}, 30)
-	lines := strings.Split(out, "\n")
-	canvas := lipgloss.NewCanvas(30, len(lines))
-	canvas.Compose(lipgloss.NewLayer(out))
-	for y := 0; y < len(lines); y++ {
-		for x := 0; x < 30; x++ {
-			cell := canvas.CellAt(x, y)
-			if cell == nil || cell.Width == 0 {
-				continue // continuación de un glifo ancho: la cubre la celda anterior
-			}
-			if cell.Style.Bg == nil {
-				t.Fatalf("celda (%d,%d) %q sin fondo", x, y, cell.Content)
+	t.Cleanup(func() { PopupSolid = false })
+	for _, solid := range []bool{false, true} {
+		PopupSolid = solid
+		ApplyPalette(CatppuccinMocha)
+		styled := lipgloss.NewStyle().Foreground(ColorRed).Render("rojo") + " normal " + lipgloss.NewStyle().Bold(true).Render("negrita")
+		out := RenderPopup("Título", "[Esc]", []string{styled, "", "texto ⚠️ ancho"}, 30)
+		lines := strings.Split(out, "\n")
+		canvas := lipgloss.NewCanvas(30, len(lines))
+		canvas.Compose(lipgloss.NewLayer(out))
+		for y := 0; y < len(lines); y++ {
+			for x := 0; x < 30; x++ {
+				cell := canvas.CellAt(x, y)
+				if cell == nil {
+					t.Fatalf("solid=%v: celda (%d,%d) sin pintar", solid, x, y)
+				}
+				if cell.Width == 0 {
+					continue // continuación de un glifo ancho: la cubre la celda anterior
+				}
+				if solid && (cell.Style.Bg == nil || rgb(cell.Style.Bg) != rgb(ColorBase)) {
+					t.Fatalf("solid: celda (%d,%d) %q debe llevar el color base: %v", x, y, cell.Content, cell.Style.Bg)
+				}
+				if !solid && cell.Style.Bg != nil {
+					t.Fatalf("sin fondo: celda (%d,%d) %q pinta fondo %v", x, y, cell.Content, cell.Style.Bg)
+				}
 			}
 		}
+		if bottom := ansi.Strip(lines[len(lines)-1]); !strings.HasSuffix(bottom, "[Esc]─╯") {
+			t.Errorf("[Esc] no está alineado dentro del borde inferior: %q", bottom)
+		}
 	}
-	if bottom := ansi.Strip(lines[len(lines)-1]); !strings.HasSuffix(bottom, "[Esc]─╯") {
-		t.Errorf("[Esc] no está alineado dentro del borde inferior: %q", bottom)
-	}
+}
+
+func rgb(c color.Color) [3]uint32 {
+	r, g, b, _ := c.RGBA()
+	return [3]uint32{r >> 8, g >> 8, b >> 8}
 }

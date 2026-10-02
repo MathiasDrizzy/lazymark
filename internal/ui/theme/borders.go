@@ -74,14 +74,33 @@ func RenderBoxWithTitle(title, badge, content string, width, height int, active 
 	return RenderPanel(title, badge, lines, width, height, active)
 }
 
-// RenderPopup dibuja un popup con esquinas redondeadas que pinta todas sus
-// celdas con el fondo del tema: cada segmento lleva su propio fondo, así un
-// reset interno no deja huecos. hint va alineado a la derecha del borde inferior.
+// PopupSolid decide el fondo de los popups: false (por defecto) los deja con el
+// fondo de la terminal, así respetan su transparencia; true los pinta con el
+// color base del tema. Lo fija la app según el ajuste "Fondo de popups".
+var PopupSolid bool
+
+// PopupBackground devuelve el color de fondo de los popups, o nil si no pintan fondo.
+func PopupBackground() color.Color {
+	if PopupSolid {
+		return ColorBase
+	}
+	return nil
+}
+
+// RenderPopup dibuja un popup con esquinas redondeadas y los colores del tema
+// (acento en el borde y el título, texto y apagado de la paleta). Pinta todas
+// sus celdas, con o sin fondo según PopupSolid, así nada de lo que hay debajo se
+// ve a través. hint va alineado a la derecha del borde inferior.
 func RenderPopup(title, hint string, lines []string, width int) string {
-	bg := ColorMantle
-	border := lipgloss.NewStyle().Foreground(ColorPeach).Background(bg)
-	titleStyle := lipgloss.NewStyle().Foreground(ColorPeach).Background(bg).Bold(true)
-	hintStyle := lipgloss.NewStyle().Foreground(ColorOverlay0).Background(bg)
+	bg := PopupBackground()
+	style := func(fg color.Color, bold bool) lipgloss.Style {
+		s := lipgloss.NewStyle().Foreground(fg).Bold(bold)
+		if bg != nil {
+			s = s.Background(bg)
+		}
+		return s
+	}
+	border, titleStyle, hintStyle := style(ColorPeach, false), style(ColorPeach, true), style(ColorOverlay0, false)
 	inner := width - 2
 
 	rows := make([]string, 0, len(lines)+2)
@@ -93,12 +112,18 @@ func RenderPopup(title, hint string, lines []string, width int) string {
 	return strings.Join(rows, "\n")
 }
 
+// Selected pinta la fila seleccionada de una lista con el color de selección del tema.
+func Selected(line string) string { return Paint(line, ColorSurface1) }
+
 // bgReset encuentra las secuencias SGR que apagan el color de fondo.
 var bgReset = regexp.MustCompile(`\x1b\[(0?|49)m`)
 
-// Paint pinta el fondo bg en toda la línea y lo reaplica después de cada reset
+// Paint pinta el fondo bg (nil = ninguno) en toda la línea y lo reaplica después de cada reset
 // interno, así ningún segmento con estilo propio deja un hueco sin fondo.
 func Paint(line string, bg color.Color) string {
+	if bg == nil {
+		return line + "\x1b[0m" // sin fondo: se respeta el de la terminal
+	}
 	seq := bgSeq(bg)
 	return seq + bgReset.ReplaceAllString(line, "${0}"+seq) + "\x1b[0m"
 }

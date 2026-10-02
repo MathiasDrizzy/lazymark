@@ -86,11 +86,12 @@ func (pl *popupList) rows(w int, render func(i int) string) []string {
 	from, to := pl.list.visible(pl.height, pl.n)
 	var out []string
 	for i := from; i < to; i++ {
-		cursor := "  "
 		if i == pl.list.cursor {
-			cursor = accent("> ")
+			// el cursor `>` y la barra de selección con el color del tema
+			out = append(out, theme.Selected(textwidth.Fit(accent("> ")+render(i), w)))
+			continue
 		}
-		out = append(out, cursor+render(i))
+		out = append(out, "  "+render(i))
 	}
 	for len(out) < pl.height {
 		out = append(out, "")
@@ -154,8 +155,21 @@ type inputPopup struct {
 	onSubmit func(string) tea.Cmd
 }
 
+// themedInputStyles pinta el campo de texto con la paleta del tema activo (por
+// defecto Bubbles usa sus propios grises, que no siguen al tema).
+func themedInputStyles() textinput.Styles {
+	text := lipgloss.NewStyle().Foreground(theme.ColorText)
+	faint := lipgloss.NewStyle().Foreground(theme.ColorOverlay0)
+	state := textinput.StyleState{Text: text, Placeholder: faint, Suggestion: faint, Prompt: lipgloss.NewStyle().Foreground(theme.ColorPeach)}
+	st := textinput.DefaultDarkStyles()
+	st.Focused, st.Blurred = state, state
+	st.Cursor.Color = theme.ColorPeach
+	return st
+}
+
 func newInputPopup(title, initial string, onSubmit func(string) tea.Cmd) *inputPopup {
 	ti := textinput.New()
+	ti.SetStyles(themedInputStyles())
 	ti.Prompt = ""
 	ti.SetValue(initial)
 	ti.CursorEnd()
@@ -236,7 +250,7 @@ func (p *movePopup) render(l Layout) string {
 	p.top = 3
 	p.height = clamp(p.n, 1, max(1, l.H-10))
 	lines := []string{dim(fmt.Sprintf(i18n.T("Destino para %d elemento(s):", "Destination for %d item(s):"), p.count)), ""}
-	lines = append(lines, p.rows(w-4, func(i int) string {
+	lines = append(lines, p.rows(w-3, func(i int) string {
 		rel, _ := filepath.Rel(p.base, p.folders[i])
 		if rel == "." {
 			rel = "/"

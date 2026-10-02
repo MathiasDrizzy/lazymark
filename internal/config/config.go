@@ -9,6 +9,10 @@ import (
 )
 
 const (
+	// Valores de Config.PopupBackground.
+	PopupBackgroundNone  = "none"
+	PopupBackgroundTheme = "theme"
+
 	Version = "0.1.0"
 	AppName = "lazymark"
 
@@ -63,7 +67,10 @@ type Config struct {
 	Keybindings        KeybindingsConfig `json:"keybindings"`
 	KeymapVersion      int               `json:"keymap_version"`
 	TaskScope          string            `json:"task_scope"`
-	configPath         string            `json:"-"`
+	// PopupBackground: "none" (por defecto) deja el fondo de la terminal en los
+	// popups, respetando su transparencia; "theme" pinta el color base del tema.
+	PopupBackground string `json:"popup_background"`
+	configPath      string `json:"-"`
 }
 
 func configFilePath() string {
@@ -109,6 +116,7 @@ func DefaultConfig(notesDir string) *Config {
 		Keybindings:        DefaultKeybindings(),
 		KeymapVersion:      KeymapVersion,
 		TaskScope:          "all",
+		PopupBackground:    PopupBackgroundNone,
 	}
 }
 
@@ -159,6 +167,9 @@ func Load(customDir string) (*Config, error) {
 			}
 			if disk.TaskScope == "" {
 				disk.TaskScope = "all"
+			}
+			if disk.PopupBackground != PopupBackgroundTheme {
+				disk.PopupBackground = PopupBackgroundNone // valor ausente o desconocido
 			}
 			if customDir != "" || disk.NotesDir == "" {
 				disk.NotesDir = notesDir
@@ -240,6 +251,14 @@ func EditorExists(editor string) bool {
 	}
 	_, err := exec.LookPath(resolved)
 	return err == nil
+}
+
+// Path devuelve la ruta del archivo de configuración.
+func (c *Config) Path() string {
+	if c.configPath == "" {
+		c.configPath = configFilePath()
+	}
+	return c.configPath
 }
 
 // Save persiste la configuración actual en ~/.config/lazymark/config.json

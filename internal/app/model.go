@@ -58,6 +58,7 @@ func New(cfg *config.Config) (*AppModel, error) {
 	if cfg.Theme != "" {
 		theme.ApplyThemeByName(cfg.Theme)
 	}
+	theme.PopupSolid = cfg.PopupBackground == config.PopupBackgroundTheme
 	c := &core{
 		cfg:   cfg,
 		store: store,
@@ -354,6 +355,7 @@ func (m *AppModel) afterChange() {
 }
 
 func (m *AppModel) onSettingsChange() {
+	theme.PopupSolid = m.c.cfg.PopupBackground == config.PopupBackgroundTheme
 	m.c.keys = NewKeymap(m.c.cfg)
 	m.c.reload()
 	m.tasks.list.set(m.tasks.list.cursor, len(m.c.tasks))
