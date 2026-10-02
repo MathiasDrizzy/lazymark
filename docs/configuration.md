@@ -40,8 +40,9 @@ What lazymark reads from your notes:
 
 - **Tags**: any `#word`. They fill the Categories panel.
 - **Tasks**: lines that start with `- [ ] something` or `- [x] something` (also with `*`). Checkboxes inside an indented list are not picked up yet.
-- **Kanban column**: a task is *In Progress* when its line contains `#doing`, `#wip`,
-  `#progreso` or `#in-progress`; `[x]` is *Done*; everything else is *To Do*.
+- **Kanban column**: a tag at the end of the task line, `- [ ] task #kb/doing`. No tag is the first
+  column and `[x]` is always the done column. The old `#doing`, `#wip`, `#progreso` and `#in-progress`
+  tags are still read as *doing* and are replaced when you move the card. See [cli.md](cli.md).
 - **Images**: `![alt](assets/picture.png)` shows the picture in the preview on
   terminals that support the Kitty graphics protocol.
 
@@ -63,6 +64,7 @@ What lazymark reads from your notes:
 | `notes_dir` | a folder path | `~/Documents/notes` | The notes folder. |
 | `editor` | a command, with arguments if you want | `$EDITOR`, else `micro`, `vim` or `nano` | Opened with `Enter` or `e`. A path with spaces works. |
 | `theme` | `catppuccin-mocha`, `catppuccin-latte`, `catppuccin-frappe`, `catppuccin-macchiato`, `tokyo-night`, `gruvbox-dark`, `nord`, `dracula`, `one-dark`, `rose-pine`, `kanagawa`, `everforest-dark`, `solarized-dark`, `solarized-light` | `catppuccin-mocha` | Colors of the whole interface, including the markdown preview and its code blocks. Changes live in Settings. |
+| `kanban_columns` | a list of 2 to 6 columns: `{"id": "doing", "title": "Writing"}` or `{"id": "doing", "titles": {"en": "Doing", "es": "En curso"}}` | `todo`, `doing`, `done` | The Kanban columns, in order. `id` is lowercase letters, digits, `_` or `-` and goes in the `#kb/<id>` tag; the title is free, per language, or (if missing) the default one for `todo`/`doing`/`done`, else the id. The column called `done` (or the last) holds the finished tasks. An invalid list goes back to the default. |
 | `language` | `auto`, `en`, `es` | `auto` | `auto` follows `LANG`, `LC_ALL` and `LC_MESSAGES`: Spanish if they mention `es`, otherwise English. |
 | `screen_background` | `theme`, `terminal` | `theme` | `theme` paints the whole screen with the theme's base color (panels, gaps, bottom bar, popups, Kanban and preview). `terminal` leaves your terminal's background, so a translucent terminal stays translucent. Changes live in Settings ("Screen background"). |
 | `mascot` | `true`, `false` | `true` | Shows the sleeping sloth, small, at the bottom right of the preview when there is nothing to show (empty notes folder, empty folder, empty note). Click it and it wakes up, waves, dances or spins, then goes back to sleep. Changes live in Settings ("Mascot"). |
@@ -113,12 +115,10 @@ Commands that run without the interface, for scripts and other tools:
 
 | Command | What it does |
 |---|---|
-| `lazymark task list [--json] [--pending]` | List the tasks found in your notes. |
-| `lazymark task toggle --path <note> --line <n>` | Toggle one task. |
-| `lazymark note list [--json]` | List the notes. |
-| `lazymark note get <path>` | Print a note. |
+| `lazymark note list\|show\|new` | List the notes, print one, create one. |
+| `lazymark task list\|toggle\|move` | List the tasks, tick one, move one to a Kanban column. |
 | `lazymark paste [--no-newline] [<note.md>]` | Save the image you have copied (a screenshot or an image file) in the note's `assets/` folder and print `![](assets/…)`. Without a note it uses `$LAZYMARK_NOTE`. Exits with an error and prints nothing if there is no image. |
 | `lazymark editor-plugins install\|uninstall [micro\|vim\|nano]` | Add or remove the plugins that paste images from micro, vim and nano. See [editor-plugins.md](editor-plugins.md). |
-| `lazymark mcp` | Start an MCP server over stdio (`list_notes`, `read_note`, `list_tasks`, `toggle_task`, `get_kanban`). |
+| `lazymark mcp` | Start an MCP server over stdio with the same operations. |
 
-`task`, `note` and `mcp` accept `--dir <folder>`.
+`task`, `note` and `mcp` accept `--dir <folder>`. The arguments, the `--json` schema, the exit codes and how to register the MCP server in Claude Code are in [cli.md](cli.md).

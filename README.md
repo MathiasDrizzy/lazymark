@@ -48,9 +48,35 @@ Every `#tag` in your notes. `Enter` on a tag shows only the notes that have it.
 
 ### Kanban board
 
-The same tasks as three columns: To Do, In Progress and Done. Move a card with `H` and `L` or `Shift+←` and `Shift+→`, and the change is written back to the note. Nothing is hidden: `Kanban (W)` opens the board from the notes view, `Notes (W)` and `← Notes (Esc)` take you back, and the bottom bar always lists what the selected card can do.
+The same tasks as columns: To Do, In Progress and Done by default. Move a card with `H` and `L` or `Shift+←` and `Shift+→`, or drag it with the mouse to another column: the card and the target column are highlighted while you drag, `Esc` cancels. The change is written back to the note, on that line only, and never over a note that changed outside lazymark (it reloads and tells you). `Kanban (W)` opens the board, `Notes (W)` and `← Notes (Esc)` go back, and the bottom bar lists what the selected card can do.
+
+The column is a tag at the end of the task line, so it works in any editor: `- [ ] write report #kb/doing`. Set your own columns (2 to 6) in the config:
+
+```json
+"kanban_columns": [
+  {"id": "todo", "titles": {"en": "To do", "es": "Por hacer"}},
+  {"id": "doing", "title": "Writing"},
+  {"id": "review"},
+  {"id": "done"}
+]
+```
 
 <img src="assets/readme/feature-kanban.gif" alt="Moving cards between the columns of the Kanban board" width="100%">
+
+### CLI and MCP
+
+Everything the board does is available without the interface, with a stable `--json` output and exit codes, and over MCP for agents:
+
+```
+$ lazymark task list --pending --json
+$ lazymark task move projects/plan.md#16de6420 doing
+$ lazymark note new "Meeting" --folder work
+$ claude mcp add --transport stdio lazymark -- lazymark mcp
+```
+
+<img src="assets/readme/feature-cli.gif" alt="Listing pending tasks in the terminal, moving one to the doing column and reading it back as JSON" width="100%">
+
+See [docs/cli.md](docs/cli.md) for the commands, the JSON schema, the exit codes and the MCP tools.
 
 ### Inline images
 
@@ -153,7 +179,7 @@ See [docs/configuration.md](docs/configuration.md) for every setting, the comman
 Limitations:
 
 - Tasks are the lines that start with `- [ ]` or `- [x]`; checkboxes inside an indented list are not listed yet.
-- The Kanban board has three fixed columns.
+- The Kanban board has 2 to 6 columns, in the order of your config; cards are not reordered inside a column.
 - Pasting an image from the clipboard (`Ctrl+V`, or `lazymark paste` from an editor) needs `osascript` or `pngpaste` (macOS), `wl-paste` or `xclip` (Linux) or PowerShell (Windows).
 - The editor plugins need micro, vim or GNU nano; nano also needs the note to be opened from lazymark.
 - The terminal must be at least 60 columns by 20 rows.
