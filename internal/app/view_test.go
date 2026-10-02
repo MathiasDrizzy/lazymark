@@ -47,6 +47,19 @@ func copyFixtures(t *testing.T) string {
 	if err != nil {
 		t.Fatalf("copiando fixtures: %v", err)
 	}
+	// Notas con emoji y un icono Nerd Font en el nombre: Go prohíbe esos caracteres en
+	// los archivos de un módulo (rompían `go install`), así que no se versionan: se
+	// crean aquí, en la carpeta temporal.
+	for name, body := range map[string]string{
+		"⚠️ alerta ❤️ con un nombre larguísimo que no cabe en ninguna columna.md": "# Alerta ⚠️ ❤️\n\n#inbox\n\n- [ ] revisar ⚠️\n",
+		"\uf15c iconos nerdfont.md": "# Iconos\n\nNota con icono \uf15c en el nombre.\n",
+	} {
+		target := filepath.Join(dst, name)
+		if err := os.WriteFile(target, []byte(body), 0o644); err != nil {
+			t.Fatalf("creando el fixture %q: %v", name, err)
+		}
+		files = append(files, target)
+	}
 	order := make([]int, len(files))
 	for i := range order {
 		order[i] = i

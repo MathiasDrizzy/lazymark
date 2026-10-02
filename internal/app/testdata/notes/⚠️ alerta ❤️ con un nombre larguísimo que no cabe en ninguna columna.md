@@ -1,5 +1,0 @@
-# Alerta ⚠️ ❤️
-
-#inbox
-
-- [ ] revisar ⚠️
