@@ -650,24 +650,37 @@
 <rect x="25" y="25" width="1" height="1" fill="#11111b"/>
 </g>
 <g id="mano">
+<rect x="23" y="12" width="1" height="1" fill="#11111b"/>
+<rect x="24" y="12" width="1" height="1" fill="#11111b"/>
+<rect x="25" y="12" width="1" height="1" fill="#11111b"/>
+<rect x="22" y="13" width="1" height="1" fill="#11111b"/>
 <rect x="23" y="13" width="1" height="1" fill="#b5855c"/>
 <rect x="24" y="13" width="1" height="1" fill="#b5855c"/>
 <rect x="25" y="13" width="1" height="1" fill="#b5855c"/>
-<rect x="26" y="13" width="1" height="1" fill="#b5855c"/>
-<rect x="27" y="13" width="1" height="1" fill="#b5855c"/>
-<rect x="28" y="13" width="1" height="1" fill="#6b4636"/>
+<rect x="26" y="13" width="1" height="1" fill="#11111b"/>
+<rect x="22" y="14" width="1" height="1" fill="#b5855c"/>
+<rect x="23" y="14" width="1" height="1" fill="#b5855c"/>
+<rect x="24" y="14" width="1" height="1" fill="#b5855c"/>
+<rect x="25" y="14" width="1" height="1" fill="#b5855c"/>
+<rect x="26" y="14" width="1" height="1" fill="#b5855c"/>
+<rect x="27" y="14" width="1" height="1" fill="#11111b"/>
+<rect x="22" y="15" width="1" height="1" fill="#b5855c"/>
 <rect x="23" y="15" width="1" height="1" fill="#b5855c"/>
 <rect x="24" y="15" width="1" height="1" fill="#b5855c"/>
 <rect x="25" y="15" width="1" height="1" fill="#b5855c"/>
 <rect x="26" y="15" width="1" height="1" fill="#b5855c"/>
-<rect x="27" y="15" width="1" height="1" fill="#b5855c"/>
-<rect x="28" y="15" width="1" height="1" fill="#6b4636"/>
-<rect x="23" y="17" width="1" height="1" fill="#b5855c"/>
-<rect x="24" y="17" width="1" height="1" fill="#b5855c"/>
-<rect x="25" y="17" width="1" height="1" fill="#b5855c"/>
-<rect x="26" y="17" width="1" height="1" fill="#b5855c"/>
-<rect x="27" y="17" width="1" height="1" fill="#b5855c"/>
-<rect x="28" y="17" width="1" height="1" fill="#6b4636"/>
-<rect x="28" y="18" width="1" height="1" fill="#6b4636"/>
+<rect x="27" y="15" width="1" height="1" fill="#11111b"/>
+<rect x="22" y="16" width="1" height="1" fill="#11111b"/>
+<rect x="23" y="16" width="1" height="1" fill="#b5855c"/>
+<rect x="24" y="16" width="1" height="1" fill="#b5855c"/>
+<rect x="25" y="16" width="1" height="1" fill="#b5855c"/>
+<rect x="26" y="16" width="1" height="1" fill="#11111b"/>
+<rect x="23" y="17" width="1" height="1" fill="#11111b"/>
+<rect x="24" y="17" width="1" height="1" fill="#6b4636"/>
+<rect x="25" y="17" width="1" height="1" fill="#11111b"/>
+<rect x="26" y="17" width="1" height="1" fill="#6b4636"/>
+<rect x="24" y="18" width="1" height="1" fill="#6b4636"/>
+<rect x="25" y="18" width="1" height="1" fill="#6b4636"/>
+<rect x="26" y="18" width="1" height="1" fill="#6b4636"/>
 </g>
 </svg>

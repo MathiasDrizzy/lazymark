@@ -131,13 +131,27 @@ def sloth_base(variant):
 
 
 def sloth_hand(variant):
-    """The fingers, drawn in FRONT of the object so they wrap around its handle."""
+    """A rounded mitt in FRONT of the pencil, with short hooked claws below it.
+
+    The pencil passes behind it and stays visible above and below. Nothing goes past
+    the pencil's own right outline (x = 27).
+    """
     p = PALETTES[variant]
     L = Layer()
-    for y in (13, 15, 17):
-        L.rect(23, y, 5, 1, p["arm"])
-        L.px(28, y, CLAW)
-    L.px(28, 18, CLAW)
+    L.rect(23, 13, 3, 1, p["arm"])  # rounded corners: the top and bottom rows are shorter
+    L.rect(22, 14, 5, 2, p["arm"])
+    L.rect(23, 16, 3, 1, p["arm"])
+    edge = {}
+    for (x, y) in L:
+        for dx, dy in ((1, 0), (-1, 0), (0, 1), (0, -1)):
+            n = (x + dx, y + dy)
+            if n not in L and n[0] >= 22:
+                edge[n] = OUTLINE
+    L.update(edge)
+    # claws hook around the handle, below the mitt, toward the pencil's middle
+    for cells in (((24, 17), (24, 18), (25, 18)), ((26, 17), (26, 18))):
+        for c in cells:
+            L.px(c[0], c[1], CLAW)
     return L
 
 
