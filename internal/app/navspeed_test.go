@@ -49,7 +49,10 @@ func bigImage(t testing.TB, path string, w, h int) {
 
 // newNavRig crea el modelo con nNotes notas, cada una con su propia copia de una imagen grande
 // (PNG las pares, JPG las impares), todas con soporte Kitty. Las notas son nav-00.md, nav-01.md…
-func newNavRig(t testing.TB, nNotes, px int) *imageRig {
+func newNavRig(t testing.TB, nNotes, px int) *imageRig { return newNavRigImages(t, nNotes, px, true) }
+
+// newNavRigImages es newNavRig con o sin la imagen en cada nota (sin ella, el texto es el mismo).
+func newNavRigImages(t testing.TB, nNotes, px int, images bool) *imageRig {
 	t.Helper()
 	tt, _ := t.(*testing.T)
 	if tt == nil {
@@ -70,6 +73,9 @@ func newNavRig(t testing.TB, nNotes, px int) *imageRig {
 		b, _ := os.ReadFile(filepath.Join(src, from))
 		os.WriteFile(filepath.Join(dir, "assets", name+ext), b, 0o644)
 		md := fmt.Sprintf("# Nota %d\n\nTexto antes.\n\n![](assets/%s%s)\n\nTexto después.\n", i, name, ext)
+		if !images {
+			md = fmt.Sprintf("# Nota %d\n\nTexto antes.\n\nTexto después.\n", i)
+		}
 		os.WriteFile(filepath.Join(dir, name+".md"), []byte(md), 0o644)
 	}
 	r.afterChange()
@@ -123,12 +129,28 @@ func navigate(r *imageRig, keys []string) navStats {
 	return s
 }
 
-// budget es el presupuesto por tecla: 16 ms (un cuadro a 60 fps); con -race, 8 veces más.
-func budget() time.Duration {
-	if raceOn {
-		return 8 * 16 * time.Millisecond
-	}
-	return 16 * time.Millisecond
+var (
+	budgetOnce sync.Once
+	budgetVal  time.Duration
+)
+
+// budget es el presupuesto por tecla: 16 ms (un cuadro a 60 fps) en la máquina de referencia, escalado por lo
+// lenta que sea esta (con -race o en un runner de CI cargado): se mide cuánto tarda aquí codificar una imagen de
+// 2000 px (en la máquina de referencia, ~140 ms) y el presupuesto crece en esa proporción. Así el test sigue
+// comprobando lo que importa (navegar cuesta una fracción de lo que cuesta una imagen) sin depender del reloj.
+func budget(t testing.TB) time.Duration {
+	budgetOnce.Do(func() {
+		dir := t.TempDir()
+		p := filepath.Join(dir, "ref.png")
+		bigImage(t, p, 2000, 1500)
+		start := time.Now()
+		if _, err := image.Encode(image.Job{Path: p, Cols: 60, Rows: 18}); err != nil {
+			t.Fatal(err)
+		}
+		slow := float64(time.Since(start)) / float64(140*time.Millisecond)
+		budgetVal = time.Duration(float64(16*time.Millisecond) * max(1, slow))
+	})
+	return budgetVal
 }
 
 // runCmd ejecuta un comando de Bubble Tea y devuelve los mensajes que produce (con tea.Batch, uno por comando).
@@ -150,13 +172,14 @@ func runCmd(cmd tea.Cmd) []tea.Msg {
 	}
 }
 
-// TestNavigationNeverWaitsForImages (N1): con imágenes de 2000 px, Update+View de cada tecla de
-// navegación tarda menos de un cuadro (p95 < 16 ms) y mientras se navega no se manda ningún byte de
-// imagen. Antes (medido, 8 notas con PNG/JPG de 2000 px): p95 = 138 ms por tecla, 12 transmisiones y
-// 11,5 MB de secuencias Kitty en 37 teclas, porque cada selección decodificaba, reducía y
-// codificaba la imagen dentro de Update.
+// TestNavigationNeverWaitsForImages (N1): con imágenes de 2000 px, Update+View de cada tecla de navegación cuesta lo
+// mismo que con las mismas notas sin imágenes (p95 como mucho el triple más 5 ms), y mientras se navega no se
+// manda ningún byte de imagen. Antes (medido, 8 notas con PNG/JPG de 2000 px, macOS arm64): p95 = 138 ms por
+// tecla frente a ~1 ms sin imágenes, 12 transmisiones y 11,5 MB de secuencias Kitty en 37 teclas, porque cada
+// selección decodificaba, reducía y codificaba la imagen dentro de Update. La comparación con el mismo
+// recorrido sin imágenes, en la misma máquina y la misma ejecución, no depende de lo rápido que sea el reloj
+// (ni del detector de carreras): lo absoluto (p95 < 16 ms) se registra en el log.
 func TestNavigationNeverWaitsForImages(t *testing.T) {
-	r := newNavRig(t, 8, 2000)
 	var keys []string
 	for i := 0; i < 30; i++ {
 		keys = append(keys, "down")
@@ -164,10 +187,12 @@ func TestNavigationNeverWaitsForImages(t *testing.T) {
 	for i := 0; i < 7; i++ {
 		keys = append(keys, "up")
 	}
-	st := navigate(r, keys)
-	t.Log(st)
-	if p95 := st.p(.95); p95 >= budget() {
-		t.Errorf("p95 por tecla = %v, el presupuesto es %v", p95, budget())
+	plain := navigate(newNavRigImages(t, 8, 2000, false), keys)
+	st := navigate(newNavRig(t, 8, 2000), keys)
+	t.Logf("con imágenes:  %s", st)
+	t.Logf("sin imágenes:  %s", plain)
+	if limit := 3*plain.p(.95) + 5*time.Millisecond; st.p(.95) >= limit {
+		t.Errorf("p95 con imágenes = %v; sin ellas = %v (máximo permitido %v): navegar espera a las imágenes", st.p(.95), plain.p(.95), limit)
 	}
 	if st.transmits != 0 || st.bytes > 1024 {
 		t.Errorf("mientras se navega no debe mandarse ninguna imagen: %d transmisiones, %d bytes", st.transmits, st.bytes)
@@ -191,8 +216,8 @@ func TestLoadedImageCostsLittle(t *testing.T) {
 	_ = r.View()
 	took := time.Since(start)
 	t.Logf("Update+View al llegar una imagen de 2000 px: %v (secuencia de %d KB)", took.Round(time.Microsecond), len(tmpl)/1024)
-	if took >= budget() {
-		t.Errorf("tardó %v, el presupuesto es %v", took, budget())
+	if took >= budget(t) {
+		t.Errorf("tardó %v, el presupuesto es %v", took, budget(t))
 	}
 }
 
