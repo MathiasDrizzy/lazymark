@@ -187,7 +187,7 @@ func (m *AppModel) applyNotesDir(path string) tea.Cmd {
 		m.c.errStatus("No se pudo leer la carpeta", "Could not read the folder", err)
 		return nil
 	}
-	m.c.cfg.NotesDir = abs
+	m.c.cfg.SetNotesDir(abs) // elección explícita: pasa a ser la carpeta por defecto
 	m.c.store = store
 	m.c.save()
 

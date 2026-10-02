@@ -191,3 +191,59 @@ func TestPopupBackgroundSetting(t *testing.T) {
 		}
 	}
 }
+
+// TestDirFlagIsNotPersisted: la carpeta que se pasa con --dir vale solo para esa
+// ejecución; guardar un ajuste cualquiera no la convierte en la carpeta por
+// defecto. Antes, abrir lazymark con --dir y cambiar el tema la cambiaba para siempre.
+func TestDirFlagIsNotPersisted(t *testing.T) {
+	isolate(t)
+	saved, oneOff := t.TempDir(), t.TempDir()
+	raw, _ := json.Marshal(map[string]any{"keymap_version": 2, "notes_dir": saved})
+	writeDiskConfig(t, string(raw))
+
+	cfg, err := Load(oneOff)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg.NotesDir != oneOff {
+		t.Fatalf("con --dir se debe usar %q, hay %q", oneOff, cfg.NotesDir)
+	}
+	cfg.Theme = "nord"
+	if err := cfg.Save(); err != nil {
+		t.Fatal(err)
+	}
+	again, err := Load("")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if again.NotesDir != saved || again.Theme != "nord" {
+		t.Errorf("tras guardar un ajuste, la carpeta por defecto debía seguir siendo %q (hay %q) y el tema nord (hay %q)", saved, again.NotesDir, again.Theme)
+	}
+}
+
+// TestDirFlagWithoutSavedConfig: sin configuración previa, --dir tampoco se guarda.
+func TestDirFlagWithoutSavedConfig(t *testing.T) {
+	isolate(t)
+	cfg, _ := Load(t.TempDir())
+	cfg.Theme = "nord"
+	_ = cfg.Save()
+	again, _ := Load("")
+	if again.NotesDir != DefaultNotesDir() {
+		t.Errorf("la carpeta por defecto debía ser %q y es %q", DefaultNotesDir(), again.NotesDir)
+	}
+}
+
+// TestSetNotesDirPersists: elegir una carpeta de forma explícita (Ajustes) sí se guarda,
+// incluso si la ejecución empezó con --dir.
+func TestSetNotesDirPersists(t *testing.T) {
+	isolate(t)
+	chosen := t.TempDir()
+	cfg, _ := Load(t.TempDir())
+	cfg.SetNotesDir(chosen)
+	if err := cfg.Save(); err != nil {
+		t.Fatal(err)
+	}
+	if again, _ := Load(""); again.NotesDir != chosen {
+		t.Errorf("la carpeta elegida no se guardó: %q", again.NotesDir)
+	}
+}

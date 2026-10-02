@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	tea "charm.land/bubbletea/v2"
+	"github.com/MathiasDrizzy/lazymark/internal/config"
 )
 
 // otherNotesDir crea otra carpeta de notas con contenido distinto y algunas
@@ -262,5 +263,40 @@ func TestShortPathAndLeftTruncate(t *testing.T) {
 	}
 	if got := leftTruncate("/corta", 12); got != "/corta" {
 		t.Errorf("leftTruncate no debe tocar lo que cabe: %q", got)
+	}
+}
+
+// TestApplyNotesDirPersistsEvenWithDirFlag: con --dir, un ajuste cualquiera no
+// cambia la carpeta guardada; elegir una carpeta en Ajustes sí.
+func TestApplyNotesDirPersistsEvenWithDirFlag(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("USERPROFILE", home)
+	t.Setenv("XDG_CONFIG_HOME", filepath.Join(home, ".config"))
+	t.Setenv("AppData", filepath.Join(home, "AppData"))
+	flagDir := copyFixtures(t)
+	cfg, err := config.Load(flagDir) // como `lazymark --dir <flagDir>`
+	if err != nil {
+		t.Fatal(err)
+	}
+	m, err := New(cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	m.c.clip.Reader = noRealClipboard{}
+	m.Update(tea.WindowSizeMsg{Width: 120, Height: 35})
+
+	press(m, ",")
+	sp := m.c.top().(*settingsPopup)
+	sp.list.set(int(setPopupBg), sp.n)
+	press(m, "right") // guarda la configuración
+	if saved := savedNotesDir(t, m); strings.Contains(saved, strings.ReplaceAll(flagDir, `\`, `\\`)) {
+		t.Fatalf("un ajuste cualquiera guardó la carpeta de --dir como la de por defecto:\n%s", saved)
+	}
+
+	other := otherNotesDir(t)
+	m.applyNotesDir(other)
+	if saved := savedNotesDir(t, m); !strings.Contains(saved, strings.ReplaceAll(other, `\`, `\\`)) {
+		t.Errorf("elegir una carpeta en Ajustes debe guardarla:\n%s", saved)
 	}
 }

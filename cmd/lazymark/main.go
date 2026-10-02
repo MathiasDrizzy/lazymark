@@ -10,7 +10,9 @@ import (
 	"github.com/MathiasDrizzy/lazymark/internal/app"
 	"github.com/MathiasDrizzy/lazymark/internal/cli"
 	"github.com/MathiasDrizzy/lazymark/internal/config"
+	"github.com/MathiasDrizzy/lazymark/internal/i18n"
 	"github.com/MathiasDrizzy/lazymark/internal/mcp"
+	"github.com/MathiasDrizzy/lazymark/internal/ui/theme"
 )
 
 func extractDirArg(args []string) string {
@@ -23,6 +25,25 @@ func extractDirArg(args []string) string {
 		}
 	}
 	return ""
+}
+
+// usageHeader es la ayuda de `lazymark --help` antes de la lista de opciones.
+func usageHeader() string {
+	return i18n.T("Uso: ", "Usage: ") + config.AppName + i18n.T(" [opciones] [subcomando]\n\n", " [options] [command]\n\n") +
+		config.AppName + i18n.T(" — notas Markdown, tareas y tablero Kanban en la terminal, al estilo de lazygit\n\n", ": markdown notes, tasks and a Kanban board in the terminal, in the style of lazygit\n\n") +
+		i18n.T("Subcomandos (sin interfaz, para scripts y agentes):\n", "Commands (headless, for scripts and agents):\n") +
+		"  task list [--json] [--pending] [--dir <dir>]\n" +
+		"  task toggle --path <note> --line <n> [--dir <dir>]\n" +
+		"  note list [--json] [--dir <dir>]\n" +
+		"  note get <path> [--dir <dir>]\n" +
+		"  mcp [--dir <dir>]\n\n" +
+		i18n.T("Opciones:\n", "Options:\n")
+}
+
+// usageFooter apunta a los atajos reales: la lista completa sale del keymap,
+// así que la ayuda no repite teclas que podrían desfasarse.
+func usageFooter() string {
+	return "\n" + i18n.T("Dentro de la aplicación, ? muestra los atajos del panel actual y , abre los ajustes.\n", "Inside the app, ? shows the keys of the current panel and , opens the settings.\n")
 }
 
 func main() {
@@ -64,37 +85,16 @@ func main() {
 		themeName   string
 	)
 
-	flag.StringVar(&customDir, "dir", "", "Ruta al directorio de notas Markdown (por defecto: $HOME/Documents/notes)")
-	flag.BoolVar(&showVersion, "version", false, "Muestra la versión de lazymark y sale")
-	flag.BoolVar(&showVersion, "v", false, "Alias para --version")
-	flag.BoolVar(&noMouse, "no-mouse", false, "Desactiva la interacción con ratón y clics")
-	flag.StringVar(&themeName, "theme", "", "Tema de colores (catppuccin-mocha, catppuccin-latte, catppuccin-frappe, catppuccin-macchiato, tokyo-night, gruvbox-dark, nord)")
+	flag.StringVar(&customDir, "dir", "", i18n.T("Carpeta de notas (por defecto: ~/Documents/notes)", "Notes folder (default: ~/Documents/notes)"))
+	flag.BoolVar(&showVersion, "version", false, i18n.T("Muestra la versión y sale", "Print the version and exit"))
+	flag.BoolVar(&showVersion, "v", false, i18n.T("Alias de --version", "Alias for --version"))
+	flag.BoolVar(&noMouse, "no-mouse", false, i18n.T("Desactiva el mouse", "Disable mouse input"))
+	flag.StringVar(&themeName, "theme", "", i18n.T("Tema de colores: ", "Color theme: ")+strings.Join(theme.ThemeNames(), ", "))
 
 	flag.Usage = func() {
-		fmt.Fprintf(os.Stderr, "Uso: %s [opciones] [subcomando]\n\n", config.AppName)
-		fmt.Fprintf(os.Stderr, "lazymark — TUI para notas en Markdown, tareas e imágenes estilo Lazygit\n\n")
-		fmt.Fprintf(os.Stderr, "Subcomandos Headless e Inter-Agente:\n")
-		fmt.Fprintf(os.Stderr, "  task list [--json] [--pending]           Lista tareas con filtros\n")
-		fmt.Fprintf(os.Stderr, "  task toggle --path <nota> --line <num>   Alterna el estado de una tarea\n")
-		fmt.Fprintf(os.Stderr, "  note list [--json]                       Lista notas Markdown\n")
-		fmt.Fprintf(os.Stderr, "  note get <ruta>                          Obtiene el contenido de una nota\n")
-		fmt.Fprintf(os.Stderr, "  mcp                                      Inicia el servidor MCP nativo (JSON-RPC 2.0)\n\n")
-		fmt.Fprintf(os.Stderr, "Opciones disponibles:\n")
+		fmt.Fprint(os.Stderr, usageHeader())
 		flag.PrintDefaults()
-		fmt.Fprintf(os.Stderr, "\nAtajos Principales (Hoja 1: Vista Lazygit):\n")
-		fmt.Fprintf(os.Stderr, "  [1..4]      Navegar paneles modulares (Notas, Tareas, Tags, Preview)\n")
-		fmt.Fprintf(os.Stderr, "  [W / K]     Alternar entre Hoja 1 (Lazygit) y Hoja 2 (Tablero Kanban)\n")
-		fmt.Fprintf(os.Stderr, "  [↑/↓ ó j/k] Navegar entre ítems\n")
-		fmt.Fprintf(os.Stderr, "  [←/→ ó h/l] Alternar foco de panel\n")
-		fmt.Fprintf(os.Stderr, "  [Tab]       Alternar panel activo\n")
-		fmt.Fprintf(os.Stderr, "  [Enter / e] Abrir nota en el editor externo ($EDITOR o micro)\n")
-		fmt.Fprintf(os.Stderr, "  [c]         Crear nueva nota\n")
-		fmt.Fprintf(os.Stderr, "  [p]         Pegar imagen desde el portapapeles\n")
-		fmt.Fprintf(os.Stderr, "  [d]         Borrar nota seleccionada\n")
-		fmt.Fprintf(os.Stderr, "  [Espacio/x] Completar tarea atómicamente\n")
-		fmt.Fprintf(os.Stderr, "  [t]         Ciclar tema de colores\n")
-		fmt.Fprintf(os.Stderr, "  [q / Esc]   Salir de la aplicación\n")
-		fmt.Fprintf(os.Stderr, "  [Clic]      Seleccionar notas, cambiar pestañas y presionar botones con el mouse\n")
+		fmt.Fprint(os.Stderr, usageFooter())
 	}
 
 	flag.Parse()

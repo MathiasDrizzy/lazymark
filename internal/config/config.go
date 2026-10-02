@@ -71,6 +71,12 @@ type Config struct {
 	// popups, respetando su transparencia; "theme" pinta el color base del tema.
 	PopupBackground string `json:"popup_background"`
 	configPath      string `json:"-"`
+
+	// notesDirFromFlag indica que NotesDir viene de --dir y vale solo para esta
+	// ejecución: Save conserva en el archivo savedNotesDir (la carpeta guardada
+	// antes, vacía si no había) hasta que SetNotesDir la elija de forma explícita.
+	notesDirFromFlag bool   `json:"-"`
+	savedNotesDir    string `json:"-"`
 }
 
 // configFilePath es la ruta de config.json según el sistema (os.UserConfigDir).
@@ -149,12 +155,14 @@ func Load(customDir string) (*Config, error) {
 	cfg := DefaultConfig(notesDir)
 	cfgPath := configFilePath()
 	cfg.configPath = cfgPath
+	cfg.notesDirFromFlag = customDir != "" // sin archivo previo, --dir tampoco se guarda
 
 	// Leer el archivo encima de los defaults: un campo ausente conserva su
 	// valor por defecto en vez de quedar en cero.
 	if data, err := os.ReadFile(cfgPath); err == nil {
 		disk := *cfg
 		disk.KeymapVersion = 0
+		disk.NotesDir = "" // para distinguir "no está en el archivo" del valor por defecto
 		if err := json.Unmarshal(data, &disk); err == nil {
 			if disk.KeymapVersion < KeymapVersion {
 				// Atajos de una versión anterior: se reemplazan por los nuevos.
@@ -172,6 +180,8 @@ func Load(customDir string) (*Config, error) {
 			if disk.PopupBackground != PopupBackgroundTheme {
 				disk.PopupBackground = PopupBackgroundNone // valor ausente o desconocido
 			}
+			disk.savedNotesDir = disk.NotesDir
+			disk.notesDirFromFlag = customDir != ""
 			if customDir != "" || disk.NotesDir == "" {
 				disk.NotesDir = notesDir
 			}
@@ -254,6 +264,13 @@ func EditorExists(editor string) bool {
 	return err == nil
 }
 
+// SetNotesDir elige la carpeta de notas de forma explícita (Ajustes): desde aquí
+// se guarda como la carpeta por defecto, incluso si la ejecución empezó con --dir.
+func (c *Config) SetNotesDir(dir string) {
+	c.NotesDir = dir
+	c.notesDirFromFlag = false
+}
+
 // Path devuelve la ruta del archivo de configuración.
 func (c *Config) Path() string {
 	if c.configPath == "" {
@@ -273,7 +290,11 @@ func (c *Config) Save() error {
 	if err := os.MkdirAll(filepath.Dir(c.configPath), 0755); err != nil {
 		return err
 	}
-	data, err := json.MarshalIndent(c, "", "  ")
+	out := *c
+	if c.notesDirFromFlag {
+		out.NotesDir = c.savedNotesDir // --dir vale solo para esta ejecución
+	}
+	data, err := json.MarshalIndent(&out, "", "  ")
 	if err != nil {
 		return err
 	}
