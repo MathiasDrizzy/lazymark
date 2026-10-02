@@ -112,7 +112,7 @@ func keyLabel(k string) string {
 }
 
 // vimKeys son las teclas de compatibilidad Vim (X8): se pueden desactivar con
-// el modo de atajos "lazygit" y nunca son las únicas que disparan una acción.
+// el modo de atajos "lazy" y nunca son las únicas que disparan una acción.
 var vimKeys = map[string]bool{"h": true, "j": true, "k": true, "l": true, "g": true, "G": true, "ctrl+u": true, "ctrl+d": true}
 
 func defaultBindings() []Binding {
@@ -185,7 +185,7 @@ type Keymap struct {
 }
 
 // NewKeymap aplica los atajos personalizados de la config y el modo de
-// compatibilidad Vim ("lazygit" la desactiva).
+// compatibilidad Vim ("lazy" la desactiva).
 func NewKeymap(cfg *config.Config) Keymap {
 	kb := cfg.Keybindings
 	overrides := map[Action]string{
@@ -199,7 +199,7 @@ func NewKeymap(cfg *config.Config) Keymap {
 		actSettings:   kb.Settings,
 		actCheatsheet: kb.Cheatsheet,
 	}
-	noVim := strings.EqualFold(cfg.KeybindingMode, "lazygit")
+	noVim := cfg.KeybindingMode == config.KeybindingModeLazy
 	var out []Binding
 	for _, b := range defaultBindings() {
 		if k := overrides[b.Action]; k != "" && b.Ctx != ctxTrash && b.Ctx != ctxPreview && b.Ctx != ctxKanban {

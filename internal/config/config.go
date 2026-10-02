@@ -12,6 +12,12 @@ import (
 var Version = "0.1.0"
 
 const (
+	// Valores de Config.KeybindingMode: "lazy" son solo las flechas y las teclas
+	// propias; "dual" suma los atajos Vim (h j k l g G). Hasta v0.1.0 "lazy" se
+	// llamaba "lazygit": se sigue leyendo.
+	KeybindingModeLazy = "lazy"
+	KeybindingModeDual = "dual"
+
 	// Valores de Config.PopupBackground.
 	PopupBackgroundNone  = "none"
 	PopupBackgroundTheme = "theme"
@@ -121,7 +127,7 @@ func DefaultConfig(notesDir string) *Config {
 		ConfirmDelete:      true,
 		HideCompletedTasks: false,
 		SidebarRatio:       0.33,
-		KeybindingMode:     "dual",
+		KeybindingMode:     KeybindingModeDual,
 		Keybindings:        DefaultKeybindings(),
 		KeymapVersion:      KeymapVersion,
 		TaskScope:          "all",
@@ -179,6 +185,7 @@ func Load(customDir string) (*Config, error) {
 			if disk.TaskScope == "" {
 				disk.TaskScope = "all"
 			}
+			disk.KeybindingMode = normalizeKeybindingMode(disk.KeybindingMode)
 			if disk.PopupBackground != PopupBackgroundTheme {
 				disk.PopupBackground = PopupBackgroundNone // valor ausente o desconocido
 			}
@@ -201,6 +208,16 @@ func Load(customDir string) (*Config, error) {
 	}
 
 	return cfg, nil
+}
+
+// normalizeKeybindingMode migra el valor antiguo "lazygit" a "lazy"; todo lo que no
+// sea "lazy" queda en "dual".
+func normalizeKeybindingMode(mode string) string {
+	switch strings.ToLower(mode) {
+	case "lazy", "lazygit":
+		return KeybindingModeLazy
+	}
+	return KeybindingModeDual
 }
 
 // DetectInstalledEditors devuelve la lista de editores presentes en el sistema

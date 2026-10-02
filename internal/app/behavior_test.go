@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	tea "charm.land/bubbletea/v2"
+	"github.com/MathiasDrizzy/lazymark/internal/config"
 	"github.com/charmbracelet/x/ansi"
 )
 
@@ -269,5 +270,33 @@ func TestMovePopupClickSelects(t *testing.T) {
 	press(m, "enter")
 	if _, err := os.Stat(note); !os.IsNotExist(err) {
 		t.Error("Enter no movió la nota")
+	}
+}
+
+// TestSettingsKeysSaysLazy (K1): Ajustes muestra "Lazy + Vim" y "Lazy", nunca "Lazygit",
+// y "lazy" desactiva las teclas Vim mientras "dual" las conserva.
+func TestSettingsKeysSaysLazy(t *testing.T) {
+	m := newTestModel(t, 120, 35)
+	press(m, ",")
+	p := m.c.top().(*settingsPopup)
+	p.list.cursor = int(setKeys)
+	if m.c.cfg.KeybindingMode != config.KeybindingModeDual {
+		t.Fatalf("modo por defecto = %q", m.c.cfg.KeybindingMode)
+	}
+	if got := p.value(setKeys); got != "Lazy + Vim (hjkl)" {
+		t.Errorf("dual se muestra como %q", got)
+	}
+	if m.c.keys.Lookup("j", ctxNav) != actDown {
+		t.Error("en dual, j debe bajar")
+	}
+	press(m, "right")
+	if m.c.cfg.KeybindingMode != config.KeybindingModeLazy || p.value(setKeys) != "Lazy" {
+		t.Errorf("tras cambiar: modo %q, texto %q", m.c.cfg.KeybindingMode, p.value(setKeys))
+	}
+	if m.c.keys.Lookup("j", ctxNav) != actNone {
+		t.Error("en lazy, j no debe hacer nada")
+	}
+	if screen := plain(m); strings.Contains(strings.ToLower(screen), "lazygit") {
+		t.Errorf("la pantalla de Ajustes dice lazygit:\n%s", screen)
 	}
 }

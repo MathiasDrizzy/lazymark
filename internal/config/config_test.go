@@ -247,3 +247,40 @@ func TestSetNotesDirPersists(t *testing.T) {
 		t.Errorf("la carpeta elegida no se guardó: %q", again.NotesDir)
 	}
 }
+
+// TestKeybindingModeMigratesLazygit (K1): el modo "lazygit" de una config existente
+// se lee como "lazy" (sin atajos Vim); "dual" sigue igual; lo ausente o desconocido
+// vuelve al valor por defecto; y al guardar queda "lazy" en el archivo.
+func TestKeybindingModeMigratesLazygit(t *testing.T) {
+	cases := map[string]string{
+		`"lazygit"`: KeybindingModeLazy,
+		`"LazyGit"`: KeybindingModeLazy,
+		`"lazy"`:    KeybindingModeLazy,
+		`"dual"`:    KeybindingModeDual,
+		`"otro"`:    KeybindingModeDual,
+		`""`:        KeybindingModeDual,
+		`3`:         KeybindingModeDual,
+	}
+	for raw, want := range cases {
+		isolate(t)
+		writeDiskConfig(t, `{"keymap_version":2,"keybinding_mode":`+raw+`}`)
+		cfg, err := Load(t.TempDir())
+		if err != nil {
+			t.Fatal(err)
+		}
+		if cfg.KeybindingMode != want {
+			t.Errorf("keybinding_mode %s -> %q, se esperaba %q", raw, cfg.KeybindingMode, want)
+		}
+	}
+
+	isolate(t)
+	writeDiskConfig(t, `{"keymap_version":2,"keybinding_mode":"lazygit"}`)
+	cfg, _ := Load(t.TempDir())
+	if err := cfg.Save(); err != nil {
+		t.Fatal(err)
+	}
+	data, _ := os.ReadFile(configFilePath())
+	if !strings.Contains(string(data), `"keybinding_mode": "lazy"`) || strings.Contains(strings.ToLower(string(data)), "lazygit") {
+		t.Errorf("el archivo guardado debe decir lazy y no lazygit:\n%s", data)
+	}
+}

@@ -4,7 +4,7 @@
 
 Press `?` inside lazymark to see the keys of the panel you are in. The same list is generated from the same keymap, so it never disagrees with this page.
 
-`h` `j` `k` `l` `g` `G` `Ctrl+U` and `Ctrl+D` are Vim-style shortcuts. They work by default and can be turned off in Settings (Keybindings: `Lazygit`). Nothing in lazymark needs Vim modes.
+`h` `j` `k` `l` `g` `G` `Ctrl+U` and `Ctrl+D` are Vim-style shortcuts. They work by default and can be turned off in Settings (Keybindings: `Lazy`). Nothing in lazymark needs Vim modes.
 
 ## Global
 

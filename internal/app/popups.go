@@ -105,10 +105,10 @@ func (p *settingsPopup) value(id settingID) string {
 	case setEditor:
 		return filepath.Base(cfg.Editor)
 	case setKeys:
-		if strings.EqualFold(cfg.KeybindingMode, "lazygit") {
-			return "Lazygit"
+		if cfg.KeybindingMode == config.KeybindingModeLazy {
+			return "Lazy"
 		}
-		return "Lazygit + Vim (hjkl)"
+		return "Lazy + Vim (hjkl)"
 	case setTaskScope:
 		return scopeLabel(cfg.TaskScope)
 	case setConfirmDelete:
@@ -146,10 +146,10 @@ func (p *settingsPopup) change(id settingID, dir int) {
 	case setEditor:
 		cfg.Editor = cycle(config.DetectInstalledEditors(), filepath.Base(cfg.Editor), dir)
 	case setKeys:
-		if strings.EqualFold(cfg.KeybindingMode, "lazygit") {
-			cfg.KeybindingMode = "dual"
+		if cfg.KeybindingMode == config.KeybindingModeLazy {
+			cfg.KeybindingMode = config.KeybindingModeDual
 		} else {
-			cfg.KeybindingMode = "lazygit"
+			cfg.KeybindingMode = config.KeybindingModeLazy
 		}
 	case setTaskScope:
 		cfg.TaskScope = cycle(p.scopes(), cfg.TaskScope, dir)

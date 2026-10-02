@@ -68,7 +68,7 @@ What lazymark reads from your notes:
 | `task_scope` | `all`, `tag:<tag>`, `folder:<folder>` | `all` | Which notes feed the Tasks panel: all of them, the ones with a tag, or the ones inside a folder. |
 | `hide_completed_tasks` | `true`, `false` | `false` | Hide finished tasks. Toggled with `H` in the Tasks panel. |
 | `confirm_delete` | `true`, `false` | `true` | Ask before moving notes to the trash. Folders with content always ask. |
-| `keybinding_mode` | `dual`, `lazygit` | `dual` | `dual` keeps the Vim-style `h` `j` `k` `l` `g` `G` next to the arrows; `lazygit` turns them off. |
+| `keybinding_mode` | `dual`, `lazy` | `dual` | `dual` (shown as `Lazy + Vim` in Settings) keeps the Vim-style `h` `j` `k` `l` `g` `G` next to the arrows; `lazy` turns them off. A `lazygit` value written by v0.1.0 is read as `lazy`. |
 | `mouse_click` | `true`, `false` | `true` | Mouse support. `--no-mouse` turns it off for one run. |
 | `sidebar_ratio` | `0.15` to `0.75` | `0.33` | Width of the left column. Drag the divider or press `[` and `]`. |
 | `show_tasks_tab` | `true`, `false` | `true` | Show the Tasks panel. |
