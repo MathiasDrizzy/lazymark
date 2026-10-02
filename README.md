@@ -1,5 +1,7 @@
 <div align="center">
 
+<img src="assets/brand/lazymark-256.png" alt="lazymark mascot: a sloth hanging a pencil from its claws" width="128">
+
 # lazymark
 
 **Markdown notes, tasks and a Kanban board in your terminal, in the style of lazygit.**
