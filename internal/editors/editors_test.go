@@ -179,3 +179,45 @@ func TestUnknownEditor(t *testing.T) {
 		t.Error("un editor desconocido debe dar error")
 	}
 }
+
+// TestWarnsWhenKeyIsTaken (auditoría): si la tecla ya está enlazada por el usuario, el plugin no la
+// pisa pero install avisa de qué hacer (el comando de micro, :LazymarkPaste en vim, y en nano
+// se niega y explica cómo agregar el bind con otra tecla).
+func TestWarnsWhenKeyIsTaken(t *testing.T) {
+	e := env(t)
+	micro := filepath.Join(e.Home, ".config", "micro")
+	os.MkdirAll(micro, 0o755)
+	os.WriteFile(filepath.Join(micro, "bindings.json"), []byte(`{"Alt-i": "Save"}`), 0o644)
+	out, err := Install("micro", e)
+	if err != nil || !strings.Contains(strings.Join(out, "\n"), "aviso") || !strings.Contains(strings.Join(out, "\n"), "pasteimage") {
+		t.Errorf("micro: debía avisar de Alt-i y de `> pasteimage`: %v %v", out, err)
+	}
+	if b, _ := os.ReadFile(filepath.Join(micro, "bindings.json")); string(b) != `{"Alt-i": "Save"}` {
+		t.Error("no se debe tocar bindings.json")
+	}
+	if again, _ := Install("micro", e); !strings.Contains(strings.Join(again, "\n"), "aviso") {
+		t.Error("el aviso debe repetirse al instalar otra vez")
+	}
+	// y sin conflicto, nada de avisos
+	if out, _ := Install("micro", env(t)); strings.Contains(strings.Join(out, "\n"), "aviso") {
+		t.Errorf("micro sin conflicto no debe avisar: %v", out)
+	}
+
+	v := env(t)
+	os.WriteFile(filepath.Join(v.Home, ".vimrc"), []byte("\" mi vimrc\nnnoremap <Leader>ip :echo 'mio'<CR>\n"), 0o644)
+	out, err = Install("vim", v)
+	if err != nil || !strings.Contains(strings.Join(out, "\n"), "LazymarkPaste") {
+		t.Errorf("vim: debía avisar de <Leader>ip y de :LazymarkPaste: %v %v", out, err)
+	}
+	v2 := env(t)
+	os.WriteFile(filepath.Join(v2.Home, ".vimrc"), []byte("\" nnoremap <Leader>ip comentado\n"), 0o644)
+	if out, _ := Install("vim", v2); strings.Contains(strings.Join(out, "\n"), "aviso") {
+		t.Errorf("vim: un mapeo comentado no cuenta: %v", out)
+	}
+
+	n := env(t)
+	os.WriteFile(filepath.Join(n.Home, ".nanorc"), []byte("bind M-7 \"{justify}\" main\n"), 0o644)
+	if _, err := Install("nano", n); err == nil || !strings.Contains(err.Error(), "otra tecla") {
+		t.Errorf("nano: el error debe explicar cómo usar otra tecla: %v", err)
+	}
+}

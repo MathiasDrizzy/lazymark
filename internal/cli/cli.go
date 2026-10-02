@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/MathiasDrizzy/lazymark/internal/config"
+	"github.com/MathiasDrizzy/lazymark/internal/i18n"
 	"github.com/MathiasDrizzy/lazymark/internal/storage"
 	"github.com/MathiasDrizzy/lazymark/internal/ui/views"
 )
@@ -58,6 +59,10 @@ func RunTaskWithWriter(w io.Writer, args []string, defaultNotesDir string) error
 	}
 
 	action := args[0]
+	if action == "-h" || action == "--help" {
+		fmt.Fprint(w, i18n.T("uso: lazymark task list [--json] [--pending] [--dir <carpeta>]\n     lazymark task toggle --path <nota> --line <n> [--dir <carpeta>]\n", "usage: lazymark task list [--json] [--pending] [--dir <folder>]\n       lazymark task toggle --path <note> --line <n> [--dir <folder>]\n"))
+		return nil
+	}
 	fs := flag.NewFlagSet("task "+action, flag.ContinueOnError)
 	fs.SetOutput(w)
 
@@ -181,6 +186,10 @@ func RunNoteWithWriter(w io.Writer, args []string, defaultNotesDir string) error
 	}
 
 	action := args[0]
+	if action == "-h" || action == "--help" {
+		fmt.Fprint(w, i18n.T("uso: lazymark note list [--json] [--dir <carpeta>]\n     lazymark note get <ruta> [--dir <carpeta>]\n", "usage: lazymark note list [--json] [--dir <folder>]\n       lazymark note get <path> [--dir <folder>]\n"))
+		return nil
+	}
 	fs := flag.NewFlagSet("note "+action, flag.ContinueOnError)
 	fs.SetOutput(w)
 

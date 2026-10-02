@@ -5,6 +5,7 @@ package editors
 
 import (
 	"embed"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
@@ -144,7 +145,34 @@ func (e Env) microDir() string {
 	return filepath.Join(e.configHome(), "micro")
 }
 
+// microBindingWarning avisa si el usuario ya enlazó Alt-i en bindings.json: el plugin no la pisa
+// (TryBindKey con overwrite=false), así que el atajo no funcionaría y hay que usar el comando.
+func (e Env) microBindingWarning() []string {
+	b, err := os.ReadFile(filepath.Join(e.microDir(), "bindings.json"))
+	if err != nil {
+		return nil
+	}
+	var m map[string]any
+	if json.Unmarshal(b, &m) != nil {
+		return nil
+	}
+	for k, v := range m {
+		if strings.EqualFold(k, "Alt-i") {
+			return []string{fmt.Sprintf("micro: aviso: Alt-i ya está enlazada a %q en tu bindings.json y no se pisa; el atajo de lazymark no funcionará. Usa el comando `> pasteimage` (Ctrl-e) o cambia ese binding", fmt.Sprint(v))}
+		}
+	}
+	return nil
+}
+
 func installMicro(e Env) ([]string, error) {
+	done, err := installMicroFiles(e)
+	if err != nil {
+		return done, err
+	}
+	return append(done, e.microBindingWarning()...), nil
+}
+
+func installMicroFiles(e Env) ([]string, error) {
 	dir := filepath.Join(e.microDir(), "plug", "lazymark")
 	lua, repo := filepath.Join(dir, "lazymark.lua"), filepath.Join(dir, "repo.json")
 	// un plug/lazymark/ con repo.json pero sin nuestro .lua es de otro plugin: no se toca
@@ -200,12 +228,37 @@ func (e Env) vimFile() string {
 	return filepath.Join(e.Home, ".vim", "pack", "lazymark", "start", "lazymark", "plugin", "lazymark.vim")
 }
 
+// vimMappingWarning avisa si algún vimrc del usuario ya mapea <Leader>ip: el plugin solo crea el
+// mapeo si está libre, así que habría que usar :LazymarkPaste o remapear <Plug>(lazymark-paste).
+func (e Env) vimMappingWarning() []string {
+	for _, rc := range []string{
+		filepath.Join(e.Home, ".vimrc"), filepath.Join(e.Home, ".vim", "vimrc"),
+		filepath.Join(e.configHome(), "vim", "vimrc"), filepath.Join(e.Home, ".config", "vim", "vimrc"),
+	} {
+		b, err := os.ReadFile(rc)
+		if err != nil {
+			continue
+		}
+		for _, line := range strings.Split(string(b), "\n") {
+			l := strings.ToLower(strings.ReplaceAll(line, " ", ""))
+			if strings.Contains(l, "<leader>ip") && strings.Contains(l, "map") && !strings.HasPrefix(strings.TrimSpace(line), `"`) {
+				return []string{fmt.Sprintf("vim: aviso: %s ya mapea <Leader>ip y el plugin no lo pisa. Usa `:LazymarkPaste` o mapea otra tecla: nmap <Leader>x <Plug>(lazymark-paste)", rc)}
+			}
+		}
+	}
+	return nil
+}
+
 func installVim(e Env) ([]string, error) {
 	changed, err := writeOwned(e.vimFile(), asset("vim/lazymark.vim"))
-	if err != nil || !changed {
+	if err != nil {
 		return nil, err
 	}
-	return []string{"vim: " + e.vimFile()}, nil
+	var done []string
+	if changed {
+		done = append(done, "vim: "+e.vimFile())
+	}
+	return append(done, e.vimMappingWarning()...), nil
 }
 
 func uninstallVim(e Env) ([]string, error) {
@@ -272,7 +325,7 @@ func installNano(e Env) ([]string, error) {
 		return nil, nil // ya está
 	}
 	if bindsKey(text, "M-7") {
-		return nil, fmt.Errorf("%s ya enlaza M-7: no se pisa (cambia o quita ese bind y vuelve a instalar)", rc)
+		return nil, fmt.Errorf("%s ya enlaza M-7 y no se pisa, así que no se instaló. Quita o cambia ese bind y vuelve a instalar, o agrega a mano con otra tecla libre: bind <tecla> \"{execute}lazymark paste --no-newline 2>/dev/null{enter}\" main", rc)
 	}
 	block := asset("nano/lazymark.nanorc")
 	add := block

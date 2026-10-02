@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"io"
 	"slices"
+	"strings"
 
 	"github.com/MathiasDrizzy/lazymark/internal/editors"
 	"github.com/MathiasDrizzy/lazymark/internal/i18n"
@@ -15,11 +16,23 @@ import (
 // con un HOME aislado lo apuntan a otro lado.
 func RunEditorPlugins(args []string, env editors.Env, stdout, stderr io.Writer) int {
 	usage := i18n.T("uso: lazymark editor-plugins install|uninstall [micro|vim|nano]…", "usage: lazymark editor-plugins install|uninstall [micro|vim|nano]…")
+	for _, a := range args {
+		if a == "-h" || a == "--help" {
+			fmt.Fprintln(stdout, usage)
+			return 0
+		}
+	}
 	if len(args) == 0 || (args[0] != "install" && args[0] != "uninstall") {
 		fmt.Fprintln(stderr, usage)
 		return 2
 	}
 	names := args[1:]
+	for _, n := range names {
+		if strings.HasPrefix(n, "-") {
+			fmt.Fprintf(stderr, i18n.T("opción desconocida %q\n%s\n", "unknown option %q\n%s\n"), n, usage)
+			return 2
+		}
+	}
 	if len(names) == 0 {
 		names = editors.Names
 	}

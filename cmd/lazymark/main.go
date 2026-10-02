@@ -81,6 +81,12 @@ func main() {
 			os.Exit(cli.RunEditorPlugins(os.Args[idx+2:], editors.Env{Home: home, Getenv: os.Getenv}, os.Stdout, os.Stderr))
 		}
 		if arg == "mcp" {
+			for _, a := range os.Args[idx+2:] {
+				if a == "-h" || a == "--help" {
+					fmt.Println(i18n.T("uso: lazymark mcp [--dir <carpeta>]  (servidor MCP por stdio)", "usage: lazymark mcp [--dir <folder>]  (MCP server over stdio)"))
+					return
+				}
+			}
 			dir := extractDirArg(os.Args[1:])
 			if err := mcp.RunServer(dir); err != nil {
 				fmt.Fprintf(os.Stderr, "Error en servidor MCP: %v\n", err)
@@ -113,6 +119,12 @@ func main() {
 	}
 
 	flag.Parse()
+
+	if flag.NArg() > 0 { // una palabra suelta que no es un subcomando: no se abre la interfaz por error
+		fmt.Fprintf(os.Stderr, i18n.T("lazymark: subcomando desconocido %q\n\n", "lazymark: unknown command %q\n\n"), flag.Arg(0))
+		flag.Usage()
+		os.Exit(2)
+	}
 
 	if showVersion {
 		fmt.Printf("%s v%s\n", config.AppName, config.Version)

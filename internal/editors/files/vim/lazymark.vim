@@ -35,6 +35,10 @@ endfunction
 
 command! -nargs=0 LazymarkPaste call s:Paste()
 nnoremap <silent> <Plug>(lazymark-paste) :LazymarkPaste<CR>
-if !hasmapto('<Plug>(lazymark-paste)') && mapcheck('<Leader>ip', 'n') ==# ''
-  nmap <unique> <Leader>ip <Plug>(lazymark-paste)
+if !hasmapto('<Plug>(lazymark-paste)')
+  if mapcheck('<Leader>ip', 'n') ==# ''
+    nmap <unique> <Leader>ip <Plug>(lazymark-paste)
+  else
+    echom 'lazymark: <Leader>ip is already mapped; use :LazymarkPaste or nmap <Leader>x <Plug>(lazymark-paste)'
+  endif
 endif

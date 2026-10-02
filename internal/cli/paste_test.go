@@ -3,12 +3,14 @@ package cli
 import (
 	"bytes"
 	"errors"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 
 	"github.com/MathiasDrizzy/lazymark/internal/clipboard"
+	"github.com/MathiasDrizzy/lazymark/internal/editors"
 )
 
 // fakeClip simula el portapapeles: P1 nunca toca el del sistema (R17).
@@ -71,6 +73,7 @@ func TestPasteWithFile(t *testing.T) {
 	os.WriteFile(src, []byte("JPEG-simulado"), 0o644)
 	note := filepath.Join(dir, "notas", "viaje.md")
 	os.MkdirAll(filepath.Dir(note), 0o755)
+	os.WriteFile(note, nil, 0o644)
 
 	code, out, errOut := pasteWith(t, fakeClip{files: []string{filepath.Join(dir, "origen", "no-es-imagen.txt"), src}}, []string{note}, nil)
 	if code != 0 || errOut != "" {
@@ -93,6 +96,7 @@ func TestPasteWithFile(t *testing.T) {
 func TestPasteWithoutImage(t *testing.T) {
 	dir := t.TempDir()
 	note := filepath.Join(dir, "n.md")
+	os.WriteFile(note, nil, 0o644)
 	code, out, errOut := pasteWith(t, fakeClip{}, []string{note}, nil)
 	if code == 0 || out != "" || strings.TrimSpace(errOut) == "" {
 		t.Fatalf("exit=%d stdout=%q stderr=%q", code, out, errOut)
@@ -106,6 +110,7 @@ func TestPasteWithoutImage(t *testing.T) {
 func TestPasteNoteFromEnvironment(t *testing.T) {
 	dir := t.TempDir()
 	note := filepath.Join(dir, "desde-env.md")
+	os.WriteFile(note, nil, 0o644)
 	code, out, _ := pasteWith(t, fakeClip{png: []byte("x")}, nil, map[string]string{"LAZYMARK_NOTE": note})
 	if code != 0 || !strings.Contains(out, "assets/desde-env-") {
 		t.Fatalf("exit=%d stdout=%q", code, out)
@@ -119,8 +124,105 @@ func TestPasteNoteFromEnvironment(t *testing.T) {
 // TestPasteNoNewline (P1): --no-newline imprime la referencia sin salto de línea (para nano).
 func TestPasteNoNewline(t *testing.T) {
 	dir := t.TempDir()
+	os.WriteFile(filepath.Join(dir, "n.md"), nil, 0o644)
 	code, out, _ := pasteWith(t, fakeClip{png: []byte("x")}, []string{"--no-newline", filepath.Join(dir, "n.md")}, nil)
 	if code != 0 || !strings.HasPrefix(out, "![](assets/n-") || strings.HasSuffix(out, "\n") || !strings.HasSuffix(out, ")") {
 		t.Errorf("exit=%d stdout=%q", code, out)
+	}
+}
+
+// spyClip cuenta cuántas veces se mira el portapapeles: con una entrada inválida no debe mirarse nunca (R17).
+type spyClip struct{ reads *int }
+
+func (s spyClip) ReadImage(dest string) error {
+	*s.reads++
+	return os.WriteFile(dest, []byte("x"), 0o644)
+}
+func (s spyClip) ReadFiles() ([]string, error) { *s.reads++; return nil, errors.New("no") }
+
+// TestPasteValidatesBeforeTouchingClipboard (R17): -h/--help, opciones desconocidas, argumentos de más,
+// una nota que no existe o que no termina en .md fallan (o ayudan) SIN leer el portapapeles y sin
+// escribir nada, ni en el cwd ni junto a la nota. Antes `--help` se tomaba como el nombre de la
+// nota y escribía ./assets/--help-<fecha>.png con el portapapeles real.
+func TestPasteValidatesBeforeTouchingClipboard(t *testing.T) {
+	dir := t.TempDir()
+	cwd, _ := os.Getwd()
+	t.Chdir(dir)
+	defer os.Chdir(cwd)
+	real := filepath.Join(dir, "real.md")
+	os.WriteFile(real, nil, 0o644)
+	txt := filepath.Join(dir, "notas.txt")
+	os.WriteFile(txt, nil, 0o644)
+	cases := []struct {
+		name string
+		args []string
+		env  map[string]string
+		code int
+	}{
+		{"--help", []string{"--help"}, nil, 0},
+		{"-h", []string{"-h"}, nil, 0},
+		{"opción desconocida", []string{"--foo"}, nil, 2},
+		{"opción desconocida y nota", []string{"--foo", real}, nil, 2},
+		{"-x", []string{"-x"}, nil, 2},
+		{"dos notas", []string{real, real}, nil, 2},
+		{"nota inexistente", []string{filepath.Join(dir, "no-existe.md")}, nil, 2},
+		{"no termina en .md", []string{txt}, nil, 2},
+		{"una carpeta .md", []string{dir + "/carpeta.md"}, nil, 2},
+		{"sin nota", nil, nil, 2},
+		{"$LAZYMARK_NOTE inexistente", nil, map[string]string{"LAZYMARK_NOTE": filepath.Join(dir, "x.md")}, 2},
+	}
+	os.Mkdir(filepath.Join(dir, "carpeta.md"), 0o755)
+	for _, c := range cases {
+		reads := 0
+		var out, errb bytes.Buffer
+		saver := &clipboard.Saver{Reader: spyClip{&reads}, Files: spyClip{&reads}}
+		code := RunPaste(c.args, func(k string) string { return c.env[k] }, saver, &out, &errb)
+		if code != c.code {
+			t.Errorf("%s: exit = %d, se esperaba %d", c.name, code, c.code)
+		}
+		if reads != 0 {
+			t.Errorf("%s: leyó el portapapeles %d veces", c.name, reads)
+		}
+		if c.code == 0 && !strings.Contains(out.String(), "lazymark paste") {
+			t.Errorf("%s: la ayuda no sale por stdout: %q", c.name, out.String())
+		}
+		if c.code != 0 && (out.Len() != 0 || errb.Len() == 0) {
+			t.Errorf("%s: stdout=%q stderr=%q", c.name, out.String(), errb.String())
+		}
+	}
+	// nada escrito: ni assets/ en el cwd ni al lado de la nota ni archivos raros
+	entries, _ := os.ReadDir(dir)
+	for _, e := range entries {
+		if e.Name() == "assets" || strings.HasPrefix(e.Name(), "--") {
+			t.Errorf("quedó %q escrito", e.Name())
+		}
+	}
+}
+
+// TestHelpAndUnknownOptionsAreSafe (R17): -h/--help ayuda y una opción desconocida se rechaza en
+// editor-plugins y en task/note, sin tocar nada.
+func TestHelpAndUnknownOptionsAreSafe(t *testing.T) {
+	home := t.TempDir()
+	env := editors.Env{Home: home, Getenv: func(string) string { return "" }}
+	for _, args := range [][]string{{"--help"}, {"install", "--help"}, {"-h"}} {
+		var out, errb bytes.Buffer
+		if code := RunEditorPlugins(args, env, &out, &errb); code != 0 || !strings.Contains(out.String(), "editor-plugins") {
+			t.Errorf("editor-plugins %v: exit=%d stdout=%q", args, code, out.String())
+		}
+	}
+	for _, args := range [][]string{{"install", "--foo"}, {"uninstall", "-x", "micro"}} {
+		var out, errb bytes.Buffer
+		if code := RunEditorPlugins(args, env, &out, &errb); code != 2 || out.Len() != 0 {
+			t.Errorf("editor-plugins %v: exit=%d stdout=%q", args, code, out.String())
+		}
+	}
+	if entries, _ := os.ReadDir(home); len(entries) != 0 {
+		t.Errorf("se escribió algo en el HOME: %v", entries)
+	}
+	for _, run := range []func(io.Writer, []string, string) error{RunTaskWithWriter, RunNoteWithWriter} {
+		var out bytes.Buffer
+		if err := run(&out, []string{"--help"}, t.TempDir()); err != nil || !strings.Contains(out.String(), "lazymark") {
+			t.Errorf("--help: err=%v stdout=%q", err, out.String())
+		}
 	}
 }

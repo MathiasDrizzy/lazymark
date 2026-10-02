@@ -35,7 +35,25 @@ function pasteImage(bp)
 	micro.InfoBar():Message("lazymark: " .. ref)
 end
 
+-- true if the user already binds Alt-i in bindings.json (TryBindKey does not tell us)
+local function altITaken()
+	local f = io.open(config.ConfigDir .. "/bindings.json", "r")
+	if f == nil then
+		return false
+	end
+	local data = f:read("*a")
+	f:close()
+	return data ~= nil and string.find(data, '"Alt%-i"') ~= nil
+end
+
 function init()
 	config.MakeCommand("pasteimage", pasteImage, config.NoComplete)
 	config.TryBindKey("Alt-i", "lua:lazymark.pasteImage", false)
+end
+
+function postinit()
+	if altITaken() then
+		-- Alt-i already has a binding of yours: it is not replaced; the command keeps working
+		micro.InfoBar():Message("lazymark: Alt-i is already bound; paste images with the command > pasteimage")
+	end
 end

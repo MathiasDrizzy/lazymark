@@ -9,7 +9,7 @@ lazymark paste [--no-newline] [<note.md>]
 ```
 
 - It saves the copied image in `<note's folder>/assets/<note>-<date>-<time>.<ext>` (a copied image file is copied; the original is not touched) and prints only `![](assets/…)` on stdout.
-- Without a note it uses `$LAZYMARK_NOTE`, which lazymark defines when it opens your editor with `e` or `Enter`. It also puts its own folder in the editor's `PATH`, so the plugins find `lazymark` without any setup.
+- The note must exist and end in `.md`, and the options are checked **before** the clipboard is read: `-h`/`--help` prints the usage, an unknown option, a second note, a missing file or a non-`.md` file exits with an error and touches nothing. Without a note it uses `$LAZYMARK_NOTE`, which lazymark defines when it opens your editor with `e` or `Enter`. It also puts its own folder in the editor's `PATH`, so the plugins find `lazymark` without any setup.
 - If nothing is copied it exits with an error, prints the reason on stderr and nothing on stdout, so the editor inserts nothing.
 - On macOS it reads the clipboard with `pngpaste` if you have it, or with `osascript`; on Linux with `wl-paste` or `xclip`; on Windows with PowerShell.
 
@@ -21,7 +21,7 @@ lazymark editor-plugins install micro      # or only one of them
 lazymark editor-plugins uninstall          # takes everything back
 ```
 
-Installing twice is the same as installing once. It never overwrites a file of yours that is not lazymark's, and `uninstall` leaves your configuration as it was.
+If the key is already bound by you (`Alt-i` in micro's `bindings.json`, `<Leader>ip` in your vimrc), the plugin leaves your binding alone and `install` tells you so and what to use instead (`> pasteimage` in micro, `:LazymarkPaste` in vim); micro also says it in its info bar. For nano, `install` stops with the `bind` line to add with another free key. Installing twice is the same as installing once. It never overwrites a file of yours that is not lazymark's, and `uninstall` leaves your configuration as it was.
 
 | Editor | What is written | Key | Why this key |
 |---|---|---|---|
