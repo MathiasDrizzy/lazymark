@@ -23,15 +23,70 @@ type Reader interface {
 	ReadImage(dest string) error
 }
 
+// FileReader obtiene las rutas de los archivos copiados en el portapapeles (Cmd+C
+// sobre un archivo en el Finder). También va detrás de una interfaz por R17.
+type FileReader interface {
+	ReadFiles() ([]string, error)
+}
+
+// ErrNoImage es lo que devuelve Paste cuando el portapapeles no tiene una imagen.
+var ErrNoImage = errors.New("no hay una imagen copiada (ni una captura ni un archivo de imagen)")
+
 // Saver guarda imágenes en la carpeta assets/ que hay junto a una nota.
 type Saver struct {
 	Reader Reader
+	Files  FileReader // opcional: sin él, Paste solo mira las capturas
 	now    func() time.Time
 }
 
 // New crea un Saver que lee el portapapeles real del sistema.
 func New() *Saver {
-	return &Saver{Reader: SystemReader{}, now: time.Now}
+	return &Saver{Reader: SystemReader{}, Files: SystemReader{}, now: time.Now}
+}
+
+// Paste guarda en <noteDir>/assets/ la imagen que haya copiada y devuelve su
+// referencia relativa. Primero mira si hay un archivo de imagen copiado (se copia;
+// el original no se toca) y después una captura (datos de imagen). Si no hay nada,
+// devuelve ErrNoImage y no deja ninguna carpeta assets/ creada de más.
+func (s *Saver) Paste(noteDir, noteName string) (string, error) {
+	_, statErr := os.Stat(filepath.Join(noteDir, "assets"))
+	existed := statErr == nil
+	cleanup := func() {
+		if !existed {
+			_ = os.Remove(filepath.Join(noteDir, "assets")) // solo si quedó vacía
+		}
+	}
+	if s.Files != nil {
+		if paths, err := s.Files.ReadFiles(); err == nil {
+			for _, p := range paths {
+				if !isImageFile(p) {
+					continue
+				}
+				ref, err := s.ImportFile(noteDir, noteName, p)
+				if err != nil {
+					cleanup()
+					return "", err
+				}
+				return ref, nil
+			}
+		}
+	}
+	if s.Reader != nil {
+		if ref, err := s.SaveFromClipboard(noteDir, noteName); err == nil {
+			return ref, nil
+		}
+	}
+	cleanup()
+	return "", ErrNoImage
+}
+
+// isImageFile indica si p es un archivo regular con una extensión de imagen que el preview decodifica.
+func isImageFile(p string) bool {
+	if !imageExts[strings.ToLower(filepath.Ext(p))] {
+		return false
+	}
+	fi, err := os.Stat(p)
+	return err == nil && fi.Mode().IsRegular()
 }
 
 // SaveFromClipboard guarda la imagen del portapapeles en <noteDir>/assets/ y
@@ -240,6 +295,45 @@ func (SystemReader) ReadImage(dest string) error {
 		return run(exec.Command("powershell", "-NoProfile", "-NonInteractive", "-Command", ps))
 	}
 	return fmt.Errorf("sistema operativo no soportado: %s", runtime.GOOS)
+}
+
+// ReadFiles devuelve las rutas de los archivos copiados en el portapapeles: osascript
+// en macOS, wl-paste o xclip (text/uri-list) en Linux y PowerShell en Windows.
+func (SystemReader) ReadFiles() ([]string, error) {
+	var out []byte
+	var err error
+	switch runtime.GOOS {
+	case "darwin":
+		out, err = exec.Command("osascript", "-e", `POSIX path of (the clipboard as «class furl»)`).Output()
+	case "linux":
+		if path, lerr := exec.LookPath("wl-paste"); lerr == nil {
+			out, err = exec.Command(path, "--type", "text/uri-list").Output()
+		} else if path, lerr := exec.LookPath("xclip"); lerr == nil {
+			out, err = exec.Command(path, "-selection", "clipboard", "-t", "text/uri-list", "-o").Output()
+		} else {
+			return nil, errors.New("se requiere 'wl-paste' o 'xclip' para leer archivos copiados en Linux")
+		}
+	case "windows":
+		out, err = exec.Command("powershell", "-NoProfile", "-NonInteractive", "-Command",
+			`Get-Clipboard -Format FileDropList | ForEach-Object { $_.FullName }`).Output()
+	default:
+		return nil, fmt.Errorf("sistema operativo no soportado: %s", runtime.GOOS)
+	}
+	if err != nil {
+		return nil, fmt.Errorf("no hay archivos copiados (%v)", err)
+	}
+	var paths []string
+	for _, line := range strings.Split(string(out), "\n") {
+		if line = strings.TrimSpace(line); line == "" || strings.HasPrefix(line, "#") {
+			continue
+		}
+		if p, ok := pastedPath(line); ok {
+			paths = append(paths, p)
+		} else if filepath.IsAbs(line) && isImageFile(line) { // osascript y PowerShell imprimen la ruta tal cual
+			paths = append(paths, line)
+		}
+	}
+	return paths, nil
 }
 
 func run(cmd *exec.Cmd) error {

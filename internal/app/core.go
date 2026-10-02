@@ -5,6 +5,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"slices"
 	"strings"
 
 	tea "charm.land/bubbletea/v2"
@@ -114,6 +115,21 @@ func (c *core) confirm(title, msg string, always bool, onYes func() tea.Cmd) tea
 
 // openEditor suspende la TUI y abre path en el editor configurado.
 func (c *core) openEditor(path string, line int) tea.Cmd {
+	cmd := c.editorCommand(path, line)
+	if cmd == nil {
+		return nil
+	}
+	c.editing = true
+	c.kitty.Reset() // el editor se abre sin imágenes en la terminal
+	return tea.ExecProcess(cmd, func(err error) tea.Msg {
+		return EditorFinishedMsg{Path: path, Err: err}
+	})
+}
+
+// editorCommand arma el comando del editor para path. El editor corre con
+// LAZYMARK_NOTE (la nota que abre) y con la carpeta de este ejecutable en el PATH, para
+// que sus plugins puedan llamar a `lazymark paste` sin más configuración.
+func (c *core) editorCommand(path string, line int) *exec.Cmd {
 	if path == "" {
 		return nil
 	}
@@ -129,11 +145,36 @@ func (c *core) openEditor(path string, line int) tea.Cmd {
 		args = append(args, fmt.Sprintf("+%d", line))
 	}
 	args = append(args, path)
-	c.editing = true
-	c.kitty.Reset() // el editor se abre sin imágenes en la terminal
-	return tea.ExecProcess(exec.Command(bin, args...), func(err error) tea.Msg {
-		return EditorFinishedMsg{Path: path, Err: err}
-	})
+	cmd := exec.Command(bin, args...)
+	exe, _ := os.Executable()
+	cmd.Env = editorEnv(os.Environ(), path, exe)
+	return cmd
+}
+
+// editorEnv agrega a env LAZYMARK_NOTE=note y, si hace falta, la carpeta de exe al
+// principio del PATH. No modifica env.
+func editorEnv(env []string, note, exe string) []string {
+	out := make([]string, 0, len(env)+2)
+	pathIdx := -1
+	for _, kv := range env {
+		if strings.HasPrefix(kv, "LAZYMARK_NOTE=") {
+			continue
+		}
+		if strings.HasPrefix(kv, "PATH=") {
+			pathIdx = len(out)
+		}
+		out = append(out, kv)
+	}
+	out = append(out, "LAZYMARK_NOTE="+note)
+	if exe != "" {
+		dir := filepath.Dir(exe)
+		if pathIdx < 0 {
+			out = append(out, "PATH="+dir)
+		} else if cur := strings.TrimPrefix(out[pathIdx], "PATH="); !slices.Contains(filepath.SplitList(cur), dir) {
+			out[pathIdx] = "PATH=" + dir + string(os.PathListSeparator) + cur
+		}
+	}
+	return out
 }
 
 // appendLine agrega text al final de la nota sin reescribir el resto (X10).
