@@ -84,6 +84,9 @@ func (m *AppModel) renderPreview() string {
 			title = "[4]─" + iconFolderOpen + " " + e.Name
 			return m.renderRest(kind, title, fmt.Sprintf(i18n.T("%d nota(s)", "%d note(s)"), 0), r, active)
 		}
+		if n := m.displayedNote(); kind == restEmptyNote && n != nil {
+			title = "[4]─" + n.Title
+		}
 		return m.renderRest(kind, title, "", r, active)
 	}
 	switch m.lastLeft {

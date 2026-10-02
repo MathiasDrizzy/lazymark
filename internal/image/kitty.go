@@ -362,19 +362,51 @@ func Encode(j Job) (string, error) {
 	if err != nil {
 		return "", err
 	}
+	return encodeImage(scaleDown(img, maxSide), j.Cols, j.Rows)
+}
+
+// encodeImage arma la secuencia de transmisión de img (PNG en base64, en trozos) para mostrarla en
+// cols x rows celdas, con el ID de marcador.
+func encodeImage(img goimage.Image, cols, rows int) (string, error) {
 	var b strings.Builder
-	err = kitty.EncodeGraphics(&b, scaleDown(img, maxSide), &kitty.Options{
+	err := kitty.EncodeGraphics(&b, img, &kitty.Options{
 		Action:           kitty.TransmitAndPut,
 		ID:               sentinelID,
 		Format:           kitty.PNG,
 		Transmission:     kitty.Direct,
 		Chunk:            true,
-		Columns:          j.Cols,
-		Rows:             j.Rows,
+		Columns:          cols,
+		Rows:             rows,
 		VirtualPlacement: true,
 		Quiet:            2,
 	})
 	return b.String(), err
+}
+
+// BlockImage es Block para una imagen que ya está en memoria y es pequeña (la mascota): se codifica
+// aquí mismo, sin goroutine, y se muestra tal cual en cols x rows celdas. name identifica la imagen: con
+// el mismo nombre y tamaño se reutiliza lo ya transmitido. Sin soporte devuelve ok=false.
+func (c *Client) BlockImage(name string, img goimage.Image, cols, rows int) (lines []string, ok bool) {
+	if !c.supported || !c.visible || cols < 1 || rows < 1 {
+		return nil, false
+	}
+	key := fmt.Sprintf("img:%s|%d|%d|%dx%d", name, cols, rows, img.Bounds().Dx(), img.Bounds().Dy())
+	if p, ok := c.live[key]; ok {
+		return Placeholders(p.id, p.cols, p.rows), true
+	}
+	if c.failed[key] {
+		return nil, false
+	}
+	tmpl, err := encodeImage(img, cols, rows)
+	if err != nil {
+		c.failed[key] = true
+		return nil, false
+	}
+	p := placed{id: c.nextID, cols: cols, rows: rows}
+	c.nextID++
+	c.live[key] = p
+	c.pending = append(c.pending, withID(tmpl, p.id))
+	return Placeholders(p.id, p.cols, p.rows), true
 }
 
 // withID pone el ID real en la primera parte de control de una secuencia hecha por Encode (las

@@ -45,6 +45,9 @@ func (m *AppModel) handleClick(msg tea.MouseClickMsg) tea.Cmd {
 		}
 		return nil
 	}
+	if cmd, ok := m.mascotClick(x, y); ok {
+		return cmd
+	}
 	if l.Divider.Contains(x, y) {
 		m.dragging = true
 		return nil

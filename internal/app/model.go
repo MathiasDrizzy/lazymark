@@ -20,12 +20,14 @@ type AppModel struct {
 	layout Layout
 	w, h   int
 
-	focus      panelID
-	lastLeft   panelID
-	zoom       bool
-	kanbanOn   bool
-	imgTickSel int // selección para la que ya se armó el tick de carga de imágenes
-	ratio      float64
+	focus        panelID
+	lastLeft     panelID
+	zoom         bool
+	kanbanOn     bool
+	imgTickSel   int
+	mascot       mascotState
+	cellW, cellH int // tamaño de celda en píxeles que dijo la terminal (0 = no contestó) // selección para la que ya se armó el tick de carga de imágenes
+	ratio        float64
 
 	notes   *notesPanel
 	tasks   tasksPanel
@@ -80,7 +82,9 @@ func New(cfg *config.Config) (*AppModel, error) {
 
 // Init consulta a la terminal si soporta gráficos Kitty (a=q + DA1). Mientras
 // no conteste afirmativamente, las imágenes se muestran como texto.
-func (m *AppModel) Init() tea.Cmd { return m.emit(image.QuerySequence()) }
+func (m *AppModel) Init() tea.Cmd {
+	return m.emit(image.QuerySequence() + mascotRequestSequence())
+}
 
 // relayout recalcula la geometría. Se llama solo ante un cambio de tamaño o de
 // modo (foco con zoom, Kanban, proporción, paneles visibles, cantidad de tags).
@@ -141,6 +145,10 @@ func (m *AppModel) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, m.startImageJobs(msg)
 	case imageLoadedMsg:
 		m.c.kitty.Done(msg.sel, msg.job, msg.tmpl, msg.err)
+	case uv.CellSizeEvent:
+		m.cellW, m.cellH = msg.Width, msg.Height
+	case mascotTickMsg:
+		return m, m.mascotTick(msg)
 	case uv.KittyGraphicsEvent:
 		if image.IsSupportReply(msg) {
 			m.c.kitty.SetSupported(true)

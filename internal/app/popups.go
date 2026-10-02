@@ -28,6 +28,7 @@ const (
 	setConfirmDelete
 	setScreenBg
 	setPopupBg
+	setMascot
 	setNotesDir
 	settingCount
 )
@@ -89,6 +90,8 @@ func (p *settingsPopup) label(id settingID) string {
 		return i18n.T("Fondo de pantalla", "Screen background")
 	case setPopupBg:
 		return i18n.T("Fondo de popups", "Popup background")
+	case setMascot:
+		return i18n.T("Mascota", "Mascot")
 	case setNotesDir:
 		return i18n.T("Carpeta de notas", "Notes folder")
 	}
@@ -124,6 +127,11 @@ func (p *settingsPopup) value(id settingID) string {
 			return "terminal"
 		}
 		return i18n.T("tema", "theme")
+	case setMascot:
+		if cfg.Mascot {
+			return i18n.T("sí", "yes")
+		}
+		return "no"
 	case setPopupBg:
 		if cfg.PopupBackground == config.PopupBackgroundTheme {
 			return i18n.T("tema", "theme")
@@ -169,6 +177,9 @@ func (p *settingsPopup) change(id settingID, dir int) {
 		} else {
 			cfg.ScreenBackground = config.ScreenBackgroundTerminal
 		}
+	case setMascot:
+		cfg.Mascot = !cfg.Mascot
+		p.c.kitty.Reset() // si se apaga, sus placeholders ya no se piden: se borra lo transmitido
 	case setPopupBg:
 		if cfg.PopupBackground == config.PopupBackgroundTheme {
 			cfg.PopupBackground = config.PopupBackgroundNone
@@ -223,9 +234,9 @@ func cycle(opts []string, current string, dir int) string {
 
 func (p *settingsPopup) render(l Layout) string {
 	w := popupWidth(l, 56)
-	p.top, p.height = 2, p.n
+	p.top, p.height = 1, p.n
 	labelW := 22
-	lines := []string{""}
+	var lines []string
 	lines = append(lines, p.rows(w-3, func(i int) string {
 		id := settingID(i)
 		val := "‹ " + p.value(id) + " ›"

@@ -81,8 +81,8 @@ func (m *AppModel) prepareImages() []tea.Cmd {
 	if visible && note != nil && !m.quitting {
 		m.preview.lines(note, m.layout.Preview.W-3)
 	}
-	if visible && m.wantsSleeper() {
-		m.sleeper() // pide su imagen (y la deja en la cola de transmisión) antes del render
+	if visible && m.mascotVisible() {
+		m.mascotLines() // la deja en la cola de transmisión antes del render
 	}
 	var cmds []tea.Cmd
 	if k.HasWanted() && m.imgTickSel != k.Selection() {

@@ -110,6 +110,8 @@ type Config struct {
 	// PopupBackground: "none" (por defecto) deja el fondo de la terminal en los
 	// popups, respetando su transparencia; "theme" pinta el color base del tema.
 	PopupBackground string `json:"popup_background"`
+	// Mascot: si el perezoso dormido aparece en los estados de reposo (carpeta o nota vacía). Por defecto sí.
+	Mascot bool `json:"mascot"`
 	// ScreenBackground: "theme" (por defecto) o "terminal". Ver ScreenBackgroundTheme.
 	ScreenBackground string `json:"screen_background"`
 	configPath       string `json:"-"`
@@ -167,6 +169,7 @@ func DefaultConfig(notesDir string) *Config {
 		TaskScope:          "all",
 		PopupBackground:    PopupBackgroundNone,
 		ScreenBackground:   ScreenBackgroundTheme,
+		Mascot:             true,
 	}
 }
 

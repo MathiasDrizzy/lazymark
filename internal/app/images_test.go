@@ -254,7 +254,7 @@ func TestImageDeleteEvents(t *testing.T) {
 func TestImageDetection(t *testing.T) {
 	r := newImageRig(t, 120, 35, false)
 	r.Init()
-	if got := r.take(); len(got) != 1 || got[0] != image.QuerySequence() {
+	if got := r.take(); len(got) != 1 || got[0] != image.QuerySequence()+mascotRequestSequence() {
 		t.Fatalf("Init debe consultar a=q: %q", got)
 	}
 	r.show("imagen.md")

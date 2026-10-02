@@ -78,3 +78,61 @@ func TestTransparentPixels(t *testing.T) {
 		t.Error("un píxel transparente no debe pintar fondo")
 	}
 }
+
+// TestImageIsIntegerNearestNeighbor (M2): el cuadro se escala en un múltiplo entero de su grilla, con vecino más
+// cercano (solo los colores del sprite y el transparente, sin mezclas), centrado en un lienzo del tamaño exacto pedido.
+func TestImageIsIntegerNearestNeighbor(t *testing.T) {
+	f, err := ParseFrames(brand.Sprite16)
+	if err != nil {
+		t.Fatal(err)
+	}
+	g := f.Grids["sleep"]
+	img, k := g.Image(144, 144)
+	if k != 9 || img.Bounds().Dx() != 144 || img.Bounds().Dy() != 144 {
+		t.Fatalf("144x144 debía dar factor 9: k=%d %v", k, img.Bounds())
+	}
+	pal := map[[4]uint8]bool{{0, 0, 0, 0}: true}
+	for _, row := range g {
+		for _, p := range row {
+			if p.Set {
+				pal[[4]uint8{p.R, p.G, p.B, 255}] = true
+			}
+		}
+	}
+	for y := 0; y < 144; y++ {
+		for x := 0; x < 144; x++ {
+			c := img.NRGBAAt(x, y)
+			if !pal[[4]uint8{c.R, c.G, c.B, c.A}] {
+				t.Fatalf("(%d,%d) tiene un color mezclado %v: el escalado no es de vecino más cercano", x, y, c)
+			}
+			// cada píxel de la grilla es un bloque k x k uniforme
+			if c != img.NRGBAAt(x/9*9, y/9*9) {
+				t.Fatalf("(%d,%d) no es del mismo bloque que su esquina", x, y)
+			}
+		}
+	}
+	// un lienzo mayor que el sprite escalado lo deja centrado; uno menor da factor 1 mínimo
+	img2, k2 := g.Image(160, 168)
+	if k2 != 10 || img2.Bounds().Dx() != 160 || img2.Bounds().Dy() != 168 {
+		t.Errorf("160x168: k=%d %v", k2, img2.Bounds())
+	}
+	if corner := img2.NRGBAAt(0, 0); corner.A != 0 {
+		t.Error("el borde del lienzo debe ser transparente")
+	}
+}
+
+func TestParseFramesErrors(t *testing.T) {
+	for name, text := range map[string]string{
+		"letra sin paleta":   "K 000000\n@frame a\nKX\nKK\n",
+		"no cuadrado":        "K 000000\n@frame a\nKK\n",
+		"animación inválida": "K 000000\n@frame a\nKK\nKK\n@anim x b\n",
+	} {
+		if _, err := ParseFrames(text); err == nil {
+			t.Errorf("%s: debía fallar", name)
+		}
+	}
+	f, _ := ParseFrames(brand.Sprite16)
+	if len(f.Anims) < 4 {
+		t.Errorf("faltan animaciones: %d", len(f.Anims))
+	}
+}

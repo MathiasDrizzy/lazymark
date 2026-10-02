@@ -13,3 +13,10 @@ var SleepingPNG []byte
 //
 //go:embed reposo/lazymark.svg
 var SleepingSVG string
+
+// Sprite16 holds the resting mascot at 16x16 (the logo is too detailed to read at the small size the app
+// draws it): the sleeping frame, the frames of its click animations and the animation sequences. Generated
+// by sprite16.py.
+//
+//go:embed reposo/sprite16.txt
+var Sprite16 string

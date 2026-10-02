@@ -341,3 +341,23 @@ func TestResolveVersion(t *testing.T) {
 		}
 	}
 }
+
+// TestMascotSetting (M3): por defecto sí; "mascot": false se guarda y se lee; sin el campo, sí.
+func TestMascotSetting(t *testing.T) {
+	isolate(t)
+	cfg, _ := Load(t.TempDir())
+	if !cfg.Mascot {
+		t.Fatal("la mascota debe estar activada por defecto")
+	}
+	cfg.Mascot = false
+	if err := cfg.Save(); err != nil {
+		t.Fatal(err)
+	}
+	if again, _ := Load(cfg.NotesDir); again.Mascot {
+		t.Error("tras desactivarla y recargar debe seguir desactivada")
+	}
+	writeDiskConfig(t, `{"keymap_version":2}`)
+	if got, _ := Load(t.TempDir()); !got.Mascot {
+		t.Error("sin el campo la mascota debe estar activada")
+	}
+}

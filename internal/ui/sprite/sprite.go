@@ -5,6 +5,8 @@ package sprite
 
 import (
 	"fmt"
+	"image"
+	"image/color"
 	"regexp"
 	"strconv"
 	"strings"
@@ -97,4 +99,98 @@ func HalfBlocks(g Grid) []string {
 		lines[i] = strings.Join(row, "")
 	}
 	return lines
+}
+
+// Anim is a named sequence of frames.
+type Anim struct {
+	Name   string
+	Frames []string
+}
+
+// Frames is a set of named pixel grids and the animations made of them.
+type Frames struct {
+	Grids map[string]Grid
+	Anims []Anim
+}
+
+// ParseFrames reads the text format written by assets/brand/sprite16.py: palette lines ("K 11111b"),
+// "@frame name" followed by rows of palette letters ('.' is transparent) and "@anim name f1 f2 …".
+func ParseFrames(text string) (*Frames, error) {
+	pal := map[byte]Pixel{}
+	out := &Frames{Grids: map[string]Grid{}}
+	var cur string
+	for _, line := range strings.Split(text, "\n") {
+		line = strings.TrimRight(line, "\r")
+		switch {
+		case line == "" || strings.HasPrefix(line, "#"):
+		case strings.HasPrefix(line, "@frame "):
+			cur = strings.TrimSpace(strings.TrimPrefix(line, "@frame "))
+			out.Grids[cur] = nil
+		case strings.HasPrefix(line, "@anim "):
+			f := strings.Fields(strings.TrimPrefix(line, "@anim "))
+			if len(f) < 2 {
+				return nil, fmt.Errorf("sprite: bad animation line %q", line)
+			}
+			out.Anims = append(out.Anims, Anim{Name: f[0], Frames: f[1:]})
+			cur = ""
+		case cur == "":
+			f := strings.Fields(line)
+			if len(f) != 2 || len(f[0]) != 1 || len(f[1]) != 6 {
+				return nil, fmt.Errorf("sprite: bad palette line %q", line)
+			}
+			v, err := strconv.ParseUint(f[1], 16, 32)
+			if err != nil {
+				return nil, err
+			}
+			pal[f[0][0]] = Pixel{uint8(v >> 16), uint8(v >> 8), uint8(v), true}
+		default:
+			row := make([]Pixel, len(line))
+			for i := 0; i < len(line); i++ {
+				if line[i] != '.' {
+					p, ok := pal[line[i]]
+					if !ok {
+						return nil, fmt.Errorf("sprite: letter %q is not in the palette (frame %s)", line[i], cur)
+					}
+					row[i] = p
+				}
+			}
+			out.Grids[cur] = append(out.Grids[cur], row)
+		}
+	}
+	for name, g := range out.Grids {
+		if w, h := g.Size(); w != h || w == 0 {
+			return nil, fmt.Errorf("sprite: frame %s is %dx%d, not square", name, w, h)
+		}
+	}
+	for _, a := range out.Anims {
+		for _, f := range a.Frames {
+			if _, ok := out.Grids[f]; !ok {
+				return nil, fmt.Errorf("sprite: animation %s uses the unknown frame %s", a.Name, f)
+			}
+		}
+	}
+	return out, nil
+}
+
+// Image scales g by an integer factor (nearest neighbor, so every pixel stays a sharp square) and
+// centers it on a transparent canvas of w x h pixels. The factor is the largest that fits.
+func (g Grid) Image(w, h int) (*image.NRGBA, int) {
+	gw, gh := g.Size()
+	k := max(1, min(w/gw, h/gh))
+	img := image.NewNRGBA(image.Rect(0, 0, max(w, gw*k), max(h, gh*k)))
+	ox, oy := (img.Bounds().Dx()-gw*k)/2, (img.Bounds().Dy()-gh*k)/2
+	for y := 0; y < gh; y++ {
+		for x := 0; x < gw; x++ {
+			p := g[y][x]
+			if !p.Set {
+				continue
+			}
+			for j := 0; j < k; j++ {
+				for i := 0; i < k; i++ {
+					img.SetNRGBA(ox+x*k+i, oy+y*k+j, color.NRGBA{p.R, p.G, p.B, 255})
+				}
+			}
+		}
+	}
+	return img, k
 }
