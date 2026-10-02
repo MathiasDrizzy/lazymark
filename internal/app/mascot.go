@@ -10,9 +10,9 @@ import (
 	"github.com/charmbracelet/x/ansi"
 )
 
-// La mascota: un perezoso de 16x16 píxeles (dibujado a mano a partir de la variante c2 de la marca: el
-// logo de 32x32 no se lee a este tamaño) que ocupa 16 columnas x 8 filas y duerme abajo a la derecha
-// de los estados de reposo. Un clic en ella lanza una animación corta (abrir los ojos, saludar con el
+// La mascota: con Kitty, el logo de 32x32 (variante c2) y sus animaciones, hechas desde sus capas, escalados
+// en un factor entero; sin Kitty, una versión de 16x16 dibujada a mano (a 16 columnas de medios bloques el de
+// 32x32 no se lee). Ocupa 16 columnas x 8 filas y duerme abajo a la derecha de los estados de reposo. Un clic en ella lanza una animación corta (abrir los ojos, saludar con el
 // lápiz, bailar, dar una vuelta), una distinta en cada clic y en orden, y vuelve a dormir sola.
 const (
 	mascotCols = 16
@@ -24,21 +24,25 @@ const (
 )
 
 var (
-	mascotOnce   sync.Once
-	mascotFrames *sprite.Frames
+	mascotOnce         sync.Once
+	mascot16, mascot32 *sprite.Frames
 )
 
-// frames lee los cuadros embebidos (una vez).
-func frames() *sprite.Frames {
+// frames devuelve los cuadros de 16x16 (medios bloques) y frames32 los de 32x32 (Kitty), leídos una vez.
+func loadMascot() {
 	mascotOnce.Do(func() {
-		f, err := sprite.ParseFrames(brand.Sprite16)
-		if err != nil {
-			panic("lazymark: la mascota embebida no se puede leer: " + err.Error()) // un error de compilación del repo
+		var err error
+		if mascot16, err = sprite.ParseFrames(brand.Sprite16); err != nil {
+			panic("lazymark: la mascota de 16x16 embebida no se puede leer: " + err.Error()) // un error del repo
 		}
-		mascotFrames = f
+		if mascot32, err = sprite.ParseFrames(brand.Sprite32); err != nil {
+			panic("lazymark: la mascota de 32x32 embebida no se puede leer: " + err.Error())
+		}
 	})
-	return mascotFrames
 }
+
+func frames() *sprite.Frames   { loadMascot(); return mascot16 }
+func frames32() *sprite.Frames { loadMascot(); return mascot32 }
 
 // mascotState lleva la animación en curso.
 type mascotState struct {
@@ -97,18 +101,17 @@ func (m *AppModel) frameName() string {
 	return "sleep"
 }
 
-// mascotLines devuelve las 8 filas de la mascota: con Kitty, la imagen (el cuadro escalado en múltiplos
-// enteros de sus 16 píxeles, con vecino más cercano, al tamaño exacto en píxeles de las celdas: la
-// terminal no tiene que reescalarla ni suavizarla); sin Kitty, medios bloques.
+// mascotLines devuelve las 8 filas de la mascota: con Kitty, la imagen (el cuadro de 32x32 escalado en un
+// factor entero, con vecino más cercano, sobre un lienzo del tamaño exacto en píxeles de las celdas: la
+// terminal no tiene que reescalarla ni suavizarla); sin Kitty, medios bloques del cuadro de 16x16.
 func (m *AppModel) mascotLines() []string {
 	name := m.frameName()
-	grid := frames().Grids[name]
 	cw, ch := m.cellSize()
-	img, _ := grid.Image(mascotCols*cw, mascotRows*ch)
+	img, _ := frames32().Grids[name].Image(mascotCols*cw, mascotRows*ch)
 	if lines, ok := m.c.kitty.BlockImage("mascot-"+name, img, mascotCols, mascotRows); ok {
 		return lines
 	}
-	return sprite.HalfBlocks(grid)
+	return sprite.HalfBlocks(frames().Grids[name])
 }
 
 // mascotClick maneja un clic: si cae en la mascota, lanza la siguiente animación.

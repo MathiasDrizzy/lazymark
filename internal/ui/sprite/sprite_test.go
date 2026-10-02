@@ -136,3 +136,66 @@ func TestParseFramesErrors(t *testing.T) {
 		t.Errorf("faltan animaciones: %d", len(f.Anims))
 	}
 }
+
+// TestSprite32 (rev 3): los cuadros de 32x32 (los de Kitty) tienen los mismos nombres y animaciones que los
+// de 16x16; el cuadro dormido es el logo (reposo/lazymark.svg) píxel por píxel; y a 16x8 celdas de 9x18 px se
+// escalan por un factor entero (4).
+func TestSprite32(t *testing.T) {
+	f32, err := ParseFrames(brand.Sprite32)
+	if err != nil {
+		t.Fatal(err)
+	}
+	f16, _ := ParseFrames(brand.Sprite16)
+	for name, g := range f32.Grids {
+		if w, h := g.Size(); w != 32 || h != 32 {
+			t.Errorf("%s mide %dx%d", name, w, h)
+		}
+		if _, ok := f16.Grids[name]; !ok {
+			t.Errorf("el cuadro %s está en 32x32 y no en 16x16", name)
+		}
+	}
+	for name := range f16.Grids {
+		if _, ok := f32.Grids[name]; !ok {
+			t.Errorf("el cuadro %s está en 16x16 y no en 32x32", name)
+		}
+	}
+	if len(f32.Anims) != len(f16.Anims) {
+		t.Fatalf("animaciones: %d en 32x32 y %d en 16x16", len(f32.Anims), len(f16.Anims))
+	}
+	for i, a := range f32.Anims {
+		if a.Name != f16.Anims[i].Name || strings.Join(a.Frames, " ") != strings.Join(f16.Anims[i].Frames, " ") {
+			t.Errorf("la animación %s difiere entre 32x32 y 16x16", a.Name)
+		}
+	}
+	logo, _ := ParseSVG(brand.SleepingSVG)
+	sleep := f32.Grids["sleep"]
+	for y := range logo {
+		for x := range logo[y] {
+			if logo[y][x] != sleep[y][x] {
+				t.Fatalf("el cuadro dormido de 32x32 difiere del logo en (%d,%d): %v vs %v", x, y, sleep[y][x], logo[y][x])
+			}
+		}
+	}
+	if _, k := sleep.Image(16*9, 8*18); k != 4 {
+		t.Errorf("a 144x144 px el factor debe ser 4: %d", k)
+	}
+	// cada animación cambia el cuadro: ningún cuadro de una animación es idéntico al dormido salvo el propio dormido
+	for _, a := range f32.Anims {
+		for _, fr := range a.Frames {
+			if fr == "sleep" || fr == "blink" {
+				continue
+			}
+			same := true
+			for y := range sleep {
+				for x := range sleep[y] {
+					if sleep[y][x] != f32.Grids[fr][y][x] {
+						same = false
+					}
+				}
+			}
+			if same {
+				t.Errorf("%s/%s es igual al cuadro dormido", a.Name, fr)
+			}
+		}
+	}
+}

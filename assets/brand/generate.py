@@ -66,6 +66,8 @@ PALETTES = {
     "c1": dict(fur="#b98560", arm="#a77450", patch="#6b4636", belly=CREAM, face=CREAM, sleepy=False),
     # c2: warmer and lighter, sleepy, with closed eyes (Mathias liked the sleepy B)
     "c2": dict(fur="#c99a6e", arm="#b5855c", patch="#7a4f3a", belly=CREAM, face=CREAM, sleepy=True),
+    # c2 with its eyes open: only the animations of the resting mascot use it (sprite32.py)
+    "c2w": dict(fur="#c99a6e", arm="#b5855c", patch="#7a4f3a", belly=CREAM, face=CREAM, sleepy=False),
 }
 
 
@@ -73,7 +75,8 @@ def mirror(x):
     return 24 - x  # the head is symmetric about x = 12
 
 
-def sloth_base(variant):
+def sloth_base(variant, arm_dy=0):
+    """arm_dy raises (negative) or lowers the right arm and its paw: the animations use it."""
     p = PALETTES[variant]
     L = Layer()
     # short legs
@@ -94,11 +97,12 @@ def sloth_base(variant):
     L.px(3, 28, CLAW)
     # right arm: long, rising to a paw above the pencil; arm and paw are one shape,
     # so the outline around them is continuous
-    L.rect(16, 20, 3, 3, p["arm"])
-    L.rect(18, 16, 3, 5, p["arm"])
-    L.rect(21, 15, 4, 1, p["arm"])
-    L.rect(20, 16, 6, 1, p["arm"])
-    L.rect(21, 17, 5, 1, p["arm"])
+    d = arm_dy
+    L.rect(16, 20 + d, 3, 3, p["arm"])
+    L.rect(18, 16 + d, 3, 5, p["arm"])
+    L.rect(21, 15 + d, 4, 1, p["arm"])
+    L.rect(20, 16 + d, 6, 1, p["arm"])
+    L.rect(21, 17 + d, 5, 1, p["arm"])
     # head
     L.ellipse(12, 10, 8, 7, p["fur"])
     # cream mask: wide at the cheeks, rising to the forehead
@@ -160,11 +164,11 @@ PENCIL = (16, 19, 15)  # x0, y0, length
 
 # --- the claws: a front layer, hooked over the pencil ----------------------------
 
-def claws():
+def claws(dy=0):
     L = Layer()
     for x in (21, 23, 25):
-        L.px(x, 18, CLAW)
-        L.px(x, 19, CLAW)
+        L.px(x, 18 + dy, CLAW)
+        L.px(x, 19 + dy, CLAW)
     return L
 
 

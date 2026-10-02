@@ -135,9 +135,9 @@ func TestMascotKitty(t *testing.T) {
 		t.Errorf("repintar no debe emitir nada: %q", again)
 	}
 	// la imagen tiene el tamaño exacto de las celdas, con el sprite en múltiplos enteros (nitidez)
-	img, k := frames().Grids["sleep"].Image(16*10, 8*21)
-	if b := img.Bounds(); b.Dx() != 160 || b.Dy() != 168 || k != 10 {
-		t.Errorf("imagen %dx%d con factor %d, se esperaba 160x168 con 10", b.Dx(), b.Dy(), k)
+	img, k := frames32().Grids["sleep"].Image(16*10, 8*21)
+	if b := img.Bounds(); b.Dx() != 160 || b.Dy() != 168 || k != 5 {
+		t.Errorf("imagen %dx%d con factor %d, se esperaba 160x168 con 5 (el cuadro de 32x32)", b.Dx(), b.Dy(), k)
 	}
 }
 
