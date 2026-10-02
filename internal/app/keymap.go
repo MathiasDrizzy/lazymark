@@ -107,6 +107,10 @@ func keyLabel(k string) string {
 		return "<space>"
 	case "shift+tab":
 		return "shift+tab"
+	case "shift+left":
+		return "shift+←"
+	case "shift+right":
+		return "shift+→"
 	}
 	return k
 }
@@ -164,11 +168,11 @@ func defaultBindings() []Binding {
 
 		{actLeft, ctxKanban, []string{"left", "h"}, "Columna anterior", "Previous column", false},
 		{actRight, ctxKanban, []string{"right", "l"}, "Columna siguiente", "Next column", false},
-		{actMoveCardLeft, ctxKanban, []string{"H"}, "Mover a la izquierda", "Move left", true},
-		{actMoveCardRight, ctxKanban, []string{"L"}, "Mover a la derecha", "Move right", true},
+		{actMoveCardLeft, ctxKanban, []string{"H", "shift+left"}, "Mover a la izquierda", "Move left", true},
+		{actMoveCardRight, ctxKanban, []string{"L", "shift+right"}, "Mover a la derecha", "Move right", true},
 		{actToggleTask, ctxKanban, []string{"space"}, "Alternar tarea", "Toggle task", true},
 		{actEdit, ctxKanban, []string{"enter", "e"}, "Editar", "Edit", true},
-		{actKanban, ctxKanban, []string{"W", "esc"}, "Volver", "Back", true},
+		{actKanban, ctxKanban, []string{"esc", "W"}, "Volver a notas", "Back to notes", false},
 
 		{actConfirm, ctxPopup, []string{"enter"}, "Aceptar", "Accept", false},
 		{actRestore, ctxTrash, []string{"r"}, "Restaurar", "Restore", true},

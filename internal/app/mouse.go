@@ -4,6 +4,7 @@ import (
 	"time"
 
 	tea "charm.land/bubbletea/v2"
+	"github.com/MathiasDrizzy/lazymark/internal/ui/mouse"
 )
 
 // handleClick resuelve un clic izquierdo. Con un popup abierto, solo cuenta lo
@@ -34,7 +35,12 @@ func (m *AppModel) handleClick(msg tea.MouseClickMsg) tea.Cmd {
 		return nil
 	}
 	if m.kanbanOn {
-		if z, ok := m.ht.Check(x, y); ok {
+		z, ok := m.ht.Check(x, y)
+		switch {
+		case !ok:
+		case z.Type == mouse.ZoneAction: // el botón "← Notas (Esc)"
+			return m.do(Action(z.Index))
+		default:
 			return m.kanban.click(z, m.clicks.hit(z.ID, time.Now()))
 		}
 		return nil

@@ -95,11 +95,11 @@ Opened with `W`. Cards are the tasks of your notes.
 |---|---|
 | `←` `h` | Previous column |
 | `→` `l` | Next column |
-| `H` | Move left |
-| `L` | Move right |
+| `H` `shift+←` | Move left |
+| `L` `shift+→` | Move right |
 | `Space` | Toggle task |
 | `Enter` `e` | Edit |
-| `W` `Esc` | Back |
+| `Esc` `W` | Back to notes |
 
 ## Lists inside popups
 

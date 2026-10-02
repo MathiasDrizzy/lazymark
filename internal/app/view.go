@@ -42,7 +42,7 @@ func (m *AppModel) render() string {
 	var body string
 	switch {
 	case m.kanbanOn:
-		body = m.kanban.view(l.Kanban, m.ht)
+		body = m.renderKanbanBar() + "\n" + m.kanban.view(l.Kanban, m.ht)
 	case m.zoom && m.focus == panelPreview:
 		body = m.preview.view(m.previewNote(), l.Preview, true)
 	default:
@@ -103,14 +103,102 @@ func (m *AppModel) renderFolderPreview(e *storage.NoteEntry, r Rect, active bool
 	return theme.RenderPanel("[4]─"+iconFolderOpen+" "+e.Name, footer, lines, r.W, r.H, active)
 }
 
+// renderKanbanBar dibuja la fila de arriba del Kanban: el botón "← Notas (Esc)"
+// que vuelve a la vista de notas, clicable.
+func (m *AppModel) renderKanbanBar() string {
+	r := m.layout.KanbanBar
+	label := " ← " + i18n.T("Notas", "Notes") + " (" + buttonKey(m.c.keys.Key(actKanban, ctxKanban)) + ") "
+	w := textwidth.Width(label)
+	m.ht.Register("kanban-back", mouse.ZoneAction, r.X, r.Y, r.X+w-1, r.Y, int(actKanban), "")
+	btn := lipgloss.NewStyle().Foreground(theme.ColorBase).Background(theme.ColorBlue).Bold(true).Render(label)
+	// la franja lleva fondo en todo el ancho: así el compositor no recorta los espacios finales
+	bar := lipgloss.NewStyle().Background(theme.ColorMantle)
+	title := bar.Foreground(theme.ColorOverlay0).Render("  " + i18n.T("Tablero Kanban", "Kanban board"))
+	pad := bar.Render(strings.Repeat(" ", max(0, r.W-w-textwidth.Width("  "+i18n.T("Tablero Kanban", "Kanban board")))))
+	return textwidth.Fit(btn+title+pad, r.W)
+}
+
+// hint es un atajo de la barra inferior: un botón clicable con su acción. long es
+// la etiqueta completa y short la forma corta que se usa si la barra no alcanza.
+// Un hint "fijo" (los botones del Kanban) nunca se quita: antes se acorta.
+type hint struct {
+	long, short string
+	action      Action
+	button      bool // etiqueta "Acción (tecla)", se pinta con el estilo de botón
+}
+
+// bindingHint convierte un atajo del keymap en un hint "Acción: tecla".
+func bindingHint(b Binding) hint {
+	l := b.Desc() + ": " + keyLabel(b.Keys[0])
+	return hint{long: l, short: l, action: b.Action}
+}
+
+// buttonKey es el nombre de una tecla dentro de un botón: "Espacio", "Enter", "Esc".
+func buttonKey(k string) string {
+	switch k {
+	case "space":
+		return i18n.T("Espacio", "Space")
+	case "enter":
+		return "Enter"
+	case "esc":
+		return "Esc"
+	}
+	return keyLabel(k)
+}
+
+// kanbanHints son las acciones de la tarjeta seleccionada, siempre a la vista.
+func (m *AppModel) kanbanHints() []hint {
+	key := func(a Action) string { return buttonKey(m.c.keys.Key(a, ctxKanban)) }
+	return hintList([]hint{
+		{i18n.T("Mover ← (%s)", "Move ← (%s)"), "← (%s)", actMoveCardLeft, true},
+		{i18n.T("Mover → (%s)", "Move → (%s)"), "→ (%s)", actMoveCardRight, true},
+		{i18n.T("Listo/Por hacer (%s)", "Done/To do (%s)"), i18n.T("Listo (%s)", "Done (%s)"), actToggleTask, true},
+		{i18n.T("Editar (%s)", "Edit (%s)"), i18n.T("Editar (%s)", "Edit (%s)"), actEdit, true},
+	}).withKeys(key)
+}
+
+// withKeys rellena el %s de cada etiqueta con la tecla de su acción.
+func (hs hintList) withKeys(key func(Action) string) []hint {
+	out := make([]hint, len(hs))
+	for i, h := range hs {
+		h.long = fmt.Sprintf(h.long, key(h.action))
+		h.short = fmt.Sprintf(h.short, key(h.action))
+		out[i] = h
+	}
+	return out
+}
+
+type hintList []hint
+
+// footerHints devuelve los hints del panel (o de las tarjetas del Kanban) y los
+// globales. En la vista de notas, el botón "Kanban (W)" encabeza los globales:
+// es lo último que se quita.
+func (m *AppModel) footerHints() (panel, global []hint, pinned bool) {
+	for _, b := range m.c.keys.Footer(ctxGlobal) {
+		global = append(global, bindingHint(b))
+	}
+	if m.kanbanOn {
+		return m.kanbanHints(), global, true
+	}
+	if k := m.c.keys.Key(actKanban, ctxGlobal); k != "" {
+		kb := fmt.Sprintf("Kanban (%s)", buttonKey(k))
+		global = append([]hint{{kb, kb, actKanban, true}}, global...)
+	}
+	for _, b := range m.c.keys.Footer(m.contexts()[0]) {
+		panel = append(panel, bindingHint(b))
+	}
+	return panel, global, false
+}
+
 // renderFooter dibuja la barra inferior estilo lazygit: la papelera abajo a la
-// izquierda, los atajos del contexto ("Acción: tecla | …") y el estado a la
-// derecha. Cada atajo es un botón clicable.
+// izquierda, los atajos del contexto y el estado a la derecha. Cada atajo es un
+// botón clicable.
 //
 // El ancho se reparte con un presupuesto: primero se acorta el estado para que
 // siempre quepan los atajos globales (Atajos: ?, Salir: q) y después se quitan
-// de a uno los atajos del panel, del último al primero. La barra nunca se
-// vacía mientras quepa un atajo y mide siempre exactamente el ancho.
+// de a uno los atajos del panel, del último al primero. Los botones del Kanban
+// no se quitan: si no caben, se usan sus etiquetas cortas y el estado cede.
+// La barra nunca se vacía mientras quepa un atajo y mide siempre exactamente el ancho.
 func (m *AppModel) renderFooter() string {
 	f := m.layout.Footer
 	keyStyle := lipgloss.NewStyle().Foreground(theme.ColorBlue)
@@ -119,25 +207,41 @@ func (m *AppModel) renderFooter() string {
 
 	trash := "\U000f0a7a " + strconv.Itoa(m.c.trashCount)
 	trashW := textwidth.Width(trash) + 1 // y un espacio
-	label := func(b Binding) string { return b.Desc() + ": " + keyLabel(b.Keys[0]) }
-	span := func(bs []Binding) int {
+	panel, global, pinned := m.footerHints()
+
+	type shown struct {
+		hint
+		short bool
+	}
+	text := func(h shown) string {
+		if h.short {
+			return h.hint.short
+		}
+		return h.hint.long
+	}
+	span := func(hs []shown) int {
 		w := 0
-		for i, b := range bs {
+		for i, h := range hs {
 			if i > 0 {
 				w += sepW
 			}
-			w += textwidth.Width(label(b))
+			w += textwidth.Width(text(h))
 		}
 		return w
 	}
-	join := func(a, b []Binding) []Binding { return append(append([]Binding{}, a...), b...) }
-
-	panel := m.c.keys.Footer(m.contexts()[0])
-	global := m.c.keys.Footer(ctxGlobal)
+	mk := func(hs []hint, short bool) []shown {
+		out := make([]shown, len(hs))
+		for i, h := range hs {
+			out[i] = shown{h, short}
+		}
+		return out
+	}
+	join := func(a, b []shown) []shown { return append(append([]shown{}, a...), b...) }
+	globalShown := mk(global, false)
 
 	// 1) el estado se acorta para dejar sitio a los atajos globales (o desaparece)
 	status := m.c.status
-	if maxStatus := f.W - trashW - span(global) - gap; maxStatus <= 0 {
+	if maxStatus := f.W - trashW - span(globalShown) - gap; maxStatus <= 0 {
 		status = ""
 	} else if textwidth.Width(status) > maxStatus {
 		status = textwidth.Truncate(status, maxStatus, textwidth.Ellipsis)
@@ -148,36 +252,74 @@ func (m *AppModel) renderFooter() string {
 		avail -= gap
 	}
 
-	// 2) atajos: se quitan de a uno los del panel; si ni los globales caben, el último de ellos
-	var hints []Binding
-	for k := len(panel); k >= 0; k-- {
-		if cand := join(panel[:k], global); span(cand) <= avail {
+	// 2) atajos. Primero los del panel completos, luego con etiquetas cortas y, si
+	// aun así no caben, se quitan de a uno del último al primero (salvo los fijos).
+	var hints []shown
+	candidates := [][]shown{join(mk(panel, false), globalShown), join(mk(panel, true), globalShown)}
+	if pinned {
+		// el estado cede ante los botones del Kanban
+		for _, c := range candidates {
+			if span(c)+trashW <= f.W {
+				hints = c
+				avail = f.W - trashW
+				break
+			}
+		}
+	}
+	for _, c := range candidates {
+		if hints == nil && span(c) <= avail {
+			hints = c
+		}
+	}
+	if pinned && hints == nil {
+		hints = join(mk(panel, true), nil) // sin globales antes que sin botones
+		for len(hints) > 0 && span(hints) > f.W-trashW {
+			hints = hints[:len(hints)-1]
+		}
+	}
+	for k := len(panel) - 1; hints == nil && k >= 0; k-- {
+		if cand := join(mk(panel[:k], true), globalShown); span(cand) <= avail {
 			hints = cand
+		}
+	}
+	gl := globalShown
+	for hints == nil && len(gl) > 0 {
+		gl = gl[:len(gl)-1] // prioridad: se conserva el primero
+		if span(gl) <= avail {
+			hints = gl
+		}
+		if len(gl) == 0 {
 			break
 		}
 	}
-	for hints == nil && len(global) > 0 {
-		global = global[:len(global)-1] // prioridad: se conserva el primero
-		if span(global) <= avail {
-			hints = global
+	if pinned { // el estado ocupa solo lo que dejan los botones
+		left := f.W - trashW - span(hints)
+		if left <= gap {
+			status = ""
+		} else if textwidth.Width(m.c.status) > left-gap {
+			status = textwidth.Truncate(m.c.status, left-gap, textwidth.Ellipsis)
+		} else {
+			status = m.c.status
 		}
-		if len(global) == 0 {
-			break
-		}
+		statusW = textwidth.Width(status)
 	}
 
 	out := lipgloss.NewStyle().Foreground(theme.ColorPeach).Render(trash) + " "
 	m.ht.Register("footer-trash", mouse.ZoneAction, f.X, f.Y, f.X+trashW-2, f.Y, int(actTrash), "")
 	x := trashW
-	for i, b := range hints {
+	for i, h := range hints {
 		if i > 0 {
 			out += sep
 			x += sepW
 		}
-		l := label(b)
+		l := text(h)
 		w := textwidth.Width(l)
-		m.ht.Register("footer-"+strconv.Itoa(i), mouse.ZoneAction, f.X+x, f.Y, f.X+x+w-1, f.Y, int(b.Action), "")
-		out += keyStyle.Render(l)
+		m.ht.Register("footer-"+strconv.Itoa(i), mouse.ZoneAction, f.X+x, f.Y, f.X+x+w-1, f.Y, int(h.action), "")
+		if h.button {
+			out += theme.FooterKey.Render(l)
+		} else {
+			out += keyStyle.Render(l)
+		}
 		x += w
 	}
 	right := lipgloss.NewStyle().Foreground(theme.ColorGreen).Render(status)

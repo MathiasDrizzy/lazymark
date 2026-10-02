@@ -318,5 +318,9 @@ func (p *cheatsheetPopup) render(l Layout) string {
 		}
 		lines[r] += textwidth.Pad("", c*cw-textwidth.Width(lines[r])) + cell
 	}
-	return theme.RenderPopup(i18n.T("Atajos", "Keybindings"), escHint, lines, w)
+	title := i18n.T("Atajos", "Keybindings")
+	if p.ctx == ctxKanban {
+		title += " · Kanban"
+	}
+	return theme.RenderPopup(title, escHint, lines, w)
 }

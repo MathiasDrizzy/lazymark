@@ -40,6 +40,7 @@ type Layout struct {
 
 	Notes, Tasks, Tags, Preview Rect
 	Kanban                      Rect
+	KanbanBar                   Rect // la fila de arriba del Kanban: botón de volver
 	Footer                      Rect
 	// Divider es la franja de 2 columnas (bordes de ambas columnas) que se
 	// arrastra con el mouse para cambiar la proporción.
@@ -66,7 +67,8 @@ func computeLayout(in layoutInput) Layout {
 	bodyH := in.H - 1
 	l.Footer = Rect{0, bodyH, in.W, 1}
 	if in.Kanban {
-		l.Kanban = Rect{0, 0, in.W, bodyH}
+		l.KanbanBar = Rect{0, 0, in.W, 1}
+		l.Kanban = Rect{0, 1, in.W, bodyH - 1}
 		return l
 	}
 	if in.Zoom && in.Focus == panelPreview {

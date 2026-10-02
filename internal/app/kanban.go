@@ -86,8 +86,8 @@ func (k *kanbanSheet) setStage(card *views.KanbanCard, target int) {
 	k.col = target
 	k.selected[target] = max(0, len(k.c.board.ColumnCards(target))-1)
 	k.clampSelection()
-	names := []string{i18n.T("Por hacer", "To do"), i18n.T("En progreso", "In progress"), i18n.T("Hecho", "Done")}
-	k.c.setStatus(i18n.T("Tarjeta movida a '%s'", "Card moved to '%s'"), names[target])
+	names := []string{i18n.T("Por hacer", "To do"), i18n.T("En progreso", "In progress"), i18n.T("Completado", "Done")}
+	k.c.setStatus("→ %s", names[target])
 }
 
 // click maneja las zonas que registra views.RenderKanban.

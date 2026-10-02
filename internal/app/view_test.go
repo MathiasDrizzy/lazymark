@@ -131,6 +131,10 @@ func keyMsg(k string) tea.KeyPressMsg {
 		return tea.KeyPressMsg{Code: tea.KeyRight}
 	case "backspace":
 		return tea.KeyPressMsg{Code: tea.KeyBackspace}
+	case "shift+left":
+		return tea.KeyPressMsg{Code: tea.KeyLeft, Mod: tea.ModShift}
+	case "shift+right":
+		return tea.KeyPressMsg{Code: tea.KeyRight, Mod: tea.ModShift}
 	}
 	r := []rune(k)[0]
 	return tea.KeyPressMsg{Code: r, Text: k}
