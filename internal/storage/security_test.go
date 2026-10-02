@@ -1,6 +1,7 @@
 package storage
 
 import (
+	"encoding/json"
 	"errors"
 	"os"
 	"path/filepath"
@@ -31,12 +32,17 @@ func TestTrashMetaCannotDeleteOutside(t *testing.T) {
 	os.WriteFile(filepath.Join(victim, "importante.txt"), []byte("dato"), 0o644)
 	os.WriteFile(filepath.Join(notes, "dentro.md"), []byte("# d\n"), 0o644)
 
-	old := time.Now().AddDate(0, 0, -400).Format(time.RFC3339)
-	meta := `[{"id":"../../victima","name":"x","original_path":"/nonexistent/x","deleted_at":"` + old + `","is_dir":true},
-	 {"id":"../dentro.md","name":"y","original_path":"` + filepath.Join(notes, "y.md") + `","deleted_at":"` + old + `"},
-	 {"id":"/` + strings.TrimPrefix(victim, "/") + `","name":"z","original_path":"x","deleted_at":"` + old + `"},
-	 {"id":"..","name":"w","original_path":"x","deleted_at":"` + old + `"}]`
-	os.WriteFile(filepath.Join(notes, ".trash", "trash.json"), []byte(meta), 0o644)
+	old := time.Now().AddDate(0, 0, -400)
+	mk := func(id, orig string) TrashItem {
+		return TrashItem{ID: id, Name: "x", OriginalPath: orig, DeletedAt: old, IsDir: true}
+	}
+	metaBytes, _ := json.Marshal([]TrashItem{ // json.Marshal: las rutas de Windows llevan "\\"
+		mk("../../victima", "/nonexistent/x"),
+		mk("../dentro.md", filepath.Join(notes, "y.md")),
+		mk("/"+strings.TrimPrefix(filepath.ToSlash(victim), "/"), "x"),
+		mk("..", "x"),
+	})
+	os.WriteFile(filepath.Join(notes, ".trash", "trash.json"), metaBytes, 0o644)
 
 	s := New(notes)
 	items, err := s.ListTrash() // lo que hace la TUI al abrir
@@ -74,10 +80,11 @@ func TestRestoreTrashConfinesDestination(t *testing.T) {
 	os.WriteFile(filepath.Join(notes, ".trash", "1_a.md"), []byte("carga"), 0o644)
 	os.WriteFile(filepath.Join(notes, ".trash", "2_b.md"), []byte("carga"), 0o644)
 	symlinkOrSkip(t, outside, filepath.Join(notes, "enlace"))
-	now := time.Now().Format(time.RFC3339)
-	meta := `[{"id":"1_a.md","name":"a.md","original_path":"` + filepath.Join(outside, "a.md") + `","deleted_at":"` + now + `"},
-	 {"id":"2_b.md","name":"b.md","original_path":"` + filepath.Join(notes, "enlace", "b.md") + `","deleted_at":"` + now + `"}]`
-	os.WriteFile(filepath.Join(notes, ".trash", "trash.json"), []byte(meta), 0o644)
+	metaBytes, _ := json.Marshal([]TrashItem{
+		{ID: "1_a.md", Name: "a.md", OriginalPath: filepath.Join(outside, "a.md"), DeletedAt: time.Now()},
+		{ID: "2_b.md", Name: "b.md", OriginalPath: filepath.Join(notes, "enlace", "b.md"), DeletedAt: time.Now()},
+	})
+	os.WriteFile(filepath.Join(notes, ".trash", "trash.json"), metaBytes, 0o644)
 
 	s := New(notes)
 	for _, id := range []string{"1_a.md", "2_b.md"} {
