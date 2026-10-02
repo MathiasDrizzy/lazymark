@@ -38,6 +38,12 @@ homebrew_casks:
     binaries:
       - lazymark
     # El binario no está firmado ni notarizado: quita la cuarentena de macOS.
+    # Homebrew 7 avisa "postflight is deprecated! Use postflight_steps instead" por este hook.
+    # GoReleaser aún no genera `postflight_steps`: la opción `hooks.post.install_steps` está en el
+    # PR https://github.com/goreleaser/goreleaser/pull/6873 (abierto; issue #6870, hito v2.19.0) y ni
+    # v2.18.2 ni el nightly 2.19.0 la reconocen (`goreleaser check`: "field install_steps not found").
+    # Cuando salga, cambiar `install` por `install_steps` con `on_macos do run "/usr/bin/xattr", args:
+    # ["-dr", "com.apple.quarantine", "{{ .StagedPath }}/lazymark"] end`.
     hooks:
       post:
         install: |
