@@ -58,7 +58,7 @@ func (c *core) reload() {
 	}
 	c.tags = views.CollectTags(c.notes)
 	c.tasks = views.CollectTasks(c.scopedNotes(), c.taskFilter)
-	c.board = views.CollectKanban(c.notes)
+	c.board = views.CollectKanban(c.notes, c.cols(), c.columnTitles())
 	c.trashCount = c.store.CountTrash()
 }
 
@@ -235,4 +235,17 @@ func counter(cursor, n int) string {
 		return "0 of 0"
 	}
 	return fmt.Sprintf("%d of %d", cursor+1, n)
+}
+
+// cols son los ids de las columnas del tablero según la config.
+func (c *core) cols() storage.Columns { return storage.Columns(c.cfg.KanbanIDs()) }
+
+// columnTitles son los títulos visibles de las columnas en el idioma activo.
+func (c *core) columnTitles() []string {
+	lang := string(i18n.CurrentLanguage())
+	titles := make([]string, len(c.cfg.KanbanColumns))
+	for i, col := range c.cfg.KanbanColumns {
+		titles[i] = col.DisplayTitle(lang)
+	}
+	return titles
 }

@@ -4,7 +4,10 @@ import (
 	"os"
 	"strings"
 	"testing"
+	"time"
 
+	tea "charm.land/bubbletea/v2"
+	"github.com/MathiasDrizzy/lazymark/internal/config"
 	"github.com/MathiasDrizzy/lazymark/internal/ui/theme"
 	"github.com/MathiasDrizzy/lazymark/internal/ui/views"
 	"github.com/charmbracelet/x/ansi"
@@ -84,11 +87,11 @@ func TestKanbanButtonsClick(t *testing.T) {
 func TestKanbanShiftArrowsMoveCard(t *testing.T) {
 	m := newTestModel(t, 120, 35)
 	press(m, "W")
-	card := m.c.board.Todo[0]
+	card := m.c.board.ColumnCards(0)[0]
 	before, _ := os.ReadFile(card.NotePath)
 
 	press(m, "shift+right")
-	if got := len(m.c.board.Doing); got != 1 || m.c.board.Doing[0].Task.Line != card.Task.Line || m.c.board.Doing[0].NotePath != card.NotePath {
+	if got := len(m.c.board.ColumnCards(1)); got != 1 || m.c.board.ColumnCards(1)[0].Task.Line != card.Task.Line || m.c.board.ColumnCards(1)[0].NotePath != card.NotePath {
 		t.Fatalf("Shift+→ no pasó la tarjeta a En progreso: doing=%d", got)
 	}
 	if !strings.Contains(lastRow(m), "→ En progreso") {
@@ -113,15 +116,15 @@ func TestKanbanShiftArrowsMoveCard(t *testing.T) {
 	}
 
 	press(m, "shift+left")
-	if len(m.c.board.Doing) != 0 || !strings.Contains(lastRow(m), "→ Por hacer") {
-		t.Errorf("Shift+← no devolvió la tarjeta a Por hacer: doing=%d, barra %q", len(m.c.board.Doing), lastRow(m))
+	if len(m.c.board.ColumnCards(1)) != 0 || !strings.Contains(lastRow(m), "→ Por hacer") {
+		t.Errorf("Shift+← no devolvió la tarjeta a Por hacer: doing=%d, barra %q", len(m.c.board.ColumnCards(1)), lastRow(m))
 	}
 	press(m, "L")
-	if len(m.c.board.Doing) != 1 {
+	if len(m.c.board.ColumnCards(1)) != 1 {
 		t.Error("L debe seguir moviendo la tarjeta")
 	}
 	press(m, "H")
-	if len(m.c.board.Doing) != 0 {
+	if len(m.c.board.ColumnCards(1)) != 0 {
 		t.Error("H debe seguir moviendo la tarjeta")
 	}
 }
@@ -192,8 +195,8 @@ func TestKanbanFooterBackButton(t *testing.T) {
 func TestKanbanCursorFollowsCard(t *testing.T) {
 	m := newTestModel(t, 120, 35)
 	press(m, "W")
-	if len(m.c.board.Todo) < 3 {
-		t.Fatalf("la fixture necesita al menos 3 tareas por hacer, tiene %d", len(m.c.board.Todo))
+	if len(m.c.board.ColumnCards(0)) < 3 {
+		t.Fatalf("la fixture necesita al menos 3 tareas por hacer, tiene %d", len(m.c.board.ColumnCards(0)))
 	}
 	same := func(a, b views.KanbanCard) bool { return a.NotePath == b.NotePath && a.Task.Line == b.Task.Line }
 	card := *m.kanban.current()
@@ -203,5 +206,178 @@ func TestKanbanCursorFollowsCard(t *testing.T) {
 		if cur == nil || !same(*cur, card) {
 			t.Fatalf("paso %d (%s): el cursor está en %+v, se esperaba la tarjeta movida %q", step, key, cur, card.CleanText)
 		}
+	}
+}
+
+// fileLines devuelve las líneas de un archivo.
+func fileLines(t *testing.T, path string) []string {
+	t.Helper()
+	b, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return strings.Split(string(b), "\n")
+}
+
+// diffLines devuelve los números (desde 1) de las líneas que difieren entre dos versiones.
+func diffLines(a, b []string) []int {
+	var out []int
+	for i := 0; i < max(len(a), len(b)); i++ {
+		var x, y string
+		if i < len(a) {
+			x = a[i]
+		}
+		if i < len(b) {
+			y = b[i]
+		}
+		if x != y {
+			out = append(out, i+1)
+		}
+	}
+	return out
+}
+
+// TestKanbanConfiguredColumns (H4-1): las columnas salen de la config (con título libre o por idioma), el tablero
+// las muestra y mover una tarjeta escribe el tag de la columna en su línea.
+func TestKanbanConfiguredColumns(t *testing.T) {
+	m := newTestModel(t, 140, 35)
+	m.c.cfg.KanbanColumns = []config.KanbanColumn{
+		{ID: "backlog", Title: "Pendientes"},
+		{ID: "doing", Titles: map[string]string{"es": "En curso", "en": "Doing"}},
+		{ID: "review"},
+		{ID: "done"},
+	}
+	m.c.reload()
+	press(m, "W")
+	out := plain(m)
+	for _, want := range []string{"[1] Pendientes", "[2] En Curso", "[3] Review", "[4] Completado"} {
+		if !strings.Contains(out, want) {
+			t.Errorf("falta la cabecera %q:\n%s", want, out)
+		}
+	}
+	if m.c.board.NumCols() != 4 {
+		t.Fatalf("columnas = %d", m.c.board.NumCols())
+	}
+	card := *m.kanban.current()
+	before := fileLines(t, card.NotePath)
+	press(m, "L", "L")
+	if m.kanban.col != 2 {
+		t.Fatalf("la tarjeta debía quedar en la columna 3, está en %d", m.kanban.col)
+	}
+	after := fileLines(t, card.NotePath)
+	if d := diffLines(before, after); len(d) != 1 || !strings.HasSuffix(after[d[0]-1], " #kb/review") {
+		t.Errorf("debía cambiar 1 línea terminada en #kb/review: %v → %q", d, after[max(0, d[0]-1)])
+	}
+	press(m, "space") // a hecho
+	if got := m.c.board.ColumnCards(3); len(got) == 0 || got[0].Task.Line != card.Task.Line && !hasCard(got, card) {
+		t.Errorf("Espacio debía llevarla a la columna de hecho")
+	}
+	if strings.Contains(strings.Join(fileLines(t, card.NotePath), "\n"), "#kb/review") {
+		t.Error("al pasar a hecho no debe quedar el tag de la columna anterior")
+	}
+	if !strings.Contains(lastRow(m), "→ Completado") {
+		t.Errorf("el aviso debía decir la columna: %q", lastRow(m))
+	}
+}
+
+func hasCard(cards []views.KanbanCard, c views.KanbanCard) bool {
+	for _, x := range cards {
+		if x.NotePath == c.NotePath && x.Task.Line == c.Task.Line {
+			return true
+		}
+	}
+	return false
+}
+
+// TestKanbanDoesNotOverwriteExternalChange (K2): si la nota cambió en disco entre que se cargó y que se mueve la
+// tarjeta, no se pisa el cambio: se recarga y se avisa; al repetir, ya con la nota al día, mueve.
+func TestKanbanDoesNotOverwriteExternalChange(t *testing.T) {
+	m := newTestModel(t, 120, 35)
+	press(m, "W")
+	card := *m.kanban.current()
+	original, _ := os.ReadFile(card.NotePath)
+	external := string(original) + "\nAñadido por otro programa\n"
+	os.WriteFile(card.NotePath, []byte(external), 0o644)
+	later := time.Now().Add(5 * time.Second)
+	os.Chtimes(card.NotePath, later, later)
+
+	press(m, "L")
+	if got, _ := os.ReadFile(card.NotePath); string(got) != external {
+		t.Fatalf("se pisó el cambio externo:\n%s", got)
+	}
+	if !strings.Contains(lastRow(m), "Cambió por fuera") {
+		t.Errorf("debía avisar que la nota cambió: %q", lastRow(m))
+	}
+	if len(m.c.board.ColumnCards(1)) != 0 {
+		t.Error("la tarjeta no debía haberse movido")
+	}
+	press(m, "L") // con la nota recargada sí mueve
+	if got := fileLines(t, card.NotePath); !strings.Contains(strings.Join(got, "\n"), "Añadido por otro programa") || len(m.c.board.ColumnCards(1)) != 1 {
+		t.Error("tras recargar, mover debe funcionar y conservar el cambio externo")
+	}
+}
+
+// TestKanbanDragAndDrop (H4-2, K3): arrastrar una tarjeta con el mouse a otra columna la mueve y reescribe solo su
+// línea; mientras se arrastra, la tarjeta va resaltada y la columna de destino marcada; soltar donde empezó o
+// cancelar con Esc no hace nada.
+func TestKanbanDragAndDrop(t *testing.T) {
+	m := newTestModel(t, 120, 35)
+	press(m, "W")
+	card := *m.kanban.current()
+	x, y, ok := cellOf(m, card.CleanText[:12])
+	if !ok {
+		t.Fatalf("no se ve la tarjeta %q", card.CleanText)
+	}
+	before := fileLines(t, card.NotePath)
+	colW := m.layout.Kanban.W / 3
+
+	m.Update(tea.MouseClickMsg{X: x + 2, Y: y, Button: tea.MouseLeft})
+	if m.kanban.press == nil || m.kanban.drag.Active {
+		t.Fatal("al apretar el botón sobre una tarjeta no empieza aún un arrastre")
+	}
+	m.Update(tea.MouseMotionMsg{X: colW + colW/2, Y: y + 4, Button: tea.MouseLeft})
+	if !m.kanban.drag.Active || m.kanban.drag.Target != 1 {
+		t.Fatalf("el arrastre debía apuntar a la columna 2: %+v", m.kanban.drag)
+	}
+	out := plain(m)
+	if !strings.Contains(out, "⇢") || !strings.Contains(out, "▸ [2]") {
+		t.Errorf("durante el arrastre la tarjeta lleva ⇢ y la columna de destino ▸:\n%s", out)
+	}
+	if got := fileLines(t, card.NotePath); len(diffLines(before, got)) != 0 {
+		t.Error("el archivo no debe cambiar hasta soltar")
+	}
+	m.Update(tea.MouseReleaseMsg{X: colW + colW/2, Y: y + 4, Button: tea.MouseLeft})
+	if m.kanban.drag.Active || m.kanban.press != nil {
+		t.Error("al soltar termina el arrastre")
+	}
+	after := fileLines(t, card.NotePath)
+	d := diffLines(before, after)
+	if len(d) != 1 || d[0] != card.Task.Line || !strings.HasSuffix(after[d[0]-1], " #kb/doing") {
+		t.Fatalf("debía cambiar solo la línea %d con #kb/doing: %v", card.Task.Line, d)
+	}
+	if !hasCard(m.c.board.ColumnCards(1), card) || m.kanban.col != 1 || !strings.Contains(lastRow(m), "→ En progreso") {
+		t.Errorf("la tarjeta debía estar en la columna 2 con el aviso: col=%d %q", m.kanban.col, lastRow(m))
+	}
+
+	// soltar en la misma columna: nada
+	x, y, _ = cellOf(m, card.CleanText[:12])
+	snapshot := fileLines(t, card.NotePath)
+	m.Update(tea.MouseClickMsg{X: x + 2, Y: y, Button: tea.MouseLeft})
+	m.Update(tea.MouseMotionMsg{X: x + 3, Y: y + 1, Button: tea.MouseLeft})
+	m.Update(tea.MouseReleaseMsg{X: x + 3, Y: y + 1, Button: tea.MouseLeft})
+	if len(diffLines(snapshot, fileLines(t, card.NotePath))) != 0 {
+		t.Error("soltar en la misma columna no debe escribir")
+	}
+	// Esc cancela (un segundo clic seguido en la misma tarjeta sería un doble clic: se espera)
+	time.Sleep(450 * time.Millisecond)
+	m.Update(tea.MouseClickMsg{X: x + 2, Y: y, Button: tea.MouseLeft})
+	m.Update(tea.MouseMotionMsg{X: 2, Y: y, Button: tea.MouseLeft})
+	if !m.kanban.drag.Active {
+		t.Fatal("debía haber un arrastre hacia la columna 1")
+	}
+	press(m, "esc")
+	m.Update(tea.MouseReleaseMsg{X: 2, Y: y, Button: tea.MouseLeft})
+	if m.kanbanOn == false || len(diffLines(snapshot, fileLines(t, card.NotePath))) != 0 {
+		t.Error("Esc debe cancelar el arrastre sin salir del Kanban ni escribir")
 	}
 }

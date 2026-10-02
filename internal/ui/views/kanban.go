@@ -2,141 +2,134 @@ package views
 
 import (
 	"fmt"
-	"github.com/MathiasDrizzy/lazymark/internal/ui/textwidth"
 	"strings"
+	"unicode"
 
 	"charm.land/lipgloss/v2"
 	"github.com/MathiasDrizzy/lazymark/internal/i18n"
 	"github.com/MathiasDrizzy/lazymark/internal/storage"
 	"github.com/MathiasDrizzy/lazymark/internal/ui/mouse"
+	"github.com/MathiasDrizzy/lazymark/internal/ui/textwidth"
 	"github.com/MathiasDrizzy/lazymark/internal/ui/theme"
 )
 
-// KanbanCard representa una tarjeta individual en el tablero Kanban
+// KanbanCard es una tarjeta del tablero: una tarea de una nota.
 type KanbanCard struct {
 	Task      storage.Task
 	NotePath  string
 	NoteTitle string
 	CleanText string
-	Stage     storage.TaskStage
+	Column    int // la columna en la que está
 }
 
-// KanbanBoard agrupa las tarjetas por sus columnas/etapas
+// KanbanBoard agrupa las tarjetas por columnas. IDs y Titles tienen una entrada por columna.
 type KanbanBoard struct {
-	Todo  []KanbanCard
-	Doing []KanbanCard
-	Done  []KanbanCard
+	IDs    []string
+	Titles []string
+	Cols   [][]KanbanCard
 }
 
-// ColumnCards devuelve el slice de tarjetas de la columna indicada (0=Todo, 1=Doing, 2=Done)
+// NumCols es la cantidad de columnas.
+func (b *KanbanBoard) NumCols() int { return len(b.Cols) }
+
+// ColumnCards devuelve las tarjetas de la columna col (nil si no existe).
 func (b *KanbanBoard) ColumnCards(col int) []KanbanCard {
-	switch col {
-	case 0:
-		return b.Todo
-	case 1:
-		return b.Doing
-	case 2:
-		return b.Done
-	default:
+	if col < 0 || col >= len(b.Cols) {
 		return nil
 	}
+	return b.Cols[col]
 }
 
-// TotalCards devuelve el total de tarjetas presentes en el tablero
+// TotalCards devuelve el total de tarjetas del tablero.
 func (b *KanbanBoard) TotalCards() int {
-	return len(b.Todo) + len(b.Doing) + len(b.Done)
+	n := 0
+	for _, c := range b.Cols {
+		n += len(c)
+	}
+	return n
 }
 
-// CollectKanban extrae todas las tareas de todas las notas y las organiza en columnas Kanban
-func CollectKanban(notes []storage.Note) KanbanBoard {
-	var board KanbanBoard
+// CollectKanban extrae las tareas de todas las notas y las reparte en las columnas cols (con sus títulos).
+func CollectKanban(notes []storage.Note, cols storage.Columns, titles []string) KanbanBoard {
+	board := KanbanBoard{IDs: append([]string(nil), cols...), Titles: titles, Cols: make([][]KanbanCard, len(cols))}
+	for len(board.Titles) < len(cols) {
+		board.Titles = append(board.Titles, cols[len(board.Titles)])
+	}
 	for _, note := range notes {
 		for _, task := range note.Tasks {
-			stage := storage.GetTaskStage(task)
-			card := KanbanCard{
+			col := cols.Of(task)
+			board.Cols[col] = append(board.Cols[col], KanbanCard{
 				Task:      task,
 				NotePath:  note.Path,
 				NoteTitle: note.Title,
 				CleanText: storage.CleanTaskText(task.Text),
-				Stage:     stage,
-			}
-			switch stage {
-			case storage.StageTodo:
-				board.Todo = append(board.Todo, card)
-			case storage.StageDoing:
-				board.Doing = append(board.Doing, card)
-			case storage.StageDone:
-				board.Done = append(board.Done, card)
-			}
+				Column:    col,
+			})
 		}
 	}
 	return board
 }
 
-// RenderKanban genera la vista de 3 columnas del tablero Kanban estilo Taskell/Kaban
-func RenderKanban(board KanbanBoard, activeCol int, selectedRows [3]int, width, height int, ht *mouse.HitTester, offsetY int) string {
-	if width < 30 {
-		width = 30
-	}
-	if height < 5 {
-		height = 5
-	}
+// KanbanDrag describe un arrastre en curso: la tarjeta (Col, Idx) que se lleva y la columna de destino bajo el puntero.
+type KanbanDrag struct {
+	Active   bool
+	Col, Idx int
+	Target   int
+}
 
-	colW0 := width / 3
-	colW1 := width / 3
-	colW2 := width - (colW0 + colW1) // Absorber el remanente de división entera
-
-	colWidths := [3]int{colW0, colW1, colW2}
-	colTitles := [3]string{
-		i18n.T("[1] Por Hacer", "[1] To Do"),
-		i18n.T("[2] En Progreso", "[2] In Progress"),
-		i18n.T("[3] Completado", "[3] Done"),
+// titleCase pone en mayúscula la primera letra de cada palabra ("En progreso" → "En Progreso").
+func titleCase(s string) string {
+	words := strings.Fields(s)
+	for i, w := range words {
+		r := []rune(w)
+		r[0] = unicode.ToUpper(r[0])
+		words[i] = string(r)
 	}
+	return strings.Join(words, " ")
+}
 
-	colEmptyMsgs := [3]string{
-		i18n.T("  (Sin tareas pendientes)", "  (No pending tasks)"),
-		i18n.T("  (Sin tareas en curso. Mueve con L)", "  (No tasks in progress. Move with L)"),
-		i18n.T("  (Sin tareas completadas)", "  (No completed tasks)"),
+// RenderKanban genera la vista del tablero: una caja por columna, con sus tarjetas. selectedRows tiene la
+// tarjeta seleccionada de cada columna y drag, el arrastre en curso (la tarjeta que se lleva va resaltada y
+// la columna de destino, marcada).
+func RenderKanban(board KanbanBoard, activeCol int, selectedRows []int, width, height int, ht *mouse.HitTester, offsetY int, drag KanbanDrag) string {
+	n := board.NumCols()
+	if n == 0 {
+		return ""
 	}
+	width = max(width, 10*n)
+	height = max(height, 5)
 
-	usableHeight := height - 2
-	if usableHeight < 1 {
-		usableHeight = 1
+	colWidths := make([]int, n)
+	for c := range colWidths {
+		colWidths[c] = width / n
 	}
+	colWidths[n-1] += width - (width/n)*n // absorbe el remanente de la división entera
 
-	// NOTA DE MEMORIA: En HitTester, registrar primero las zonas base de columna (menor prioridad z-index)
-	currentX := 0
+	usableHeight := max(height-2, 1)
+	emptyMsg := lipgloss.NewStyle().Foreground(theme.ColorOverlay0).Italic(true).Render(i18n.T("  (Sin tareas)", "  (No tasks)"))
+
+	// registrar primero las zonas de columna (menor prioridad), después las de tarjeta
 	if ht != nil {
-		for c := 0; c < 3; c++ {
-			w := colWidths[c]
-			ht.Register(
-				fmt.Sprintf("kanban-col-bg-%d", c),
-				mouse.ZoneKanbanCol,
-				currentX,
-				offsetY,
-				currentX+w-1,
-				offsetY+height-1,
-				c,
-				fmt.Sprintf("%d", c),
-			)
-			currentX += w
+		x := 0
+		for c := 0; c < n; c++ {
+			ht.Register(fmt.Sprintf("kanban-col-bg-%d", c), mouse.ZoneKanbanCol, x, offsetY, x+colWidths[c]-1, offsetY+height-1, c, fmt.Sprintf("%d", c))
+			x += colWidths[c]
 		}
 	}
 
-	var renderedCols []string
+	doneCol := board.doneIndex()
+	var rendered []string
 	colStartX := 0
-
-	for c := 0; c < 3; c++ {
+	for c := 0; c < n; c++ {
 		w := colWidths[c]
 		cards := board.ColumnCards(c)
 		isActive := c == activeCol
-		selIdx := selectedRows[c]
-		if selIdx < 0 {
-			selIdx = 0
+		target := drag.Active && c == drag.Target
+		selIdx := 0
+		if c < len(selectedRows) {
+			selIdx = selectedRows[c]
 		}
-		if selIdx >= len(cards) && len(cards) > 0 {
-			selIdx = len(cards) - 1
-		}
+		selIdx = max(0, min(selIdx, len(cards)-1))
 
 		badge := "0 of 0"
 		if len(cards) > 0 {
@@ -145,99 +138,74 @@ func RenderKanban(board KanbanBoard, activeCol int, selectedRows [3]int, width, 
 
 		var lines []string
 		if len(cards) == 0 {
-			emptyStyle := theme.NormalItem.Copy().Italic(true)
-			lines = append(lines, emptyStyle.Render(colEmptyMsgs[c]))
+			lines = append(lines, emptyMsg)
 		} else {
 			startIdx := 0
 			if selIdx >= usableHeight {
 				startIdx = selIdx - usableHeight + 1
 			}
-			endIdx := startIdx + usableHeight
-			if endIdx > len(cards) {
-				endIdx = len(cards)
-			}
-
-			contentWidth := w - 4
-			if contentWidth < 4 {
-				contentWidth = 4
-			}
+			endIdx := min(startIdx+usableHeight, len(cards))
+			contentWidth := max(w-4, 4)
 
 			for i := startIdx; i < endIdx; i++ {
 				card := cards[i]
 				isSelected := i == selIdx
+				dragged := drag.Active && c == drag.Col && i == drag.Idx
 
-				var selStyle lipgloss.Style
-				if isSelected {
-					if isActive {
-						selStyle = theme.SelectedLineActive
-					} else {
-						selStyle = theme.SelectedLineInactive
-					}
+				mark := "☐"
+				markColor := theme.ColorSubtext0
+				switch {
+				case c == doneCol:
+					mark, markColor = "☑", theme.ColorGreen
+				case c != 0:
+					mark, markColor = "◓", theme.ColorYellow
 				}
-
-				displayText := card.CleanText
-				noteOrigin := card.NoteTitle
-
 				var rowText string
-				if isSelected {
+				if isSelected || dragged {
+					style := theme.SelectedLineInactive
+					if isActive || dragged {
+						style = theme.SelectedLineActive
+					}
 					cursor := "▸ "
-					checkbox := "☐"
-					if card.Stage == storage.StageDone {
-						checkbox = "☑"
-					} else if card.Stage == storage.StageDoing {
-						checkbox = "◓"
+					if dragged {
+						cursor = "⇢ "
 					}
-					rawLine := fmt.Sprintf("%s%s %s (%s)", cursor, checkbox, displayText, noteOrigin)
-					rawLine = textwidth.Truncate(rawLine, contentWidth, "")
-					lineW := textwidth.Width(rawLine)
-					if lineW < contentWidth {
-						rawLine += strings.Repeat(" ", contentWidth-lineW)
+					raw := textwidth.Truncate(fmt.Sprintf("%s%s %s (%s)", cursor, mark, card.CleanText, card.NoteTitle), contentWidth, "")
+					if lw := textwidth.Width(raw); lw < contentWidth {
+						raw += strings.Repeat(" ", contentWidth-lw)
 					}
-					rowText = selStyle.Render(rawLine)
+					rowText = style.Render(raw)
 				} else {
-					cursor := "  "
-					var checkbox string
-					var textStyle string
-					switch card.Stage {
-					case storage.StageDone:
-						checkbox = theme.NormalItem.Copy().Foreground(theme.ColorGreen).Render("☑")
-						textStyle = theme.TaskDone.Render(displayText)
-					case storage.StageDoing:
-						checkbox = theme.NormalItem.Copy().Foreground(theme.ColorYellow).Render("◓")
-						textStyle = theme.TaskPending.Copy().Foreground(theme.ColorPeach).Render(displayText)
-					default:
-						checkbox = theme.NormalItem.Copy().Foreground(theme.ColorSubtext0).Render("☐")
-						textStyle = theme.TaskPending.Render(displayText)
+					text := theme.TaskPending.Render(card.CleanText)
+					switch {
+					case c == doneCol:
+						text = theme.TaskDone.Render(card.CleanText)
+					case c != 0:
+						text = theme.TaskPending.Foreground(theme.ColorPeach).Render(card.CleanText)
 					}
-					originLabel := theme.NormalItem.Copy().Foreground(theme.ColorOverlay0).Render(fmt.Sprintf("(%s)", noteOrigin))
-					rowText = fmt.Sprintf("%s%s %s %s", cursor, checkbox, textStyle, originLabel)
-					rowText = textwidth.Truncate(rowText, contentWidth, "")
+					origin := theme.NormalItem.Foreground(theme.ColorOverlay0).Render(fmt.Sprintf("(%s)", card.NoteTitle))
+					rowText = textwidth.Truncate(fmt.Sprintf("  %s %s %s", theme.NormalItem.Foreground(markColor).Render(mark), text, origin), contentWidth, "")
 				}
-
 				lines = append(lines, rowText)
 
-				// Registrar zona de tarjeta (mayor prioridad z-index, registrada después de col-bg)
-				if ht != nil {
+				if ht != nil { // las tarjetas se registran después de las columnas: ganan al clic
 					rowY := offsetY + 1 + (i - startIdx)
-					ht.Register(
-						fmt.Sprintf("kanban-card-%d-%d", c, i),
-						mouse.ZoneKanbanCard,
-						colStartX+1,
-						rowY,
-						colStartX+w-2,
-						rowY,
-						i,
-						fmt.Sprintf("%d:%s:%d", c, card.NotePath, card.Task.Line),
-					)
+					ht.Register(fmt.Sprintf("kanban-card-%d-%d", c, i), mouse.ZoneKanbanCard, colStartX+1, rowY, colStartX+w-2, rowY, i,
+						fmt.Sprintf("%d:%s:%d", c, card.NotePath, card.Task.Line))
 				}
 			}
 		}
 
-		content := strings.Join(lines, "\n")
-		colBox := theme.RenderBoxWithTitle(colTitles[c], badge, content, w, height, isActive)
-		renderedCols = append(renderedCols, colBox)
+		title := fmt.Sprintf("[%d] %s", c+1, titleCase(board.Titles[c]))
+		if target {
+			title = "▸ " + title // la columna de destino del arrastre
+		}
+		box := theme.RenderBoxWithTitle(title, badge, strings.Join(lines, "\n"), w, height, isActive || target)
+		rendered = append(rendered, box)
 		colStartX += w
 	}
-
-	return lipgloss.JoinHorizontal(lipgloss.Top, renderedCols...)
+	return lipgloss.JoinHorizontal(lipgloss.Top, rendered...)
 }
+
+// doneIndex es la columna de las tareas hechas ("done", o la última).
+func (b *KanbanBoard) doneIndex() int { return storage.Columns(b.IDs).DoneIndex() }

@@ -1,0 +1,29 @@
+[
+  {
+    "id": "ideas.md",
+    "title": "ideas",
+    "path": "<DIR>/ideas.md",
+    "tags": [],
+    "tasks_count": 2,
+    "mod_time": "<TIME>"
+  },
+  {
+    "id": "proyecto.md",
+    "title": "proyecto",
+    "path": "<DIR>/proyecto.md",
+    "tags": [
+      "trabajo",
+      "wip"
+    ],
+    "tasks_count": 4,
+    "mod_time": "<TIME>"
+  },
+  {
+    "id": "diario.md",
+    "title": "diario",
+    "path": "<DIR>/sub/diario.md",
+    "tags": [],
+    "tasks_count": 0,
+    "mod_time": "<TIME>"
+  }
+]

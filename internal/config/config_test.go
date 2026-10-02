@@ -361,3 +361,58 @@ func TestMascotSetting(t *testing.T) {
 		t.Error("sin el campo la mascota debe estar activada")
 	}
 }
+
+// TestKanbanColumns (H4-1): por defecto todo, doing y done; se configuran con ids y título libre o por idioma; una
+// lista inválida (menos de 2, ids repetidos o mal escritos) vuelve a la de por defecto.
+func TestKanbanColumns(t *testing.T) {
+	isolate(t)
+	cfg, _ := Load(t.TempDir())
+	if got := strings.Join(cfg.KanbanIDs(), ","); got != "todo,doing,done" {
+		t.Fatalf("por defecto = %s", got)
+	}
+	if es, en := cfg.KanbanColumns[1].DisplayTitle("es"), cfg.KanbanColumns[1].DisplayTitle("en"); es != "En progreso" || en != "In progress" {
+		t.Errorf("títulos por idioma: %q %q", es, en)
+	}
+	writeDiskConfig(t, `{"keymap_version":2,"kanban_columns":[
+		{"id":"backlog","title":"Pendientes"},
+		{"id":"doing","titles":{"es":"En curso","en":"Doing"}},
+		{"id":"review"},
+		{"id":"done"}]}`)
+	cfg, _ = Load(t.TempDir())
+	if got := strings.Join(cfg.KanbanIDs(), ","); got != "backlog,doing,review,done" {
+		t.Fatalf("configuradas = %s", got)
+	}
+	cols := cfg.KanbanColumns
+	for i, want := range []string{"Pendientes", "En curso", "review", "Completado"} {
+		if got := cols[i].DisplayTitle("es"); got != want {
+			t.Errorf("título %d en español = %q, se esperaba %q", i, got, want)
+		}
+	}
+	if cols[1].DisplayTitle("en") != "Doing" || cols[0].DisplayTitle("en") != "Pendientes" {
+		t.Error("título por idioma y libre en inglés")
+	}
+	for name, bad := range map[string]string{
+		"una sola":       `[{"id":"a"}]`,
+		"repetidas":      `[{"id":"a"},{"id":"a"}]`,
+		"mayúsculas":     `[{"id":"A"},{"id":"b"}]`,
+		"con espacio":    `[{"id":"a b"},{"id":"c"}]`,
+		"con barra":      `[{"id":"a/b"},{"id":"c"}]`,
+		"vacío":          `[]`,
+		"demasiadas (7)": `[{"id":"a"},{"id":"b"},{"id":"c"},{"id":"d"},{"id":"e"},{"id":"f"},{"id":"g"}]`,
+		"id vacío":       `[{"id":""},{"id":"b"}]`,
+	} {
+		writeDiskConfig(t, `{"keymap_version":2,"kanban_columns":`+bad+`}`)
+		got, _ := Load(t.TempDir())
+		if strings.Join(got.KanbanIDs(), ",") != "todo,doing,done" {
+			t.Errorf("%s: debía volver a las de por defecto: %v", name, got.KanbanIDs())
+		}
+	}
+	// y se guardan tal cual
+	cfg.KanbanColumns = []KanbanColumn{{ID: "a"}, {ID: "b", Title: "B"}}
+	if err := cfg.Save(); err != nil {
+		t.Fatal(err)
+	}
+	if again, _ := Load(cfg.NotesDir); strings.Join(again.KanbanIDs(), ",") != "a,b" {
+		t.Errorf("tras guardar y recargar: %v", again.KanbanIDs())
+	}
+}

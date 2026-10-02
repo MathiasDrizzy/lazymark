@@ -72,7 +72,7 @@ func New(baseDir string) *Storage {
 var (
 	taskRegex   = regexp.MustCompile(`^[-*]\s+\[([ xX])\]\s+(.*)$`)
 	imageRegex  = regexp.MustCompile(`!\[(.*?)\]\((.*?)\)`)
-	tagRegex    = regexp.MustCompile(`#([a-zA-Z0-9_-]+)`)
+	tagRegex    = regexp.MustCompile(`#([a-zA-Z0-9_-]+)(/[a-zA-Z0-9_/-]*)?`)
 	unsafeChars = regexp.MustCompile(`[\\/:*?"<>|]`)
 )
 
@@ -273,6 +273,9 @@ func (s *Storage) extractTags(content string) []string {
 	tagMap := make(map[string]bool)
 	for _, m := range matches {
 		if len(m) > 1 {
+			if strings.EqualFold(m[1], "kb") && len(m) > 2 && m[2] != "" {
+				continue // #kb/<columna> es del tablero, no una categoría
+			}
 			tagMap[strings.ToLower(m[1])] = true
 		}
 	}
@@ -489,61 +492,6 @@ func rewriteLine(notePath string, lineNum int, expected time.Time, fn func(line 
 		return fmt.Errorf("error al renombrar archivo atómico: %w", err)
 	}
 	return nil
-}
-
-// TaskStage define la columna del tablero Kanban (To Do, In Progress, Done)
-type TaskStage int
-
-const (
-	StageTodo  TaskStage = iota // 0: Por Hacer (- [ ])
-	StageDoing                  // 1: En Progreso (- [ ] con #doing, #wip, #progreso)
-	StageDone                   // 2: Completado (- [x])
-)
-
-var inProgressTagRegex = regexp.MustCompile(`(?i)#(doing|wip|progreso|in-progress)\b`)
-
-// IsTaskDoing determina si una tarea está en progreso basándose en sus etiquetas
-func IsTaskDoing(taskText string) bool {
-	return inProgressTagRegex.MatchString(taskText)
-}
-
-// CleanTaskText devuelve el texto de la tarea sin las etiquetas de control Kanban (#doing, #wip)
-func CleanTaskText(taskText string) string {
-	cleaned := inProgressTagRegex.ReplaceAllString(taskText, "")
-	return strings.TrimSpace(cleaned)
-}
-
-// GetTaskStage devuelve la etapa Kanban de una tarea
-func GetTaskStage(task Task) TaskStage {
-	if task.Done {
-		return StageDone
-	}
-	if IsTaskDoing(task.Text) {
-		return StageDoing
-	}
-	return StageTodo
-}
-
-// UpdateTaskStage actualiza de forma atómica en disco el estado Kanban de una tarea
-func (s *Storage) UpdateTaskStage(notePath string, lineNum int, targetStage TaskStage) error {
-	notePath, err := s.ResolveNote(notePath)
-	if err != nil {
-		return err
-	}
-	return rewriteLine(notePath, lineNum, time.Time{}, func(line string) (string, error) {
-		m := toggleTaskRegex.FindStringSubmatch(line)
-		if len(m) != 4 {
-			return "", fmt.Errorf("la línea %d no es una tarea válida de markdown", lineNum)
-		}
-		clean := CleanTaskText(strings.TrimSpace(strings.TrimPrefix(m[3], "]")))
-		switch targetStage {
-		case StageDoing:
-			return fmt.Sprintf("%s ] %s #doing", m[1], clean), nil
-		case StageDone:
-			return fmt.Sprintf("%sx] %s", m[1], clean), nil
-		}
-		return fmt.Sprintf("%s ] %s", m[1], clean), nil
-	})
 }
 
 // slug convierte un nombre visible en un nombre de archivo seguro.

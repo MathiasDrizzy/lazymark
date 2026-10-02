@@ -4,162 +4,189 @@ import (
 	"bytes"
 	"encoding/json"
 	"os"
+	"path/filepath"
 	"strings"
 	"testing"
-
-	"github.com/MathiasDrizzy/lazymark/internal/storage"
 )
 
-func TestMCPServerLifecycleAndTools(t *testing.T) {
-	tempDir, err := os.MkdirTemp("", "lazymark-mcp-test-*")
-	if err != nil {
-		t.Fatalf("Fallo al crear temp dir: %v", err)
+// session ejecuta UNA sesión stdio contra el servidor: escribe todas las líneas JSON-RPC por stdin, como lo
+// hace un cliente MCP, y devuelve las respuestas por id.
+func session(t *testing.T, dir string, reqs ...map[string]interface{}) map[float64]JSONRPCResponse {
+	t.Helper()
+	var in bytes.Buffer
+	for _, r := range reqs {
+		r["jsonrpc"] = "2.0"
+		b, _ := json.Marshal(r)
+		in.Write(b)
+		in.WriteByte('\n')
 	}
-	defer os.RemoveAll(tempDir)
-
-	st := storage.New(tempDir)
-	note, err := st.CreateNote("Nota Para MCP")
-	if err != nil {
-		t.Fatalf("Error al crear nota: %v", err)
+	var out bytes.Buffer
+	if err := NewServer(dir).Serve(&in, &out); err != nil {
+		t.Fatal(err)
 	}
-
-	content := "# Nota Para MCP\n\n- [ ] Tarea Todo\n- [ ] Tarea Doing #doing\n- [x] Tarea Done\n"
-	if err := os.WriteFile(note.Path, []byte(content), 0644); err != nil {
-		t.Fatalf("Error al escribir nota: %v", err)
-	}
-
-	server := NewServer(tempDir)
-
-	// Helper para ejecutar una petición JSON-RPC y obtener la respuesta decodificada
-	sendRequest := func(method string, id interface{}, params interface{}) JSONRPCResponse {
-		var req JSONRPCRequest
-		req.JSONRPC = "2.0"
-		req.ID = id
-		req.Method = method
-		if params != nil {
-			pBytes, _ := json.Marshal(params)
-			req.Params = pBytes
+	resps := map[float64]JSONRPCResponse{}
+	dec := json.NewDecoder(&out)
+	for dec.More() {
+		var r JSONRPCResponse
+		if err := dec.Decode(&r); err != nil {
+			t.Fatalf("respuesta inválida: %v", err)
 		}
+		id, _ := r.ID.(float64)
+		resps[id] = r
+	}
+	return resps
+}
 
-		inBytes, _ := json.Marshal(req)
-		inBuf := bytes.NewBuffer(append(inBytes, '\n'))
-		var outBuf bytes.Buffer
+func call(id int, tool string, args map[string]interface{}) map[string]interface{} {
+	return map[string]interface{}{"id": id, "method": "tools/call", "params": map[string]interface{}{"name": tool, "arguments": args}}
+}
 
-		if err := server.Serve(inBuf, &outBuf); err != nil {
-			t.Fatalf("Error al servir request %s: %v", method, err)
+// toolText devuelve el texto de una respuesta de herramienta y si fue un error.
+func toolText(t *testing.T, r JSONRPCResponse) (string, bool) {
+	t.Helper()
+	if r.Error != nil {
+		t.Fatalf("error JSON-RPC: %+v", r.Error)
+	}
+	b, _ := json.Marshal(r.Result)
+	var res CallToolResult
+	if err := json.Unmarshal(b, &res); err != nil || len(res.Content) == 0 {
+		t.Fatalf("resultado inválido: %s", b)
+	}
+	return res.Content[0].Text, res.IsError
+}
+
+// TestMCPSession (MC1): una sesión completa por stdio: initialize, tools/list y una llamada a cada herramienta.
+func TestMCPSession(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("XDG_CONFIG_HOME", filepath.Join(home, ".config"))
+	t.Setenv("AppData", filepath.Join(home, "AppData"))
+	dir, _ := filepath.EvalSymlinks(t.TempDir())
+	notes := filepath.Join(dir, "notas")
+	os.MkdirAll(notes, 0o755)
+	proyecto := filepath.Join(notes, "proyecto.md")
+	os.WriteFile(proyecto, []byte("# Proyecto\n\n- [ ] Tarea Todo\n- [ ] Tarea Doing #kb/doing\n- [x] Tarea Done\n"), 0o644)
+	secreto := filepath.Join(dir, "secreto.md")
+	os.WriteFile(secreto, []byte("clave\n"), 0o644)
+
+	r := session(t, notes,
+		map[string]interface{}{"id": 1, "method": "initialize", "params": map[string]interface{}{}},
+		map[string]interface{}{"method": "notifications/initialized"}, // sin id: no tiene respuesta
+		map[string]interface{}{"id": 2, "method": "tools/list"},
+		call(3, "list_notes", nil),
+		call(4, "read_note", map[string]interface{}{"path": "proyecto.md"}),
+		call(5, "list_tasks", map[string]interface{}{"pending_only": true}),
+		call(6, "get_kanban", nil),
+		call(7, "create_note", map[string]interface{}{"title": "Desde MCP", "empty": true}),
+	)
+	if len(r) != 7 {
+		t.Fatalf("7 respuestas (la notificación no tiene), hay %d", len(r))
+	}
+
+	// initialize
+	init, _ := json.Marshal(r[1].Result)
+	if !strings.Contains(string(init), `"protocolVersion":"2024-11-05"`) || !strings.Contains(string(init), `"tools"`) {
+		t.Errorf("initialize: %s", init)
+	}
+
+	// tools/list: las 7 herramientas, cada una con descripción y esquema de entrada
+	lst, _ := json.Marshal(r[2].Result)
+	var tl struct {
+		Tools []struct {
+			Name        string                 `json:"name"`
+			Description string                 `json:"description"`
+			InputSchema map[string]interface{} `json:"inputSchema"`
+		} `json:"tools"`
+	}
+	json.Unmarshal(lst, &tl)
+	var names []string
+	for _, tool := range tl.Tools {
+		names = append(names, tool.Name)
+		if tool.Description == "" || tool.InputSchema["type"] != "object" {
+			t.Errorf("%s: falta la descripción o el esquema", tool.Name)
 		}
+	}
+	if got := strings.Join(names, ","); got != "list_notes,read_note,create_note,list_tasks,move_task,toggle_task,get_kanban" {
+		t.Errorf("herramientas: %s", got)
+	}
 
-		var resp JSONRPCResponse
-		if err := json.Unmarshal(outBuf.Bytes(), &resp); err != nil {
-			t.Fatalf("Error al decodificar respuesta JSON-RPC: %v, raw: %s", err, outBuf.String())
+	if txt, isErr := toolText(t, r[3]); isErr || !strings.Contains(txt, `"id": "proyecto.md"`) || !strings.Contains(txt, `"tasks_count": 3`) {
+		t.Errorf("list_notes: %v %s", isErr, txt)
+	}
+	if txt, isErr := toolText(t, r[4]); isErr || !strings.HasPrefix(txt, "# Proyecto") {
+		t.Errorf("read_note: %v %s", isErr, txt)
+	}
+	txt, isErr := toolText(t, r[5])
+	var pending []struct {
+		ID, Text, Column string
+		Done             bool
+	}
+	if err := json.Unmarshal([]byte(txt), &pending); err != nil || isErr || len(pending) != 2 {
+		t.Fatalf("list_tasks pending: %v %v %s", err, isErr, txt)
+	}
+	if pending[1].Column != "doing" || pending[0].Column != "todo" || pending[1].Text != "Tarea Doing" {
+		t.Errorf("columnas/texto limpio: %+v", pending)
+	}
+	if txt, isErr := toolText(t, r[6]); isErr || !strings.Contains(txt, `"id": "todo"`) || !strings.Contains(txt, `"id": "done"`) || !strings.Contains(txt, "Tarea Done") {
+		t.Errorf("get_kanban: %v %s", isErr, txt)
+	}
+	if txt, isErr := toolText(t, r[7]); isErr || !strings.Contains(txt, "desde-mcp.md") {
+		t.Errorf("create_note: %v %s", isErr, txt)
+	}
+	if b, _ := os.ReadFile(filepath.Join(notes, "desde-mcp.md")); string(b) != "# Desde MCP\n" {
+		t.Errorf("create_note empty escribió %q", b)
+	}
+
+	// otra sesión: mover y marcar por id, y los errores
+	todoID := pending[0].ID
+	r = session(t, notes,
+		call(1, "move_task", map[string]interface{}{"id": todoID, "column": "doing"}),
+		call(2, "toggle_task", map[string]interface{}{"id": todoID}),
+		call(3, "toggle_task", map[string]interface{}{"path": "proyecto.md", "line": 4}), // forma anterior
+		call(4, "move_task", map[string]interface{}{"id": todoID, "column": "cancelada"}),
+		call(5, "move_task", map[string]interface{}{"id": "proyecto.md#00000000", "column": "doing"}),
+		call(6, "read_note", map[string]interface{}{"path": secreto}),
+		call(7, "read_note", map[string]interface{}{"path": "../secreto.md"}),
+		call(8, "create_note", map[string]interface{}{"title": "X", "folder": ".."}),
+		call(9, "move_task", map[string]interface{}{"id": todoID}),
+		call(10, "borrar_todo", nil),
+	)
+	if txt, isErr := toolText(t, r[1]); isErr || !strings.Contains(txt, `"column": "doing"`) {
+		t.Errorf("move_task: %v %s", isErr, txt)
+	}
+	if txt, isErr := toolText(t, r[2]); isErr || !strings.Contains(txt, `"column": "done"`) || !strings.Contains(txt, `"done": true`) {
+		t.Errorf("toggle_task por id: %v %s", isErr, txt)
+	}
+	if txt, isErr := toolText(t, r[3]); isErr || !strings.Contains(txt, `"column": "done"`) {
+		t.Errorf("toggle_task por path+line: %v %s", isErr, txt)
+	}
+	for id, want := range map[float64]string{4: "código 2", 5: "código 3", 6: "código 2", 7: "código 2", 8: "código 2"} {
+		if txt, isErr := toolText(t, r[id]); !isErr || !strings.Contains(txt, want) {
+			t.Errorf("respuesta %v debía ser un error con %q: %v %s", id, want, isErr, txt)
 		}
-		return resp
 	}
-
-	// 1. Probar `initialize`
-	initResp := sendRequest("initialize", 1, map[string]interface{}{})
-	if initResp.Error != nil {
-		t.Fatalf("Error en initialize: %+v", initResp.Error)
+	if _, isErr := toolText(t, r[9]); !isErr {
+		t.Error("move_task sin column debía ser un error")
 	}
-	resultMap, ok := initResp.Result.(map[string]interface{})
-	if !ok || resultMap["protocolVersion"] != "2024-11-05" {
-		t.Errorf("Respuesta de initialize inválida: %+v", initResp.Result)
+	if _, isErr := toolText(t, r[10]); !isErr {
+		t.Error("una herramienta inexistente debía ser un error")
 	}
-
-	// 2. Probar `tools/list`
-	toolsResp := sendRequest("tools/list", 2, nil)
-	if toolsResp.Error != nil {
-		t.Fatalf("Error en tools/list: %+v", toolsResp.Error)
+	if b, _ := os.ReadFile(secreto); string(b) != "clave\n" {
+		t.Errorf("se tocó un archivo de fuera: %q", b)
 	}
-	toolsMap := toolsResp.Result.(map[string]interface{})
-	toolsList := toolsMap["tools"].([]interface{})
-	if len(toolsList) != 5 {
-		t.Errorf("Se esperaban 5 herramientas MCP, obtenidas %d", len(toolsList))
-	}
-
-	// 3. Probar tool `list_notes`
-	callListNotes := sendRequest("tools/call", 3, map[string]interface{}{
-		"name":      "list_notes",
-		"arguments": map[string]interface{}{},
-	})
-	if callListNotes.Error != nil {
-		t.Fatalf("Error en call list_notes: %+v", callListNotes.Error)
-	}
-
-	// 4. Probar tool `read_note`
-	callReadNote := sendRequest("tools/call", 4, map[string]interface{}{
-		"name": "read_note",
-		"arguments": map[string]interface{}{
-			"path": note.Path,
-		},
-	})
-	if callReadNote.Error != nil {
-		t.Fatalf("Error en call read_note: %+v", callReadNote.Error)
-	}
-
-	// 5. Probar tool `list_tasks`
-	callListTasks := sendRequest("tools/call", 5, map[string]interface{}{
-		"name": "list_tasks",
-		"arguments": map[string]interface{}{
-			"pending_only": true,
-		},
-	})
-	if callListTasks.Error != nil {
-		t.Fatalf("Error en call list_tasks: %+v", callListTasks.Error)
-	}
-
-	// 6. Probar tool `get_kanban`
-	callKanban := sendRequest("tools/call", 6, map[string]interface{}{
-		"name":      "get_kanban",
-		"arguments": map[string]interface{}{},
-	})
-	if callKanban.Error != nil {
-		t.Fatalf("Error en call get_kanban: %+v", callKanban.Error)
-	}
-	callResult := callKanban.Result.(map[string]interface{})
-	contents := callResult["content"].([]interface{})
-	text := contents[0].(map[string]interface{})["text"].(string)
-	if !strings.Contains(text, "Tarea Todo") || !strings.Contains(text, "Tarea Doing") || !strings.Contains(text, "Tarea Done") {
-		t.Errorf("Salida de get_kanban incompleta: %s", text)
-	}
-
-	// 7. Probar tool `toggle_task`
-	callToggle := sendRequest("tools/call", 7, map[string]interface{}{
-		"name": "toggle_task",
-		"arguments": map[string]interface{}{
-			"path": note.Path,
-			"line": 3,
-		},
-	})
-	if callToggle.Error != nil {
-		t.Fatalf("Error en call toggle_task: %+v", callToggle.Error)
+	if b, _ := os.ReadFile(proyecto); !strings.Contains(string(b), "- [x] Tarea Todo\n") || !strings.Contains(string(b), "- [x] Tarea Doing\n") {
+		t.Errorf("proyecto.md tras las llamadas:\n%s", b)
 	}
 }
 
-// TestMCPStaysInsideNotes (seguridad): read_note y toggle_task rechazan archivos de fuera de la carpeta de
-// notas (ruta absoluta, "..") con IsError y sin tocarlos. Antes leían y escribían cualquier archivo.
-func TestMCPStaysInsideNotes(t *testing.T) {
-	root := t.TempDir()
-	notes := root + "/notas"
-	os.MkdirAll(notes, 0o755)
-	secret := root + "/secreto.md"
-	os.WriteFile(secret, []byte("clave\n- [ ] fuera\n"), 0o644)
-	os.WriteFile(notes+"/a.md", []byte("# A\n- [ ] dentro\n"), 0o644)
-	server := NewServer(notes)
-	for _, p := range []string{secret, notes + "/../secreto.md", "/etc/hosts"} {
-		r := server.callTool("read_note", map[string]interface{}{"path": p})
-		if !r.IsError || strings.Contains(r.Content[0].Text, "clave") {
-			t.Errorf("read_note %q debía rechazarse: %+v", p, r)
-		}
-		r = server.callTool("toggle_task", map[string]interface{}{"path": p, "line": float64(2)})
-		if !r.IsError {
-			t.Errorf("toggle_task %q debía rechazarse: %+v", p, r)
-		}
+// TestMCPProtocolErrors: JSON inválido y método desconocido dan los errores estándar de JSON-RPC.
+func TestMCPProtocolErrors(t *testing.T) {
+	var out bytes.Buffer
+	in := strings.NewReader("{no es json\n" + `{"jsonrpc":"2.0","id":9,"method":"nada"}` + "\n")
+	if err := NewServer(t.TempDir()).Serve(in, &out); err != nil {
+		t.Fatal(err)
 	}
-	if b, _ := os.ReadFile(secret); string(b) != "clave\n- [ ] fuera\n" {
-		t.Errorf("se modificó un archivo de fuera: %q", b)
-	}
-	if r := server.callTool("read_note", map[string]interface{}{"path": notes + "/a.md"}); r.IsError {
-		t.Errorf("read_note dentro: %+v", r)
+	if !strings.Contains(out.String(), "-32700") || !strings.Contains(out.String(), "-32601") {
+		t.Errorf("respuestas: %s", out.String())
 	}
 }

@@ -193,7 +193,7 @@ func (m *AppModel) applyNotesDir(path string) tea.Cmd {
 
 	m.notes = newNotesPanel(m.c)
 	m.tasks.list, m.tags.list = listState{}, listState{}
-	m.kanban.selected = [3]int{}
+	m.kanban.selected = nil
 	m.preview.reset()
 	m.imgNote = ""
 	m.c.kitty.Reset()

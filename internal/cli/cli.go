@@ -2,284 +2,313 @@ package cli
 
 import (
 	"encoding/json"
+	"errors"
 	"flag"
 	"fmt"
 	"io"
 	"os"
-	"strconv"
-	"time"
+	"strings"
 
 	"github.com/MathiasDrizzy/lazymark/internal/config"
 	"github.com/MathiasDrizzy/lazymark/internal/i18n"
-	"github.com/MathiasDrizzy/lazymark/internal/storage"
-	"github.com/MathiasDrizzy/lazymark/internal/ui/views"
+	"github.com/MathiasDrizzy/lazymark/internal/ops"
 )
 
-// TaskJSON representa una tarea en formato JSON estructurado para CLI / MCP
-type TaskJSON struct {
-	Line      int    `json:"line"`
-	Text      string `json:"text"`
-	CleanText string `json:"clean_text"`
-	Done      bool   `json:"done"`
-	Stage     string `json:"stage"` // "todo", "doing", "done"
-	NoteTitle string `json:"note_title"`
-	NotePath  string `json:"note_path"`
+// parser separa los flags de los argumentos posicionales, vengan en el orden que vengan
+// (`task move <id> doing --json` y `task move --json <id> doing` son lo mismo).
+type parser struct {
+	fs      *flag.FlagSet
+	json    bool
+	dir     string
+	help    bool
+	posArgs []string
 }
 
-// NoteJSON representa una nota en formato JSON estructurado
-type NoteJSON struct {
-	ID         string   `json:"id"`
-	Title      string   `json:"title"`
-	Path       string   `json:"path"`
-	Tags       []string `json:"tags"`
-	TasksCount int      `json:"tasks_count"`
-	ModTime    string   `json:"mod_time"`
+func newParser(name, defaultDir string) *parser {
+	p := &parser{fs: flag.NewFlagSet(name, flag.ContinueOnError)}
+	p.fs.SetOutput(io.Discard)
+	p.fs.BoolVar(&p.json, "json", false, "")
+	p.fs.StringVar(&p.dir, "dir", defaultDir, "")
+	p.fs.BoolVar(&p.help, "h", false, "")
+	p.fs.BoolVar(&p.help, "help", false, "")
+	return p
 }
 
-func stageToString(s storage.TaskStage) string {
-	switch s {
-	case storage.StageDoing:
-		return "doing"
-	case storage.StageDone:
-		return "done"
-	default:
-		return "todo"
+// parse lee args; un flag desconocido, sin valor o con un valor inválido es un error de uso (código 2).
+func (p *parser) parse(args []string) error {
+	for len(args) > 0 {
+		if err := p.fs.Parse(args); err != nil {
+			return &ops.Error{Code: ExitUsage, Err: err}
+		}
+		args = p.fs.Args()
+		if len(args) > 0 {
+			p.posArgs = append(p.posArgs, args[0])
+			args = args[1:]
+		}
 	}
+	return nil
 }
 
-// RunTask ejecuta subcomandos relacionados con tareas (list, toggle)
+// need exige exactamente n argumentos posicionales.
+func (p *parser) need(n int, usage string) error {
+	if len(p.posArgs) != n {
+		return &ops.Error{Code: ExitUsage, Err: fmt.Errorf("uso: %s", usage)}
+	}
+	return nil
+}
+
+func (p *parser) service() (*ops.Service, error) {
+	dir := p.dir
+	if dir == "" {
+		dir = config.DefaultNotesDir()
+	}
+	return ops.New(dir)
+}
+
+// printJSON escribe v con sangría (el esquema de cada comando está en docs/cli.md).
+func printJSON(w io.Writer, v any) error {
+	enc := json.NewEncoder(w)
+	enc.SetIndent("", "  ")
+	return enc.Encode(v)
+}
+
+func usageText(es, en string) string { return i18n.T(es, en) }
+
+const taskUsageES = `uso: lazymark task list   [--json] [--pending] [--column <id>] [--note <ruta>] [--dir <carpeta>]
+     lazymark task toggle <id> [--json] [--dir <carpeta>]
+     lazymark task move   <id> <columna> [--json] [--dir <carpeta>]
+códigos de salida: 0 ok · 1 falló · 2 argumentos inválidos (no se toca nada) · 3 no existe · 4 la nota cambió (no se escribe)
+`
+
+const taskUsageEN = `usage: lazymark task list   [--json] [--pending] [--column <id>] [--note <path>] [--dir <folder>]
+       lazymark task toggle <id> [--json] [--dir <folder>]
+       lazymark task move   <id> <column> [--json] [--dir <folder>]
+exit codes: 0 ok · 1 failed · 2 invalid arguments (nothing touched) · 3 not found · 4 the note changed (nothing written)
+`
+
+const noteUsageES = `uso: lazymark note list [--json] [--dir <carpeta>]
+     lazymark note show <ruta> [--json] [--dir <carpeta>]
+     lazymark note new  <título> [--folder <subcarpeta>] [--empty] [--json] [--dir <carpeta>]
+códigos de salida: 0 ok · 1 falló · 2 argumentos inválidos o ruta fuera de la carpeta de notas · 3 no existe
+`
+
+const noteUsageEN = `usage: lazymark note list [--json] [--dir <folder>]
+       lazymark note show <path> [--json] [--dir <folder>]
+       lazymark note new  <title> [--folder <subfolder>] [--empty] [--json] [--dir <folder>]
+exit codes: 0 ok · 1 failed · 2 invalid arguments or a path outside the notes folder · 3 not found
+`
+
+// RunTask ejecuta `lazymark task …` (list, toggle, move).
 func RunTask(args []string, defaultNotesDir string) error {
 	return RunTaskWithWriter(os.Stdout, args, defaultNotesDir)
 }
 
-// RunTaskWithWriter ejecuta subcomandos de tareas escribiendo la salida en el writer indicado
+// RunTaskWithWriter ejecuta los subcomandos de tareas escribiendo la salida en w.
 func RunTaskWithWriter(w io.Writer, args []string, defaultNotesDir string) error {
+	help := usageText(taskUsageES, taskUsageEN)
 	if len(args) == 0 {
-		return fmt.Errorf("subcomando de tarea requerido: list, toggle")
+		return &ops.Error{Code: ExitUsage, Err: errors.New("falta el subcomando (list, toggle, move)\n" + help)}
 	}
-
 	action := args[0]
 	if action == "-h" || action == "--help" {
-		fmt.Fprint(w, i18n.T("uso: lazymark task list [--json] [--pending] [--dir <carpeta>]\n     lazymark task toggle --path <nota> --line <n> [--dir <carpeta>]\n", "usage: lazymark task list [--json] [--pending] [--dir <folder>]\n       lazymark task toggle --path <note> --line <n> [--dir <folder>]\n"))
+		fmt.Fprint(w, help)
 		return nil
 	}
-	fs := flag.NewFlagSet("task "+action, flag.ContinueOnError)
-	fs.SetOutput(w)
-
+	p := newParser("task "+action, defaultNotesDir)
 	var (
-		jsonOutput  bool
-		pendingOnly bool
-		notesDir    string
-		notePath    string
-		lineNum     int
+		pending      bool
+		column, note string
+		path         string
+		line         int
 	)
-
-	fs.BoolVar(&jsonOutput, "json", false, "Salida en formato JSON estructurado")
-	fs.StringVar(&notesDir, "dir", defaultNotesDir, "Directorio de notas Markdown")
+	switch action {
+	case "list":
+		p.fs.BoolVar(&pending, "pending", false, "")
+		p.fs.StringVar(&column, "column", "", "")
+		p.fs.StringVar(&note, "note", "", "")
+	case "toggle":
+		p.fs.StringVar(&path, "path", "", "") // forma anterior: --path <nota> --line <n>
+		p.fs.IntVar(&line, "line", 0, "")
+	case "move":
+	default:
+		return &ops.Error{Code: ExitUsage, Err: fmt.Errorf("subcomando de tarea desconocido: %q (list, toggle, move)", action)}
+	}
+	if err := p.parse(args[1:]); err != nil {
+		return err
+	}
+	if p.help {
+		fmt.Fprint(w, help)
+		return nil
+	}
 
 	switch action {
 	case "list":
-		fs.BoolVar(&pendingOnly, "pending", false, "Solo mostrar tareas pendientes")
-		if err := fs.Parse(args[1:]); err != nil {
+		if err := p.need(0, "lazymark task list [--json] [--pending] [--column <id>] [--note <ruta>]"); err != nil {
 			return err
 		}
-
-		if notesDir == "" {
-			notesDir = config.DefaultNotesDir()
-		}
-
-		st := storage.New(notesDir)
-		notes, err := st.ListNotes()
+		svc, err := p.service()
 		if err != nil {
-			return fmt.Errorf("error al listar notas: %w", err)
+			return err
 		}
-
-		filter := views.TaskFilterAll
-		if pendingOnly {
-			filter = views.TaskFilterPending
+		tasks, err := svc.ListTasks(ops.TaskFilter{PendingOnly: pending, Column: column, Note: note})
+		if err != nil {
+			return err
 		}
-
-		flatTasks := views.CollectTasks(notes, filter)
-
-		if jsonOutput {
-			var out []TaskJSON
-			for _, t := range flatTasks {
-				stage := storage.GetTaskStage(t.Task)
-				out = append(out, TaskJSON{
-					Line:      t.Line,
-					Text:      t.Text,
-					CleanText: storage.CleanTaskText(t.Text),
-					Done:      t.Done,
-					Stage:     stageToString(stage),
-					NoteTitle: t.NoteTitle,
-					NotePath:  t.NotePath,
-				})
-			}
-			enc := json.NewEncoder(w)
-			enc.SetIndent("", "  ")
-			return enc.Encode(out)
+		if p.json {
+			return printJSON(w, tasks)
 		}
-
-		for _, t := range flatTasks {
-			check := "[ ]"
+		for _, t := range tasks {
+			mark := "[ ]"
 			if t.Done {
-				check = "[x]"
+				mark = "[x]"
 			}
-			fmt.Fprintf(w, "%s %s:%d - %s\n", check, t.NotePath, t.Line, t.Text)
+			fmt.Fprintf(w, "%s %s  %s  (%s)\n", mark, t.ID, t.Text, t.Column)
 		}
 		return nil
 
 	case "toggle":
-		fs.StringVar(&notePath, "path", "", "Ruta de la nota")
-		fs.IntVar(&lineNum, "line", 0, "Número de línea de la tarea")
-		if err := fs.Parse(args[1:]); err != nil {
+		var id string
+		if path != "" || line != 0 { // forma anterior
+			if path == "" || line <= 0 || len(p.posArgs) != 0 {
+				return &ops.Error{Code: ExitUsage, Err: errors.New("uso: lazymark task toggle --path <nota> --line <n>")}
+			}
+			svc, err := p.service()
+			if err != nil {
+				return err
+			}
+			if id, err = svc.IDByLine(path, line); err != nil {
+				return err
+			}
+			return finishMove(w, p, svc, func() (ops.TaskDTO, error) { return svc.ToggleTask(id) })
+		}
+		if err := p.need(1, "lazymark task toggle <id>"); err != nil {
 			return err
 		}
-
-		if notePath == "" || lineNum <= 0 {
-			return fmt.Errorf("parámetros --path <ruta> y --line <línea> son obligatorios")
-		}
-
-		if notesDir == "" {
-			notesDir = config.DefaultNotesDir()
-		}
-
-		st := storage.New(notesDir)
-		newStatus, err := st.ToggleTask(notePath, lineNum)
+		svc, err := p.service()
 		if err != nil {
-			return fmt.Errorf("error al alternar tarea: %w", err)
+			return err
 		}
+		return finishMove(w, p, svc, func() (ops.TaskDTO, error) { return svc.ToggleTask(p.posArgs[0]) })
 
-		if jsonOutput {
-			res := map[string]interface{}{
-				"success": true,
-				"path":    notePath,
-				"line":    lineNum,
-				"done":    newStatus,
-			}
-			enc := json.NewEncoder(w)
-			enc.SetIndent("", "  ")
-			return enc.Encode(res)
+	default: // move
+		if err := p.need(2, "lazymark task move <id> <columna>"); err != nil {
+			return err
 		}
-
-		statusStr := "pendiente"
-		if newStatus {
-			statusStr = "completada"
+		svc, err := p.service()
+		if err != nil {
+			return err
 		}
-		fmt.Fprintf(w, "Tarea en %s:%d alternada a %s\n", notePath, lineNum, statusStr)
-		return nil
-
-	default:
-		return fmt.Errorf("subcomando de tarea desconocido: '%s'. Usa 'list' o 'toggle'", action)
+		return finishMove(w, p, svc, func() (ops.TaskDTO, error) { return svc.MoveTask(p.posArgs[0], p.posArgs[1]) })
 	}
 }
 
-// RunNote ejecuta subcomandos relacionados con notas (list, get)
+func finishMove(w io.Writer, p *parser, _ *ops.Service, do func() (ops.TaskDTO, error)) error {
+	t, err := do()
+	if err != nil {
+		return err
+	}
+	if p.json {
+		return printJSON(w, t)
+	}
+	fmt.Fprintf(w, "%s → %s\n", t.ID, t.Column)
+	return nil
+}
+
+// RunNote ejecuta `lazymark note …` (list, show, new).
 func RunNote(args []string, defaultNotesDir string) error {
 	return RunNoteWithWriter(os.Stdout, args, defaultNotesDir)
 }
 
-// RunNoteWithWriter ejecuta subcomandos de notas escribiendo en el writer indicado
+// RunNoteWithWriter ejecuta los subcomandos de notas escribiendo la salida en w.
 func RunNoteWithWriter(w io.Writer, args []string, defaultNotesDir string) error {
+	help := usageText(noteUsageES, noteUsageEN)
 	if len(args) == 0 {
-		return fmt.Errorf("subcomando de nota requerido: list, get")
+		return &ops.Error{Code: ExitUsage, Err: errors.New("falta el subcomando (list, show, new)\n" + help)}
 	}
-
 	action := args[0]
 	if action == "-h" || action == "--help" {
-		fmt.Fprint(w, i18n.T("uso: lazymark note list [--json] [--dir <carpeta>]\n     lazymark note get <ruta> [--dir <carpeta>]\n", "usage: lazymark note list [--json] [--dir <folder>]\n       lazymark note get <path> [--dir <folder>]\n"))
+		fmt.Fprint(w, help)
 		return nil
 	}
-	fs := flag.NewFlagSet("note "+action, flag.ContinueOnError)
-	fs.SetOutput(w)
-
+	if action == "get" { // nombre anterior de show
+		action = "show"
+	}
+	p := newParser("note "+action, defaultNotesDir)
 	var (
-		jsonOutput bool
-		notesDir   string
+		folder string
+		empty  bool
 	)
-
-	fs.BoolVar(&jsonOutput, "json", false, "Salida en formato JSON estructurado")
-	fs.StringVar(&notesDir, "dir", defaultNotesDir, "Directorio de notas Markdown")
+	switch action {
+	case "list", "show":
+	case "new":
+		p.fs.StringVar(&folder, "folder", "", "")
+		p.fs.BoolVar(&empty, "empty", false, "")
+	default:
+		return &ops.Error{Code: ExitUsage, Err: fmt.Errorf("subcomando de nota desconocido: %q (list, show, new)", action)}
+	}
+	if err := p.parse(args[1:]); err != nil {
+		return err
+	}
+	if p.help {
+		fmt.Fprint(w, help)
+		return nil
+	}
 
 	switch action {
 	case "list":
-		if err := fs.Parse(args[1:]); err != nil {
+		if err := p.need(0, "lazymark note list [--json]"); err != nil {
 			return err
 		}
-
-		if notesDir == "" {
-			notesDir = config.DefaultNotesDir()
-		}
-
-		st := storage.New(notesDir)
-		notes, err := st.ListNotes()
+		svc, err := p.service()
 		if err != nil {
-			return fmt.Errorf("error al listar notas: %w", err)
+			return err
 		}
-
-		if jsonOutput {
-			var out []NoteJSON
-			for _, n := range notes {
-				out = append(out, NoteJSON{
-					ID:         n.ID,
-					Title:      n.Title,
-					Path:       n.Path,
-					Tags:       n.Tags,
-					TasksCount: len(n.Tasks),
-					ModTime:    n.ModTime.Format(time.RFC3339),
-				})
-			}
-			enc := json.NewEncoder(w)
-			enc.SetIndent("", "  ")
-			return enc.Encode(out)
+		notes, err := svc.ListNotes()
+		if err != nil {
+			return err
 		}
-
+		if p.json {
+			return printJSON(w, notes)
+		}
 		for _, n := range notes {
 			fmt.Fprintf(w, "%s (%s)\n", n.Title, n.Path)
 		}
 		return nil
 
-	case "get":
-		if err := fs.Parse(args[1:]); err != nil {
+	case "show":
+		if err := p.need(1, "lazymark note show <ruta>"); err != nil {
 			return err
 		}
-
-		remaining := fs.Args()
-		if len(remaining) == 0 {
-			return fmt.Errorf("se requiere la ruta de la nota: lazymark note get <path>")
-		}
-
-		if notesDir == "" {
-			notesDir = config.DefaultNotesDir()
-		}
-		notePath, err := storage.New(notesDir).ResolveNote(remaining[0])
+		svc, err := p.service()
 		if err != nil {
-			return usageErr(err)
+			return err
 		}
-		data, err := os.ReadFile(notePath)
+		n, err := svc.ShowNote(p.posArgs[0])
 		if err != nil {
-			return fmt.Errorf("error al leer nota en '%s': %w", notePath, err)
+			return err
 		}
-
-		if jsonOutput {
-			res := map[string]interface{}{
-				"path":    notePath,
-				"content": string(data),
-			}
-			enc := json.NewEncoder(w)
-			enc.SetIndent("", "  ")
-			return enc.Encode(res)
+		if p.json {
+			return printJSON(w, n)
 		}
-
-		_, err = w.Write(data)
+		_, err = io.WriteString(w, n.Content)
 		return err
 
-	default:
-		return fmt.Errorf("subcomando de nota desconocido: '%s'. Usa 'list' o 'get'", action)
+	default: // new
+		if len(p.posArgs) == 0 {
+			return &ops.Error{Code: ExitUsage, Err: errors.New("uso: lazymark note new <título> [--folder <subcarpeta>] [--empty]")}
+		}
+		svc, err := p.service()
+		if err != nil {
+			return err
+		}
+		n, err := svc.NewNote(strings.Join(p.posArgs, " "), folder, empty)
+		if err != nil {
+			return err
+		}
+		if p.json {
+			return printJSON(w, n)
+		}
+		fmt.Fprintf(w, "%s\n", n.Path)
+		return nil
 	}
-}
-
-// Helper para parsear enteros seguros
-func parseInt(s string) (int, error) {
-	return strconv.Atoi(s)
 }

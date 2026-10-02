@@ -110,6 +110,9 @@ type Config struct {
 	// PopupBackground: "none" (por defecto) deja el fondo de la terminal en los
 	// popups, respetando su transparencia; "theme" pinta el color base del tema.
 	PopupBackground string `json:"popup_background"`
+	// KanbanColumns son las columnas del tablero (por defecto todo, doing y done). La columna de una tarea
+	// se guarda como un tag al final de su línea: `- [ ] tarea #kb/doing`.
+	KanbanColumns []KanbanColumn `json:"kanban_columns"`
 	// Mascot: si el perezoso dormido aparece en los estados de reposo (carpeta o nota vacía). Por defecto sí.
 	Mascot bool `json:"mascot"`
 	// ScreenBackground: "theme" (por defecto) o "terminal". Ver ScreenBackgroundTheme.
@@ -170,6 +173,7 @@ func DefaultConfig(notesDir string) *Config {
 		PopupBackground:    PopupBackgroundNone,
 		ScreenBackground:   ScreenBackgroundTheme,
 		Mascot:             true,
+		KanbanColumns:      DefaultKanbanColumns(),
 	}
 }
 
@@ -184,19 +188,31 @@ func DefaultNotesDir() string {
 
 // Load carga la configuración desde disco o crea una con valores por defecto.
 func Load(customDir string) (*Config, error) {
+	return load(customDir, true)
+}
+
+// LoadReadOnly es Load sin efectos: no crea la carpeta de notas ni su assets/. La usan los comandos de la
+// línea de comandos, que no deben tocar nada si los argumentos son inválidos.
+func LoadReadOnly(customDir string) (*Config, error) {
+	return load(customDir, false)
+}
+
+func load(customDir string, create bool) (*Config, error) {
 	notesDir := customDir
 	if notesDir == "" {
 		notesDir = DefaultNotesDir()
 	}
 
-	// Asegurar que el directorio de notas exista
-	if err := os.MkdirAll(notesDir, 0755); err != nil {
-		return nil, err
-	}
+	if create {
+		// Asegurar que el directorio de notas exista
+		if err := os.MkdirAll(notesDir, 0755); err != nil {
+			return nil, err
+		}
 
-	// Asegurar subdirectorio de assets / imágenes
-	assetsDir := filepath.Join(notesDir, "assets")
-	_ = os.MkdirAll(assetsDir, 0755)
+		// Asegurar subdirectorio de assets / imágenes
+		assetsDir := filepath.Join(notesDir, "assets")
+		_ = os.MkdirAll(assetsDir, 0755)
+	}
 
 	cfg := DefaultConfig(notesDir)
 	cfgPath := configFilePath()
@@ -208,7 +224,8 @@ func Load(customDir string) (*Config, error) {
 	if data, err := os.ReadFile(cfgPath); err == nil {
 		disk := *cfg
 		disk.KeymapVersion = 0
-		disk.NotesDir = "" // para distinguir "no está en el archivo" del valor por defecto
+		disk.KanbanColumns = nil // Unmarshal mezclaría los elementos con los de por defecto (sus títulos)
+		disk.NotesDir = ""       // para distinguir "no está en el archivo" del valor por defecto
 		if err := json.Unmarshal(data, &disk); err == nil {
 			if disk.KeymapVersion < KeymapVersion {
 				// Atajos de una versión anterior: se reemplazan por los nuevos.
@@ -224,6 +241,9 @@ func Load(customDir string) (*Config, error) {
 				disk.TaskScope = "all"
 			}
 			disk.KeybindingMode = normalizeKeybindingMode(disk.KeybindingMode)
+			if !validKanbanColumns(disk.KanbanColumns) {
+				disk.KanbanColumns = DefaultKanbanColumns() // ausente o inválida
+			}
 			if disk.ScreenBackground != ScreenBackgroundTerminal {
 				disk.ScreenBackground = ScreenBackgroundTheme // valor ausente o desconocido
 			}

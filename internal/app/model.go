@@ -190,6 +190,9 @@ func (m *AppModel) handleKey(msg tea.KeyPressMsg) tea.Cmd {
 	if key == "ctrl+c" {
 		return m.quit()
 	}
+	if m.kanbanOn && key == "esc" && m.kanban.cancelDrag() { // Esc cancela un arrastre en curso
+		return nil
+	}
 	if p := m.c.top(); p != nil {
 		if key == "esc" { // Esc cierra cualquier popup.
 			m.c.pop()

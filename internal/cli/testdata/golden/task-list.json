@@ -1,0 +1,62 @@
+[
+  {
+    "id": "ideas.md#16de6420",
+    "text": "Escribir informe",
+    "column": "todo",
+    "done": false,
+    "line": 3,
+    "note": "ideas.md",
+    "note_title": "ideas",
+    "path": "<DIR>/ideas.md"
+  },
+  {
+    "id": "ideas.md#a3c05484",
+    "text": "Comprar café",
+    "column": "todo",
+    "done": false,
+    "line": 4,
+    "note": "ideas.md",
+    "note_title": "ideas",
+    "path": "<DIR>/ideas.md"
+  },
+  {
+    "id": "proyecto.md#16de6420",
+    "text": "Escribir informe",
+    "column": "todo",
+    "done": false,
+    "line": 5,
+    "note": "proyecto.md",
+    "note_title": "proyecto",
+    "path": "<DIR>/proyecto.md"
+  },
+  {
+    "id": "proyecto.md#bd0bcf35",
+    "text": "Revisar código",
+    "column": "doing",
+    "done": false,
+    "line": 6,
+    "note": "proyecto.md",
+    "note_title": "proyecto",
+    "path": "<DIR>/proyecto.md"
+  },
+  {
+    "id": "proyecto.md#1173ad53",
+    "text": "Tarea heredada",
+    "column": "doing",
+    "done": false,
+    "line": 7,
+    "note": "proyecto.md",
+    "note_title": "proyecto",
+    "path": "<DIR>/proyecto.md"
+  },
+  {
+    "id": "proyecto.md#521eb6d1",
+    "text": "Publicar versión",
+    "column": "done",
+    "done": true,
+    "line": 8,
+    "note": "proyecto.md",
+    "note_title": "proyecto",
+    "path": "<DIR>/proyecto.md"
+  }
+]

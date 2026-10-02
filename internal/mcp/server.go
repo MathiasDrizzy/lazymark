@@ -6,11 +6,9 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"time"
 
 	"github.com/MathiasDrizzy/lazymark/internal/config"
-	"github.com/MathiasDrizzy/lazymark/internal/storage"
-	"github.com/MathiasDrizzy/lazymark/internal/ui/views"
+	"github.com/MathiasDrizzy/lazymark/internal/ops"
 )
 
 // JSONRPCRequest representa una petición JSON-RPC 2.0
@@ -50,7 +48,6 @@ type CallToolResult struct {
 // Server encapsula el servidor MCP de Lazymark
 type Server struct {
 	notesDir string
-	storage  *storage.Storage
 }
 
 // NewServer crea una nueva instancia del servidor MCP
@@ -58,10 +55,7 @@ func NewServer(notesDir string) *Server {
 	if notesDir == "" {
 		notesDir = config.DefaultNotesDir()
 	}
-	return &Server{
-		notesDir: notesDir,
-		storage:  storage.New(notesDir),
-	}
+	return &Server{notesDir: notesDir}
 }
 
 // RunServer ejecuta el servidor MCP sobre stdin y stdout
@@ -169,224 +163,162 @@ func (s *Server) handleRequest(req *JSONRPCRequest) *JSONRPCResponse {
 	}
 }
 
-func (s *Server) getToolsList() []map[string]interface{} {
-	return []map[string]interface{}{
+// obj y los demás construyen los esquemas de entrada de las herramientas.
+type obj = map[string]interface{}
+
+func str(desc string) obj { return obj{"type": "string", "description": desc} }
+
+func schema(required []string, props obj) obj {
+	out := obj{"type": "object", "properties": props}
+	if len(required) > 0 {
+		out["required"] = required
+	}
+	return out
+}
+
+func (s *Server) getToolsList() []obj {
+	const idDesc = "Id estable de la tarea (el campo `id` de list_tasks y get_kanban): <nota.md>#<huella>."
+	return []obj{
 		{
 			"name":        "list_notes",
-			"description": "Lista todas las notas de Lazymark con sus rutas, títulos, etiquetas y conteo de tareas.",
-			"inputSchema": map[string]interface{}{
-				"type":       "object",
-				"properties": map[string]interface{}{},
-			},
+			"description": "Lista las notas de Lazymark con su ruta, título, etiquetas y cantidad de tareas.",
+			"inputSchema": schema(nil, obj{}),
 		},
 		{
 			"name":        "read_note",
-			"description": "Lee el contenido Markdown completo de una nota específica.",
-			"inputSchema": map[string]interface{}{
-				"type": "object",
-				"properties": map[string]interface{}{
-					"path": map[string]interface{}{
-						"type":        "string",
-						"description": "Ruta absoluta o relativa del archivo de nota Markdown.",
-					},
-				},
-				"required": []string{"path"},
-			},
+			"description": "Lee el contenido Markdown de una nota de la carpeta de notas.",
+			"inputSchema": schema([]string{"path"}, obj{"path": str("Ruta de la nota .md: absoluta o relativa a la carpeta de notas. Debe quedar dentro de ella.")}),
+		},
+		{
+			"name":        "create_note",
+			"description": "Crea una nota nueva (con plantilla, o solo con su título si empty es true) y devuelve su ruta.",
+			"inputSchema": schema([]string{"title"}, obj{
+				"title":  str("Título de la nota."),
+				"folder": str("Subcarpeta de la carpeta de notas donde crearla (opcional; debe existir)."),
+				"empty":  obj{"type": "boolean", "description": "Si es true, la nota solo lleva su título."},
+			}),
 		},
 		{
 			"name":        "list_tasks",
-			"description": "Lista las tareas de todas las notas o de una nota específica, con filtro de pendientes.",
-			"inputSchema": map[string]interface{}{
-				"type": "object",
-				"properties": map[string]interface{}{
-					"pending_only": map[string]interface{}{
-						"type":        "boolean",
-						"description": "Si es true, solo retorna las tareas que no están completadas.",
-					},
-					"note_path": map[string]interface{}{
-						"type":        "string",
-						"description": "Opcional: filtrar tareas de una nota en específico.",
-					},
-				},
-			},
+			"description": "Lista las tareas con su id, texto, columna del tablero y si están hechas.",
+			"inputSchema": schema(nil, obj{
+				"pending_only": obj{"type": "boolean", "description": "Si es true, omite las tareas hechas."},
+				"column":       str("Opcional: solo las de esta columna (su id, como todo, doing o done)."),
+				"note_path":    str("Opcional: solo las de esta nota."),
+			}),
+		},
+		{
+			"name":        "move_task",
+			"description": "Lleva una tarea a otra columna del tablero Kanban. Reescribe solo la línea de la tarea; si la nota cambió en disco mientras tanto, no escribe y devuelve un error.",
+			"inputSchema": schema([]string{"id", "column"}, obj{"id": str(idDesc), "column": str("Id de la columna destino (get_kanban muestra las que hay).")}),
 		},
 		{
 			"name":        "toggle_task",
-			"description": "Alterna atómicamente el estado de una tarea (- [ ] <-> - [x]) en el archivo físico.",
-			"inputSchema": map[string]interface{}{
-				"type": "object",
-				"properties": map[string]interface{}{
-					"path": map[string]interface{}{
-						"type":        "string",
-						"description": "Ruta de la nota Markdown donde reside la tarea.",
-					},
-					"line": map[string]interface{}{
-						"type":        "integer",
-						"description": "Número de línea 1-indexed de la tarea en el archivo.",
-					},
-				},
-				"required": []string{"path", "line"},
-			},
+			"description": "Marca una tarea como hecha (la lleva a la columna de hecho) o, si ya lo estaba, la devuelve a la primera columna.",
+			"inputSchema": schema(nil, obj{
+				"id":   str(idDesc),
+				"path": str("Forma anterior: ruta de la nota (con line)."),
+				"line": obj{"type": "integer", "description": "Forma anterior: línea de la tarea, desde 1 (con path)."},
+			}),
 		},
 		{
 			"name":        "get_kanban",
-			"description": "Devuelve el tablero Kanban completo con tareas agrupadas en columnas: todo, doing, done.",
-			"inputSchema": map[string]interface{}{
-				"type":       "object",
-				"properties": map[string]interface{}{},
-			},
+			"description": "Devuelve el tablero Kanban: las columnas configuradas, en orden, cada una con sus tarjetas.",
+			"inputSchema": schema(nil, obj{}),
 		},
 	}
 }
 
+func fail(err error) CallToolResult {
+	return CallToolResult{IsError: true, Content: []ToolContent{{Type: "text", Text: fmt.Sprintf("Error (código %d): %v", ops.Code(err), err)}}}
+}
+
+func ok(v interface{}) CallToolResult {
+	data, _ := json.MarshalIndent(v, "", "  ")
+	return CallToolResult{Content: []ToolContent{{Type: "text", Text: string(data)}}}
+}
+
+func missing(names string) CallToolResult {
+	return CallToolResult{IsError: true, Content: []ToolContent{{Type: "text", Text: "Error: " + names + " requerido(s)"}}}
+}
+
 func (s *Server) callTool(name string, args map[string]interface{}) CallToolResult {
+	svc, err := ops.New(s.notesDir)
+	if err != nil {
+		return fail(err)
+	}
+	text := func(k string) string { v, _ := args[k].(string); return v }
+
 	switch name {
 	case "list_notes":
-		notes, err := s.storage.ListNotes()
+		notes, err := svc.ListNotes()
 		if err != nil {
-			return CallToolResult{IsError: true, Content: []ToolContent{{Type: "text", Text: "Error: " + err.Error()}}}
+			return fail(err)
 		}
-		type noteDTO struct {
-			ID         string   `json:"id"`
-			Title      string   `json:"title"`
-			Path       string   `json:"path"`
-			Tags       []string `json:"tags"`
-			TasksCount int      `json:"tasks_count"`
-			ModTime    string   `json:"mod_time"`
-		}
-		var dtoList []noteDTO
-		for _, n := range notes {
-			dtoList = append(dtoList, noteDTO{
-				ID:         n.ID,
-				Title:      n.Title,
-				Path:       n.Path,
-				Tags:       n.Tags,
-				TasksCount: len(n.Tasks),
-				ModTime:    n.ModTime.Format(time.RFC3339),
-			})
-		}
-		data, _ := json.MarshalIndent(dtoList, "", "  ")
-		return CallToolResult{Content: []ToolContent{{Type: "text", Text: string(data)}}}
+		return ok(notes)
 
 	case "read_note":
-		p, _ := args["path"].(string)
-		if p == "" {
-			return CallToolResult{IsError: true, Content: []ToolContent{{Type: "text", Text: "Error: parámetro 'path' requerido"}}}
+		if text("path") == "" {
+			return missing("'path'")
 		}
-		p, err := s.storage.ResolveNote(p)
+		n, err := svc.ShowNote(text("path"))
 		if err != nil {
-			return CallToolResult{IsError: true, Content: []ToolContent{{Type: "text", Text: "Error: " + err.Error()}}}
+			return fail(err)
 		}
-		bytes, err := os.ReadFile(p)
+		return CallToolResult{Content: []ToolContent{{Type: "text", Text: n.Content}}}
+
+	case "create_note":
+		if text("title") == "" {
+			return missing("'title'")
+		}
+		empty, _ := args["empty"].(bool)
+		n, err := svc.NewNote(text("title"), text("folder"), empty)
 		if err != nil {
-			return CallToolResult{IsError: true, Content: []ToolContent{{Type: "text", Text: "Error al leer archivo: " + err.Error()}}}
+			return fail(err)
 		}
-		return CallToolResult{Content: []ToolContent{{Type: "text", Text: string(bytes)}}}
+		return ok(n)
 
 	case "list_tasks":
-		pendingOnly, _ := args["pending_only"].(bool)
-		notePathFilter, _ := args["note_path"].(string)
-
-		notes, err := s.storage.ListNotes()
+		pending, _ := args["pending_only"].(bool)
+		tasks, err := svc.ListTasks(ops.TaskFilter{PendingOnly: pending, Column: text("column"), Note: text("note_path")})
 		if err != nil {
-			return CallToolResult{IsError: true, Content: []ToolContent{{Type: "text", Text: "Error: " + err.Error()}}}
+			return fail(err)
 		}
+		return ok(tasks)
 
-		filter := views.TaskFilterAll
-		if pendingOnly {
-			filter = views.TaskFilterPending
+	case "move_task":
+		if text("id") == "" || text("column") == "" {
+			return missing("'id' y 'column'")
 		}
-
-		flatTasks := views.CollectTasks(notes, filter)
-		type taskDTO struct {
-			Line      int    `json:"line"`
-			Text      string `json:"text"`
-			CleanText string `json:"clean_text"`
-			Done      bool   `json:"done"`
-			Stage     string `json:"stage"`
-			NoteTitle string `json:"note_title"`
-			NotePath  string `json:"note_path"`
+		t, err := svc.MoveTask(text("id"), text("column"))
+		if err != nil {
+			return fail(err)
 		}
-
-		var dtoList []taskDTO
-		for _, t := range flatTasks {
-			if notePathFilter != "" && t.NotePath != notePathFilter {
-				continue
-			}
-			stage := storage.GetTaskStage(t.Task)
-			stageStr := "todo"
-			if stage == storage.StageDoing {
-				stageStr = "doing"
-			} else if stage == storage.StageDone {
-				stageStr = "done"
-			}
-			dtoList = append(dtoList, taskDTO{
-				Line:      t.Line,
-				Text:      t.Text,
-				CleanText: storage.CleanTaskText(t.Text),
-				Done:      t.Done,
-				Stage:     stageStr,
-				NoteTitle: t.NoteTitle,
-				NotePath:  t.NotePath,
-			})
-		}
-		data, _ := json.MarshalIndent(dtoList, "", "  ")
-		return CallToolResult{Content: []ToolContent{{Type: "text", Text: string(data)}}}
+		return ok(t)
 
 	case "toggle_task":
-		p, _ := args["path"].(string)
-		lineFloat, ok := args["line"].(float64)
-		if !ok || p == "" {
-			return CallToolResult{IsError: true, Content: []ToolContent{{Type: "text", Text: "Error: parámetros 'path' y 'line' requeridos"}}}
+		id := text("id")
+		if id == "" { // forma anterior: path + line
+			line, hasLine := args["line"].(float64)
+			if text("path") == "" || !hasLine {
+				return missing("'id' (o 'path' y 'line')")
+			}
+			if id, err = svc.IDByLine(text("path"), int(line)); err != nil {
+				return fail(err)
+			}
 		}
-		line := int(lineFloat)
-		newStatus, err := s.storage.ToggleTask(p, line)
+		t, err := svc.ToggleTask(id)
 		if err != nil {
-			return CallToolResult{IsError: true, Content: []ToolContent{{Type: "text", Text: "Error: " + err.Error()}}}
+			return fail(err)
 		}
-		res, _ := json.MarshalIndent(map[string]interface{}{
-			"success": true,
-			"path":    p,
-			"line":    line,
-			"done":    newStatus,
-		}, "", "  ")
-		return CallToolResult{Content: []ToolContent{{Type: "text", Text: string(res)}}}
+		return ok(t)
 
 	case "get_kanban":
-		notes, err := s.storage.ListNotes()
+		b, err := svc.Board()
 		if err != nil {
-			return CallToolResult{IsError: true, Content: []ToolContent{{Type: "text", Text: "Error: " + err.Error()}}}
+			return fail(err)
 		}
-		board := views.CollectKanban(notes)
-
-		type cardDTO struct {
-			Text      string `json:"text"`
-			NoteTitle string `json:"note_title"`
-			NotePath  string `json:"note_path"`
-			Line      int    `json:"line"`
-		}
-
-		mapCards := func(cards []views.KanbanCard) []cardDTO {
-			var res []cardDTO
-			for _, c := range cards {
-				res = append(res, cardDTO{
-					Text:      c.CleanText,
-					NoteTitle: c.NoteTitle,
-					NotePath:  c.NotePath,
-					Line:      c.Task.Line,
-				})
-			}
-			return res
-		}
-
-		kanbanDTO := map[string]interface{}{
-			"todo":  mapCards(board.Todo),
-			"doing": mapCards(board.Doing),
-			"done":  mapCards(board.Done),
-		}
-
-		data, _ := json.MarshalIndent(kanbanDTO, "", "  ")
-		return CallToolResult{Content: []ToolContent{{Type: "text", Text: string(data)}}}
+		return ok(b)
 
 	default:
 		return CallToolResult{

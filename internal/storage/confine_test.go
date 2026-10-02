@@ -96,8 +96,8 @@ func TestWritersRefuseOutsideNotes(t *testing.T) {
 	if _, err := s.ToggleTask(outside, 2); !errors.Is(err, ErrOutsideNotes) {
 		t.Errorf("ToggleTask fuera: %v", err)
 	}
-	if err := s.UpdateTaskStage(outside, 2, StageDoing); !errors.Is(err, ErrOutsideNotes) {
-		t.Errorf("UpdateTaskStage fuera: %v", err)
+	if err := s.MoveTask(outside, 2, DefaultColumns, 1, timeZero); !errors.Is(err, ErrOutsideNotes) {
+		t.Errorf("MoveTask fuera: %v", err)
 	}
 	if err := s.AppendToNote(outside, "x", timeZero); !errors.Is(err, ErrOutsideNotes) {
 		t.Errorf("AppendToNote fuera: %v", err)

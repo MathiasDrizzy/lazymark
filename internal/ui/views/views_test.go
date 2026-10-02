@@ -108,16 +108,17 @@ func TestCollectKanbanAndRender(t *testing.T) {
 		},
 	}
 
-	board := CollectKanban(notes)
+	board := CollectKanban(notes, storage.DefaultColumns, []string{"To do", "In progress", "Done"})
 
-	if len(board.Todo) != 2 {
-		t.Errorf("Se esperaban 2 tareas en Todo, obtenidas %d", len(board.Todo))
+	// #doing y #wip son el formato anterior: se leen como #kb/doing
+	if n := len(board.ColumnCards(0)); n != 2 {
+		t.Errorf("Se esperaban 2 tareas en Todo, obtenidas %d", n)
 	}
-	if len(board.Doing) != 2 {
-		t.Errorf("Se esperaban 2 tareas en Doing, obtenidas %d", len(board.Doing))
+	if n := len(board.ColumnCards(1)); n != 2 {
+		t.Errorf("Se esperaban 2 tareas en Doing, obtenidas %d", n)
 	}
-	if len(board.Done) != 1 {
-		t.Errorf("Se esperaba 1 tarea en Done, obtenida %d", len(board.Done))
+	if n := len(board.ColumnCards(2)); n != 1 {
+		t.Errorf("Se esperaba 1 tarea en Done, obtenida %d", n)
 	}
 
 	if board.TotalCards() != 5 {
@@ -126,8 +127,8 @@ func TestCollectKanbanAndRender(t *testing.T) {
 
 	// Probar renderizado y registro de zonas
 	ht := mouse.NewHitTester()
-	selectedRows := [3]int{0, 1, 0}
-	rendered := RenderKanban(board, 1, selectedRows, 90, 20, ht, 1)
+	selectedRows := []int{0, 1, 0}
+	rendered := RenderKanban(board, 1, selectedRows, 90, 20, ht, 1, KanbanDrag{})
 
 	if !strings.Contains(rendered, "[1] Por Hacer") && !strings.Contains(rendered, "[1] To Do") {
 		t.Errorf("No se encontró cabecera de columna [1]")

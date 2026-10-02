@@ -34,10 +34,12 @@ func usageHeader() string {
 	return i18n.T("Uso: ", "Usage: ") + config.AppName + i18n.T(" [opciones] [subcomando]\n\n", " [options] [command]\n\n") +
 		config.AppName + i18n.T(" — notas Markdown, tareas y tablero Kanban en la terminal, sin esfuerzo (lazy)\n\n", ": markdown notes, tasks and a Kanban board in the terminal, the lazy way\n\n") +
 		i18n.T("Subcomandos (sin interfaz, para scripts y agentes):\n", "Commands (headless, for scripts and agents):\n") +
-		"  task list [--json] [--pending] [--dir <dir>]\n" +
-		"  task toggle --path <note> --line <n> [--dir <dir>]\n" +
 		"  note list [--json] [--dir <dir>]\n" +
-		"  note get <path> [--dir <dir>]\n" +
+		"  note show <path> [--json] [--dir <dir>]\n" +
+		"  note new <title> [--folder <sub>] [--empty] [--json] [--dir <dir>]\n" +
+		"  task list [--json] [--pending] [--column <id>] [--note <path>] [--dir <dir>]\n" +
+		"  task toggle <id> [--json] [--dir <dir>]\n" +
+		"  task move <id> <column> [--json] [--dir <dir>]\n" +
 		"  paste [--no-newline] [<note.md>]\n" +
 		"  editor-plugins install|uninstall [micro|vim|nano]\n" +
 		"  mcp [--dir <dir>]\n\n" +
