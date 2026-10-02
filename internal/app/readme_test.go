@@ -138,6 +138,13 @@ func TestReadmeAssetsAndLinks(t *testing.T) {
 		name := strings.TrimSuffix(filepath.Base(src), filepath.Ext(src))
 		switch filepath.Ext(src) {
 		case ".gif":
+			if strings.HasPrefix(src, "assets/brand/") {
+				// El GIF de la mascota sale de assets/brand/mascot.py (los mismos cuadros que la app), no de VHS.
+				if _, err := os.Stat(repoFile("assets/brand/mascot.py")); err != nil {
+					t.Errorf("%s: falta el generador assets/brand/mascot.py", src)
+				}
+				continue
+			}
 			tape := readRepo(t, "assets/readme/tapes/"+name+".tape")
 			if !strings.Contains(tape, "Output "+src) {
 				t.Errorf("%s: su tape no escribe esa salida", src)

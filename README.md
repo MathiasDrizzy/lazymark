@@ -1,6 +1,6 @@
 <div align="center">
 
-<img src="assets/brand/lazymark-256.png" alt="lazymark mascot: a sloth hanging a pencil from its claws" width="128">
+<img src="assets/brand/reposo/hero.gif" alt="The lazymark mascot, a sloth with a pencil, waking up, waving, dancing, jumping and spinning in a loop" width="144" height="144">
 
 # lazymark
 
