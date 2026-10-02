@@ -13,7 +13,7 @@ builds:
     goos: [darwin, linux, windows]
     goarch: [amd64, arm64]
     ldflags:
-      - -s -w -X github.com/MathiasDrizzy/lazymark/internal/config.Version={{ .Version }}
+      - -s -w -X github.com/MathiasDrizzy/lazymark/internal/config.injectedVersion={{ .Version }}
 
 archives:
   - id: default

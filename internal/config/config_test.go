@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"runtime/debug"
 	"strings"
 	"testing"
 )
@@ -312,5 +313,31 @@ func TestScreenBackgroundSetting(t *testing.T) {
 	writeDiskConfig(t, `{"keymap_version":2}`)
 	if got, _ := Load(t.TempDir()); got.ScreenBackground != ScreenBackgroundTheme {
 		t.Errorf("sin el campo -> %q, se esperaba theme", got.ScreenBackground)
+	}
+}
+
+// TestResolveVersion: la versión sale de ldflags si el release la inyectó; si no (go install), del módulo
+// que registra Go (sin la "v"); y sin ninguna de las dos es "dev". Antes un binario de `go install` decía
+// siempre 0.1.0.
+func TestResolveVersion(t *testing.T) {
+	info := func(v string) *debug.BuildInfo { return &debug.BuildInfo{Main: debug.Module{Version: v}} }
+	cases := []struct {
+		name    string
+		ldflags string
+		info    *debug.BuildInfo
+		want    string
+	}{
+		{"release con ldflags", "0.2.1", info("v0.2.1"), "0.2.1"},
+		{"ldflags manda sobre el módulo", "1.0.0", info("v0.2.1"), "1.0.0"},
+		{"go install de una etiqueta", "", info("v0.2.1"), "0.2.1"},
+		{"go install de un commit", "", info("v0.2.2-0.20261002120000-abcdef123456"), "0.2.2-0.20261002120000-abcdef123456"},
+		{"compilado desde el árbol", "", info("(devel)"), "dev"},
+		{"sin información", "", nil, "dev"},
+		{"módulo sin versión", "", info(""), "dev"},
+	}
+	for _, c := range cases {
+		if got := resolveVersion(c.ldflags, c.info); got != c.want {
+			t.Errorf("%s: %q, se esperaba %q", c.name, got, c.want)
+		}
 	}
 }

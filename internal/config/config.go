@@ -5,11 +5,38 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime/debug"
 	"strings"
 )
 
-// Version la inyecta GoReleaser con -ldflags "-X …/config.Version=…".
-var Version = "0.1.0"
+// Version es la versión del programa. El release la inyecta con -ldflags
+// "-X …/config.Version=…"; si no (go install), sale del módulo que registra Go; y si nada de eso
+// existe (compilado desde el árbol), vale "dev".
+var Version = resolveVersion(injectedVersion, buildInfo())
+
+// injectedVersion es lo que GoReleaser pone con -ldflags "-X …/config.injectedVersion=…".
+var injectedVersion = ""
+
+func buildInfo() *debug.BuildInfo {
+	if bi, ok := debug.ReadBuildInfo(); ok {
+		return bi
+	}
+	return nil
+}
+
+// resolveVersion elige la versión: ldflags, luego la versión del módulo principal (sin la "v"),
+// y "dev" si no hay ninguna ("(devel)" es lo que registra Go al compilar desde el árbol).
+func resolveVersion(ldflags string, info *debug.BuildInfo) string {
+	if ldflags != "" {
+		return ldflags
+	}
+	if info != nil {
+		if v := strings.TrimPrefix(info.Main.Version, "v"); v != "" && info.Main.Version != "(devel)" {
+			return v
+		}
+	}
+	return "dev"
+}
 
 const (
 	// Valores de Config.KeybindingMode: "lazy" son solo las flechas y las teclas
