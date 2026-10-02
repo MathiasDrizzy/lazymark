@@ -64,6 +64,7 @@ What lazymark reads from your notes:
 | `editor` | a command, with arguments if you want | `$EDITOR`, else `micro`, `vim` or `nano` | Opened with `Enter` or `e`. A path with spaces works. |
 | `theme` | `catppuccin-mocha`, `catppuccin-latte`, `catppuccin-frappe`, `catppuccin-macchiato`, `tokyo-night`, `gruvbox-dark`, `nord`, `dracula`, `one-dark`, `rose-pine`, `kanagawa`, `everforest-dark`, `solarized-dark`, `solarized-light` | `catppuccin-mocha` | Colors of the whole interface, including the markdown preview and its code blocks. Changes live in Settings. |
 | `language` | `auto`, `en`, `es` | `auto` | `auto` follows `LANG`, `LC_ALL` and `LC_MESSAGES`: Spanish if they mention `es`, otherwise English. |
+| `screen_background` | `theme`, `terminal` | `theme` | `theme` paints the whole screen with the theme's base color (panels, gaps, bottom bar, popups, Kanban and preview). `terminal` leaves your terminal's background, so a translucent terminal stays translucent. Changes live in Settings ("Screen background"). |
 | `popup_background` | `none`, `theme` | `none` | `none` leaves the terminal background behind popups, so a translucent terminal stays translucent. `theme` paints the theme's base color. Every popup uses the theme palette either way. |
 | `task_scope` | `all`, `tag:<tag>`, `folder:<folder>` | `all` | Which notes feed the Tasks panel: all of them, the ones with a tag, or the ones inside a folder. |
 | `hide_completed_tasks` | `true`, `false` | `false` | Hide finished tasks. Toggled with `H` in the Tasks panel. |

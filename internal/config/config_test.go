@@ -284,3 +284,33 @@ func TestKeybindingModeMigratesLazygit(t *testing.T) {
 		t.Errorf("el archivo guardado debe decir lazy y no lazygit:\n%s", data)
 	}
 }
+
+// TestScreenBackgroundSetting (T4): por defecto "theme"; "terminal" se guarda y se lee; un valor
+// ausente o desconocido vuelve a "theme".
+func TestScreenBackgroundSetting(t *testing.T) {
+	isolate(t)
+	cfg, err := Load(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg.ScreenBackground != ScreenBackgroundTheme {
+		t.Fatalf("por defecto = %q, se esperaba theme", cfg.ScreenBackground)
+	}
+	cfg.ScreenBackground = ScreenBackgroundTerminal
+	if err := cfg.Save(); err != nil {
+		t.Fatal(err)
+	}
+	if again, _ := Load(cfg.NotesDir); again.ScreenBackground != ScreenBackgroundTerminal {
+		t.Errorf("tras recargar = %q, se esperaba terminal", again.ScreenBackground)
+	}
+	for _, bad := range []string{`"rojo"`, `""`, `3`} {
+		writeDiskConfig(t, `{"keymap_version":2,"screen_background":`+bad+`}`)
+		if got, _ := Load(t.TempDir()); got.ScreenBackground != ScreenBackgroundTheme {
+			t.Errorf("valor %s -> %q, se esperaba theme", bad, got.ScreenBackground)
+		}
+	}
+	writeDiskConfig(t, `{"keymap_version":2}`)
+	if got, _ := Load(t.TempDir()); got.ScreenBackground != ScreenBackgroundTheme {
+		t.Errorf("sin el campo -> %q, se esperaba theme", got.ScreenBackground)
+	}
+}

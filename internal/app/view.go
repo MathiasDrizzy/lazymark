@@ -8,6 +8,7 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
+	"github.com/MathiasDrizzy/lazymark/internal/config"
 	"github.com/MathiasDrizzy/lazymark/internal/i18n"
 	"github.com/MathiasDrizzy/lazymark/internal/storage"
 	"github.com/MathiasDrizzy/lazymark/internal/ui/mouse"
@@ -19,7 +20,11 @@ import (
 // View declara pantalla alternativa y mouse; Bubble Tea v2 los reaplica en cada
 // frame, también al volver del editor externo.
 func (m *AppModel) View() tea.View {
-	v := tea.NewView(m.render())
+	content := m.render()
+	if m.c.cfg.ScreenBackground != config.ScreenBackgroundTerminal {
+		content = theme.PaintBackground(content, theme.ColorBase)
+	}
+	v := tea.NewView(content)
 	v.AltScreen = true
 	if m.c.cfg.MouseClick {
 		v.MouseMode = tea.MouseModeCellMotion
@@ -178,6 +183,11 @@ func (m *AppModel) footerHints() (panel, global []hint, pinned bool) {
 		global = append(global, bindingHint(b))
 	}
 	if m.kanbanOn {
+		// "Notas (W)" es el botón "Kanban (W)" de la vista de notas, en el mismo lugar de la barra
+		if k := m.c.keys.Key(actKanban, ctxGlobal); k != "" {
+			nb := i18n.T("Notas", "Notes") + " (" + buttonKey(k) + ")"
+			global = append([]hint{{nb, nb, actKanban, true}}, global...)
+		}
 		return m.kanbanHints(), global, true
 	}
 	if k := m.c.keys.Key(actKanban, ctxGlobal); k != "" {
@@ -272,9 +282,18 @@ func (m *AppModel) renderFooter() string {
 		}
 	}
 	if pinned && hints == nil {
-		hints = join(mk(panel, true), nil) // sin globales antes que sin botones
-		for len(hints) > 0 && span(hints) > f.W-trashW {
-			hints = hints[:len(hints)-1]
+		// antes que quitar un botón del Kanban se quitan los globales, del último al primero
+		// (el botón "Notas (W)" encabeza los globales: es lo último que se va)
+		for k := len(global) - 1; hints == nil && k >= 0; k-- {
+			if c := join(mk(panel, true), mk(global[:k], false)); span(c)+trashW <= f.W {
+				hints = c
+			}
+		}
+		if hints == nil {
+			hints = mk(panel, true)
+			for len(hints) > 0 && span(hints) > f.W-trashW {
+				hints = hints[:len(hints)-1]
+			}
 		}
 	}
 	for k := len(panel) - 1; hints == nil && k >= 0; k-- {

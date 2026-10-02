@@ -18,6 +18,11 @@ const (
 	KeybindingModeLazy = "lazy"
 	KeybindingModeDual = "dual"
 
+	// Valores de Config.ScreenBackground: "theme" (por defecto) pinta toda la pantalla
+	// con el color base del tema; "terminal" deja el fondo de la terminal (y su transparencia).
+	ScreenBackgroundTheme    = "theme"
+	ScreenBackgroundTerminal = "terminal"
+
 	// Valores de Config.PopupBackground.
 	PopupBackgroundNone  = "none"
 	PopupBackgroundTheme = "theme"
@@ -78,7 +83,9 @@ type Config struct {
 	// PopupBackground: "none" (por defecto) deja el fondo de la terminal en los
 	// popups, respetando su transparencia; "theme" pinta el color base del tema.
 	PopupBackground string `json:"popup_background"`
-	configPath      string `json:"-"`
+	// ScreenBackground: "theme" (por defecto) o "terminal". Ver ScreenBackgroundTheme.
+	ScreenBackground string `json:"screen_background"`
+	configPath       string `json:"-"`
 
 	// notesDirFromFlag indica que NotesDir viene de --dir y vale solo para esta
 	// ejecución: Save conserva en el archivo savedNotesDir (la carpeta guardada
@@ -132,6 +139,7 @@ func DefaultConfig(notesDir string) *Config {
 		KeymapVersion:      KeymapVersion,
 		TaskScope:          "all",
 		PopupBackground:    PopupBackgroundNone,
+		ScreenBackground:   ScreenBackgroundTheme,
 	}
 }
 
@@ -186,6 +194,9 @@ func Load(customDir string) (*Config, error) {
 				disk.TaskScope = "all"
 			}
 			disk.KeybindingMode = normalizeKeybindingMode(disk.KeybindingMode)
+			if disk.ScreenBackground != ScreenBackgroundTerminal {
+				disk.ScreenBackground = ScreenBackgroundTheme // valor ausente o desconocido
+			}
 			if disk.PopupBackground != PopupBackgroundTheme {
 				disk.PopupBackground = PopupBackgroundNone // valor ausente o desconocido
 			}

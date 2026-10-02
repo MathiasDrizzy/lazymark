@@ -26,6 +26,7 @@ const (
 	setKeys
 	setTaskScope
 	setConfirmDelete
+	setScreenBg
 	setPopupBg
 	setNotesDir
 	settingCount
@@ -84,6 +85,8 @@ func (p *settingsPopup) label(id settingID) string {
 		return i18n.T("Alcance de tareas", "Task scope")
 	case setConfirmDelete:
 		return i18n.T("Confirmar al borrar", "Confirm deletion")
+	case setScreenBg:
+		return i18n.T("Fondo de pantalla", "Screen background")
 	case setPopupBg:
 		return i18n.T("Fondo de popups", "Popup background")
 	case setNotesDir:
@@ -116,6 +119,11 @@ func (p *settingsPopup) value(id settingID) string {
 			return i18n.T("Sí", "Yes")
 		}
 		return "No"
+	case setScreenBg:
+		if cfg.ScreenBackground == config.ScreenBackgroundTerminal {
+			return "terminal"
+		}
+		return i18n.T("tema", "theme")
 	case setPopupBg:
 		if cfg.PopupBackground == config.PopupBackgroundTheme {
 			return i18n.T("tema", "theme")
@@ -155,6 +163,12 @@ func (p *settingsPopup) change(id settingID, dir int) {
 		cfg.TaskScope = cycle(p.scopes(), cfg.TaskScope, dir)
 	case setConfirmDelete:
 		cfg.ConfirmDelete = !cfg.ConfirmDelete
+	case setScreenBg:
+		if cfg.ScreenBackground == config.ScreenBackgroundTerminal {
+			cfg.ScreenBackground = config.ScreenBackgroundTheme
+		} else {
+			cfg.ScreenBackground = config.ScreenBackgroundTerminal
+		}
 	case setPopupBg:
 		if cfg.PopupBackground == config.PopupBackgroundTheme {
 			cfg.PopupBackground = config.PopupBackgroundNone

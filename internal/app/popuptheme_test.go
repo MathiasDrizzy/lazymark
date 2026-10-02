@@ -47,6 +47,9 @@ var popupKinds = []struct {
 }
 
 func setPopupBackground(m *AppModel, mode string) {
+	// "Fondo de popups" se prueba con "Fondo de pantalla" = terminal: con "tema" la pantalla
+	// entera se pinta con el Base y ningún popup "sin fondo" deja ver el de la terminal (T4).
+	m.c.cfg.ScreenBackground = config.ScreenBackgroundTerminal
 	m.c.cfg.PopupBackground = mode
 	m.onSettingsChange()
 }
