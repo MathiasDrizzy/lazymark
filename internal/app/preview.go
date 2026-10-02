@@ -72,12 +72,9 @@ func (p *previewPanel) view(note *storage.Note, r Rect, active bool) string {
 // tal como se escribieron, e intercala las imágenes en su posición.
 func renderMarkdown(note *storage.Note, width int, imgs *image.Client) string {
 	width = max(10, width)
-	style := "dark"
-	if theme.CurrentThemeName == "catppuccin-latte" {
-		style = "light"
-	}
 	r, err := glamour.NewTermRenderer(
-		glamour.WithStandardStyle(style),
+		glamour.WithStyles(theme.MarkdownStyle()),
+		glamour.WithChromaFormatter(theme.ChromaFormatter),
 		glamour.WithWordWrap(width),
 		glamour.WithPreservedNewLines(),
 	)
