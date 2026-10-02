@@ -73,6 +73,7 @@ type Config struct {
 	configPath      string `json:"-"`
 }
 
+// configFilePath es la ruta de config.json según el sistema (os.UserConfigDir).
 func configFilePath() string {
 	configDir, err := os.UserConfigDir()
 	if err != nil {
@@ -261,7 +262,10 @@ func (c *Config) Path() string {
 	return c.configPath
 }
 
-// Save persiste la configuración actual en ~/.config/lazymark/config.json
+// Save persiste la configuración actual en el archivo de configuración del
+// usuario (Config.Path): ~/Library/Application Support/lazymark/config.json en
+// macOS, $XDG_CONFIG_HOME o ~/.config/lazymark/config.json en Linux y
+// %AppData%\lazymark\config.json en Windows.
 func (c *Config) Save() error {
 	if c.configPath == "" {
 		c.configPath = configFilePath()

@@ -47,6 +47,9 @@ type core struct {
 	editing bool
 }
 
+// newStore crea el almacén de notas de una carpeta.
+func newStore(dir string) *storage.Storage { return storage.New(dir) }
+
 // reload relee las notas del disco y recalcula todo lo derivado.
 func (c *core) reload() {
 	if notes, err := c.store.ListNotes(); err == nil {

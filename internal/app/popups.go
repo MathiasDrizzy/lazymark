@@ -27,6 +27,7 @@ const (
 	setTaskScope
 	setConfirmDelete
 	setPopupBg
+	setNotesDir
 	settingCount
 )
 
@@ -34,12 +35,13 @@ const (
 // guarda al momento, así se ve en vivo detrás del popup.
 type settingsPopup struct {
 	popupList
-	c        *core
-	onChange func()
+	c          *core
+	onChange   func()
+	openPicker func() // abre el selector de la carpeta de notas
 }
 
-func newSettingsPopup(c *core, onChange func()) *settingsPopup {
-	p := &settingsPopup{c: c, onChange: onChange}
+func newSettingsPopup(c *core, onChange, openPicker func()) *settingsPopup {
+	p := &settingsPopup{c: c, onChange: onChange, openPicker: openPicker}
 	p.n = int(settingCount)
 	return p
 }
@@ -84,6 +86,8 @@ func (p *settingsPopup) label(id settingID) string {
 		return i18n.T("Confirmar al borrar", "Confirm deletion")
 	case setPopupBg:
 		return i18n.T("Fondo de popups", "Popup background")
+	case setNotesDir:
+		return i18n.T("Carpeta de notas", "Notes folder")
 	}
 	return ""
 }
@@ -117,12 +121,18 @@ func (p *settingsPopup) value(id settingID) string {
 			return i18n.T("tema", "theme")
 		}
 		return i18n.T("sin fondo", "none")
+	case setNotesDir:
+		return leftTruncate(shortPath(cfg.NotesDir), 24)
 	}
 	return ""
 }
 
 // change aplica el valor siguiente (dir=1) o anterior (dir=-1) del ajuste.
 func (p *settingsPopup) change(id settingID, dir int) {
+	if id == setNotesDir { // no se recorre: abre el selector de carpeta
+		p.openPicker()
+		return
+	}
 	cfg := p.c.cfg
 	switch id {
 	case setTheme:

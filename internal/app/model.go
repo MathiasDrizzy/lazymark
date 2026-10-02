@@ -237,7 +237,7 @@ func (m *AppModel) do(a Action) tea.Cmd {
 		m.c.push(&cheatsheetPopup{keys: m.c.keys, ctx: m.contexts()[0]})
 		return nil
 	case actSettings:
-		m.c.push(newSettingsPopup(m.c, m.onSettingsChange))
+		m.c.push(newSettingsPopup(m.c, m.onSettingsChange, m.openNotesPicker))
 		return nil
 	case actTrash:
 		m.c.push(newTrashPopup(m.c, m.afterChange))
