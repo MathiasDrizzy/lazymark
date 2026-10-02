@@ -66,61 +66,66 @@ def slot_cells():
 
 # --- the sloth -------------------------------------------------------------
 
-# Earth and cream tones, all Catppuccin Mocha tokens.
-#  b1: peach limbs, cream belly (peach only on the limbs and cheeks)
-#  b2: maroon limbs, flamingo belly (a muted, pinker earth tone)
+# Own earth tones (Catppuccin has no browns); only the pencil keeps a Catppuccin accent.
+CREAM, CLAW, CHEEK = "#f3e2c7", "#6b4636", "#f2a7bd"
 PALETTES = {
-    "b1": dict(fur=ROSEWATER, face=ROSEWATER, belly=ROSEWATER, limb=PEACH, band=SURFACE2, claw=YELLOW, cheek=MAROON),
-    "b2": dict(fur=ROSEWATER, face=ROSEWATER, belly=FLAMINGO, limb=MAROON, band=SURFACE2, claw=YELLOW, cheek=MAROON),
+    # c1: medium brown, as in the brand spec
+    "c1": dict(fur="#b98560", arm="#a77450", patch="#6b4636", belly=CREAM, face=CREAM, sleepy=False),
+    # c2: warmer and lighter, sleepy, with closed eyes (Mathias liked the sleepy B)
+    "c2": dict(fur="#c99a6e", arm="#b5855c", patch="#7a4f3a", belly=CREAM, face=CREAM, sleepy=True),
 }
 
 
-def claw(L, x, y, dx, color):
-    """A curved claw: two pixels, hooking toward dx."""
-    L.px(x, y, color)
-    L.px(x + dx, y + 1, color)
+def mirror(x):
+    return 24 - x  # the head is symmetric about x = 12
 
 
 def sloth_base(variant):
     p = PALETTES[variant]
     L = Layer()
-    # feet with claws
-    L.ellipse(7, 27, 2, 1, p["limb"])
-    L.ellipse(15, 27, 2, 1, p["limb"])
-    for x in (5, 7, 9, 13, 15, 17):
-        L.px(x, 29, p["claw"])
-    # body, with shoulders that join the head, smaller than the arms so the arms read as long
-    L.ellipse(11, 22, 7, 6, p["fur"])
-    L.rect(4, 17, 15, 4, p["fur"])
-    L.ellipse(11, 23, 4, 4, p["belly"])
-    # left arm: long, from the shoulder to the ground, with hooked claws
-    L.rect(2, 16, 3, 12, p["limb"])
+    # short legs
+    L.rect(6, 27, 4, 3, p["fur"])
+    L.rect(15, 27, 4, 3, p["fur"])
+    for x in (6, 8, 15, 17):
+        L.px(x, 30, CLAW)
+    # body and oval belly
+    L.ellipse(12, 23, 7, 6, p["fur"])
+    L.rect(5, 17, 15, 3, p["fur"])  # shoulders join the head
+    L.ellipse(12, 24, 3, 4, p["belly"])
+    # left arm: long, hanging, with dark claws
+    L.rect(2, 18, 3, 9, p["arm"])
+    L.px(3, 17, p["arm"])
+    L.rect(4, 17, 2, 2, p["arm"])
     for x in (2, 4):
-        L.px(x, 28, p["claw"])
-    L.px(1, 28, p["claw"])
-    L.px(3, 29, p["claw"])
-    L.px(5, 28, p["claw"])
-    # right arm: long, rising from the shoulder to the hand
-    L.rect(17, 18, 3, 5, p["limb"])
-    L.rect(19, 13, 4, 7, p["limb"])  # palm, left of the slot
+        L.px(x, 27, CLAW)
+    L.px(3, 28, CLAW)
+    # right arm: long, rising to the palm, which sits left of the slot
+    L.rect(16, 20, 3, 3, p["arm"])
+    L.rect(18, 17, 3, 4, p["arm"])
+    L.rect(20, 13, 3, 7, p["arm"])
     # head
-    L.ellipse(11, 10, 9, 7, p["fur"])
-    L.ellipse(11, 11, 7, 5, p["face"])
-    # the sloth's dark band: crosses the face through both eyes and sweeps down and out
-    L.rect(4, 9, 15, 3, p["band"])
-    for (x, y) in ((3, 10), (3, 11), (3, 12), (4, 12), (19, 10), (19, 11), (19, 12), (18, 12)):
-        L.px(x, y, p["band"])
-    for x in (9, 10, 11, 12):
-        L.px(x, 9, p["face"])  # the band narrows over the nose
-    # sleepy: closed eyes, a nose and a calm smile
-    L.rect(6, 10, 3, 1, CRUST)
-    L.rect(14, 10, 3, 1, CRUST)
-    L.rect(10, 12, 2, 1, CRUST)
-    L.px(9, 14, CRUST)
-    L.rect(10, 15, 2, 1, CRUST)
-    L.px(12, 14, CRUST)
-    L.px(7, 13, p["cheek"])
-    L.px(15, 13, p["cheek"])
+    L.ellipse(12, 10, 8, 7, p["fur"])
+    # cream mask: wide at the cheeks, rising to the forehead
+    L.ellipse(12, 11, 6, 4, p["face"])
+    L.ellipse(12, 9, 4, 3, p["face"])
+    # eye patches, drooping outward
+    for row, (x0, x1) in {9: (7, 9), 10: (6, 9), 11: (5, 8)}.items():
+        for x in range(x0, x1 + 1):
+            L.px(x, row, p["patch"])
+            L.px(mirror(x), row, p["patch"])
+    # small eyes, a one-line nose, pink cheeks
+    if p["sleepy"]:
+        for x in (7, 8, 9):
+            L.px(x, 10, CRUST)
+            L.px(mirror(x), 10, CRUST)
+    else:
+        for x in (8, 16):
+            L.px(x, 9, CRUST)
+            L.px(x, 10, CRUST)
+    L.rect(11, 12, 3, 1, CRUST)
+    for x in (6, 7):
+        L.px(x, 12, CHEEK)
+        L.px(mirror(x), 12, CHEEK)
     L.outline(skip=slot_cells())
     return L
 
@@ -130,9 +135,9 @@ def sloth_hand(variant):
     p = PALETTES[variant]
     L = Layer()
     for y in (13, 15, 17):
-        L.rect(22, y, 6, 1, p["limb"])
-        L.px(28, y, p["claw"])
-    L.px(28, 18, p["claw"])
+        L.rect(23, y, 5, 1, p["arm"])
+        L.px(28, y, CLAW)
+    L.px(28, 18, CLAW)
     return L
 
 
