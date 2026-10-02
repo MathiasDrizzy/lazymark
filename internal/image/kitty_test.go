@@ -19,6 +19,25 @@ import (
 	"github.com/charmbracelet/x/ansi/kitty"
 )
 
+// block pide la imagen como lo haría la interfaz y deja que "termine de cargar" antes de volver a
+// pedirla: Block ya no decodifica dentro de la llamada (ver async_test.go).
+func block(t *testing.T, c *Client, path string, cols, rows int) ([]string, bool) {
+	t.Helper()
+	lines, ok := c.Block(path, cols, rows)
+	if !ok {
+		return lines, ok
+	}
+	jobs := c.TakeJobs()
+	if len(jobs) == 0 {
+		return lines, ok
+	}
+	for _, j := range jobs {
+		tmpl, err := Encode(j)
+		c.Done(c.Selection(), j, tmpl, err)
+	}
+	return c.Block(path, cols, rows)
+}
+
 // writePNG crea un PNG con ruido (no se comprime) de w x h en dir.
 func writePNG(t *testing.T, dir, name string, w, h int) string {
 	t.Helper()
@@ -140,7 +159,7 @@ func TestTransmitSequence(t *testing.T) {
 	path := writePNG(t, t.TempDir(), "grande.png", 1500, 800)
 	c := New()
 	c.SetSupported(true)
-	lines, ok := c.Block(path, 60, 30)
+	lines, ok := block(t, c, path, 60, 30)
 	if !ok {
 		t.Fatal("Block no devolvió la imagen")
 	}
@@ -201,7 +220,7 @@ func TestTransmitSequence(t *testing.T) {
 	}
 
 	// pedirla otra vez no la vuelve a transmitir
-	if _, ok := c.Block(path, 60, 30); !ok || len(c.TakePending()) != 0 {
+	if _, ok := block(t, c, path, 60, 30); !ok || len(c.TakePending()) != 0 {
 		t.Error("la segunda vez no debería haber nada pendiente")
 	}
 }
@@ -221,7 +240,7 @@ func TestResetEmitsDelete(t *testing.T) {
 	path := writePNG(t, t.TempDir(), "a.png", 80, 40)
 	c := New()
 	c.SetSupported(true)
-	c.Block(path, 60, 30)
+	block(t, c, path, 60, 30)
 	c.TakePending()
 	if !c.HasLive() {
 		t.Fatal("debería haber una imagen viva")
@@ -236,7 +255,7 @@ func TestResetEmitsDelete(t *testing.T) {
 	if c.HasLive() || c.Generation() == gen {
 		t.Error("Reset debe vaciar lo vivo y cambiar la generación")
 	}
-	c.Block(path, 60, 30)
+	block(t, c, path, 60, 30)
 	if pend := c.TakePending(); len(pend) != 1 || !strings.Contains(pend[0], "a=T") || !strings.Contains(pend[0], "i=2") {
 		t.Errorf("tras Reset la imagen debe transmitirse de nuevo con otro ID: %q", pend)
 	}
@@ -246,14 +265,14 @@ func TestResetEmitsDelete(t *testing.T) {
 	if pend := c.TakePending(); len(pend) != 1 || !strings.HasPrefix(pend[0], "\x1b_Ga=d") {
 		t.Errorf("ocultar debía emitir a=d: %q", pend)
 	}
-	if _, ok := c.Block(path, 60, 30); ok {
+	if _, ok := block(t, c, path, 60, 30); ok {
 		t.Error("con las imágenes ocultas Block no debe devolver placeholders")
 	}
 	if len(c.TakePending()) != 0 {
 		t.Error("oculto no debe transmitir nada")
 	}
 	c.SetVisible(true)
-	if _, ok := c.Block(path, 60, 30); !ok || len(c.TakePending()) != 1 {
+	if _, ok := block(t, c, path, 60, 30); !ok || len(c.TakePending()) != 1 {
 		t.Error("al volver a mostrar debe retransmitir")
 	}
 
@@ -274,12 +293,12 @@ func TestFallback(t *testing.T) {
 	_ = os.WriteFile(bad, []byte("no soy un png"), 0o644)
 
 	c := New() // sin soporte
-	if _, ok := c.Block(good, 60, 30); ok {
+	if _, ok := block(t, c, good, 60, 30); ok {
 		t.Error("sin soporte no debe haber placeholders")
 	}
 	c.SetSupported(true)
 	for _, p := range []string{filepath.Join(dir, "no-existe.png"), bad} {
-		if _, ok := c.Block(p, 60, 30); ok {
+		if _, ok := block(t, c, p, 60, 30); ok {
 			t.Errorf("%s no debería poder mostrarse", p)
 		}
 	}

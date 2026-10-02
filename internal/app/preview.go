@@ -191,6 +191,9 @@ const maxImageRows = 18
 func imageBlock(imgs *image.Client, path string, width, indent int) string {
 	pad := strings.Repeat(" ", indent)
 	if lines, ok := imgs.Block(path, max(2, width-indent-1), maxImageRows); ok {
+		if lines[0] == image.Label(path) { // todavía cargando: su texto de reemplazo, con el estilo de siempre
+			lines[0] = lipgloss.NewStyle().Foreground(theme.ColorPeach).Render(lines[0])
+		}
 		for i := range lines {
 			lines[i] = pad + lines[i]
 		}

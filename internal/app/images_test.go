@@ -42,8 +42,30 @@ func (r *imageRig) take() []string {
 // show pone el cursor del árbol sobre la nota (como un usuario que navega) y deja
 // que Update prepare los gráficos.
 func (r *imageRig) show(name string) {
+	r.showNoLoad(name)
+	r.settle()
+}
+
+// showNoLoad es show sin esperar a que lleguen las imágenes: lo que se ve mientras cargan.
+func (r *imageRig) showNoLoad(name string) {
 	r.notes.selectPath(filepath.Join(r.c.store.BaseDir, name))
 	r.Update(tea.WindowSizeMsg{Width: r.w, Height: r.h})
+}
+
+// settle hace lo que haría el programa real al pasar el debounce: lanza lo que la selección pidió, lo
+// ejecuta y entrega los resultados a Update. Las imágenes ya no se cargan dentro de Update.
+func (r *imageRig) settle() {
+	for i := 0; i < 5; i++ {
+		jobs := r.c.kitty.TakeJobs()
+		if len(jobs) == 0 {
+			return
+		}
+		sel := r.c.kitty.Selection()
+		for _, j := range jobs {
+			tmpl, err := image.Encode(j)
+			r.Update(imageLoadedMsg{sel: sel, job: j, tmpl: tmpl, err: err})
+		}
+	}
 }
 
 func transmits(seqs []string) (n int) {
@@ -250,6 +272,7 @@ func TestImageDetection(t *testing.T) {
 	if !r.c.kitty.Supported() {
 		t.Fatal("la respuesta OK debe activar el soporte")
 	}
+	r.settle() // la imagen se carga fuera de Update
 	if got := r.take(); transmits(got) != 1 || placeholderCells(r.AppModel) == 0 {
 		t.Errorf("al detectar soporte la imagen debe transmitirse y verse: %q", got)
 	}

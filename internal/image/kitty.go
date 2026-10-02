@@ -102,9 +102,21 @@ type placed struct {
 	cols, rows int
 }
 
+// Job es el trabajo pesado de una imagen: decodificarla, reducirla y codificarla. Va fuera del
+// ciclo de Update (Encode corre en una goroutine) y se identifica por su clave: ruta, mtime,
+// tamaño del archivo y celdas, así un archivo cambiado o un ancho distinto no reusan el resultado.
+type Job struct {
+	Key, Path  string
+	Cols, Rows int
+}
+
+// maxReady limita la caché de imágenes ya codificadas (secuencias de transmisión listas).
+const maxReady = 24
+
 // Client lleva el estado de los gráficos: si la terminal los soporta, qué
-// imágenes están transmitidas y las secuencias que faltan por enviar. Se usa
-// desde un solo hilo (el de Update/View de Bubble Tea).
+// imágenes están transmitidas, cuáles están codificadas y esperando, y las
+// secuencias que faltan por enviar. Se usa desde un solo hilo (el de Update/View de
+// Bubble Tea); solo Encode, que no toca el Client, corre en otras goroutines.
 type Client struct {
 	supported bool
 	visible   bool
@@ -112,12 +124,21 @@ type Client struct {
 	nextID    int
 	live      map[string]placed
 	pending   []string
+
+	sel      int            // selección actual: cambia al cambiar de nota (NewSelection)
+	wanted   []Job          // lo que pide el render y aún no se lanzó
+	inflight map[string]int // trabajos lanzados, con la selección que los pidió
+	ready    map[string]string
+	order    []string // claves de ready, de la más vieja a la más nueva
+	failed   map[string]bool
+	dims     map[string][2]int
 }
 
 // New crea un cliente sin soporte: hasta que la terminal conteste a la
 // consulta (SetSupported) las imágenes se muestran como texto.
 func New() *Client {
-	return &Client{visible: true, nextID: 1, live: map[string]placed{}}
+	return &Client{visible: true, nextID: 1, live: map[string]placed{}, inflight: map[string]int{},
+		ready: map[string]string{}, failed: map[string]bool{}, dims: map[string][2]int{}}
 }
 
 // Supported indica si la terminal contestó afirmativamente a la consulta.
@@ -132,11 +153,11 @@ func (c *Client) SetSupported(v bool) {
 }
 
 // Generation cambia cada vez que lo que Block devuelve puede ser distinto
-// (soporte, visibilidad o imágenes borradas); sirve para invalidar cachés de render.
+// (soporte, visibilidad, imágenes borradas o recién listas); sirve para invalidar cachés de render.
 func (c *Client) Generation() int { return c.gen }
 
-// SetVisible oculta o vuelve a mostrar las imágenes (p. ej. mientras hay un
-// popup abierto). Al ocultarlas se borran de la terminal.
+// SetVisible oculta o vuelve a mostrar las imágenes (p. ej. mientras el Kanban está abierto).
+// Al ocultarlas se borran de la terminal.
 func (c *Client) SetVisible(v bool) {
 	if c.visible == v {
 		return
@@ -150,8 +171,8 @@ func (c *Client) SetVisible(v bool) {
 }
 
 // Reset borra todas las imágenes de la terminal (a=d); las que se vuelvan a
-// pedir se transmiten de nuevo. Se llama al cambiar de nota, abrir un popup,
-// volver del editor y al salir.
+// pedir se transmiten de nuevo (desde la caché, sin volver a codificarlas). Se llama al cambiar de
+// nota, volver del editor y al salir.
 func (c *Client) Reset() {
 	if len(c.live) > 0 || len(c.pending) > 0 {
 		c.pending = append(c.pending[:0], DeleteAllSequence())
@@ -160,8 +181,63 @@ func (c *Client) Reset() {
 	c.gen++
 }
 
+// NewSelection marca que la selección cambió: lo que se pidió antes deja de importar. Los
+// trabajos en vuelo se descartan al terminar (no se dibujan ni se transmiten).
+func (c *Client) NewSelection() {
+	c.sel++
+	c.wanted = c.wanted[:0]
+	clear(c.inflight)
+}
+
+// Selection devuelve la selección actual.
+func (c *Client) Selection() int { return c.sel }
+
 // HasLive indica si hay imágenes transmitidas en la terminal.
 func (c *Client) HasLive() bool { return len(c.live) > 0 }
+
+// HasWanted indica si el render pidió imágenes que todavía no se lanzaron.
+func (c *Client) HasWanted() bool { return len(c.wanted) > 0 }
+
+// TakeJobs devuelve los trabajos pedidos y los marca como lanzados.
+func (c *Client) TakeJobs() []Job {
+	jobs := append([]Job(nil), c.wanted...)
+	for _, j := range jobs {
+		c.inflight[j.Key] = c.sel
+	}
+	c.wanted = c.wanted[:0]
+	return jobs
+}
+
+// Done recibe el resultado de Encode. Si la selección ya cambió, el resultado no se dibuja ni se
+// transmite (se guarda en la caché por si se vuelve a esa nota) y devuelve false.
+func (c *Client) Done(sel int, j Job, tmpl string, err error) bool {
+	current := c.inflight[j.Key] == sel && sel == c.sel
+	delete(c.inflight, j.Key)
+	if err != nil {
+		if current {
+			c.failed[j.Key] = true
+			c.gen++
+		}
+		return current
+	}
+	c.store(j.Key, tmpl)
+	if current {
+		c.gen++
+	}
+	return current
+}
+
+// store guarda una secuencia en la caché, expulsando la más vieja si hay más de maxReady.
+func (c *Client) store(key, tmpl string) {
+	if _, ok := c.ready[key]; !ok {
+		c.order = append(c.order, key)
+	}
+	c.ready[key] = tmpl
+	for len(c.order) > maxReady {
+		delete(c.ready, c.order[0])
+		c.order = c.order[1:]
+	}
+}
 
 // TakePending devuelve las secuencias por enviar a la terminal, en orden, y las vacía.
 func (c *Client) TakePending() []string {
@@ -172,8 +248,13 @@ func (c *Client) TakePending() []string {
 
 // Block devuelve las líneas de placeholders de la imagen en path, ajustada a
 // maxCols x maxRows. ok es false si no hay soporte, las imágenes están ocultas
-// o el archivo no se puede leer: el llamador usa entonces Label. Si la imagen
-// todavía no está en la terminal, deja su transmisión en la cola de pendientes.
+// o el archivo no se puede leer: el llamador usa entonces Label.
+//
+// Block nunca espera: leer las dimensiones es barato, pero decodificar, reducir y codificar la
+// imagen no. Si la imagen no está lista, pide el trabajo (se lanza con TakeJobs) y devuelve
+// mientras tanto un bloque de la misma altura con su texto de reemplazo, así el texto de
+// alrededor no salta cuando la imagen llega. Si ya está codificada, la deja en la cola de
+// transmisión.
 func (c *Client) Block(path string, maxCols, maxRows int) (lines []string, ok bool) {
 	if !c.supported || !c.visible {
 		return nil, false
@@ -182,37 +263,63 @@ func (c *Client) Block(path string, maxCols, maxRows int) (lines []string, ok bo
 	if err != nil {
 		return nil, false
 	}
-	f, err := os.Open(path)
-	if err != nil {
-		return nil, false
-	}
-	cfg, _, err := goimage.DecodeConfig(f)
-	_ = f.Close()
-	if err != nil {
-		return nil, false
-	}
-	cols, rows := Fit(cfg.Width, cfg.Height, maxCols, maxRows)
-	if cols == 0 {
-		return nil, false
-	}
-	key := fmt.Sprintf("%s|%d|%d|%d", path, fi.ModTime().UnixNano(), cols, rows)
-	p, exists := c.live[key]
-	if !exists {
-		seq, err := c.sequence(path, c.nextID, cols, rows)
+	dkey := fmt.Sprintf("%s|%d|%d", path, fi.ModTime().UnixNano(), fi.Size())
+	d, known := c.dims[dkey]
+	if !known {
+		f, err := os.Open(path)
 		if err != nil {
 			return nil, false
 		}
-		p = placed{id: c.nextID, cols: cols, rows: rows}
+		cfg, _, err := goimage.DecodeConfig(f)
+		_ = f.Close()
+		if err != nil {
+			return nil, false
+		}
+		d = [2]int{cfg.Width, cfg.Height}
+		c.dims[dkey] = d
+	}
+	cols, rows := Fit(d[0], d[1], maxCols, maxRows)
+	if cols == 0 {
+		return nil, false
+	}
+	key := fmt.Sprintf("%s|%d|%d", dkey, cols, rows)
+	if p, ok := c.live[key]; ok {
+		return Placeholders(p.id, p.cols, p.rows), true
+	}
+	if c.failed[key] {
+		return nil, false
+	}
+	if tmpl, ok := c.ready[key]; ok {
+		p := placed{id: c.nextID, cols: cols, rows: rows}
 		c.nextID++
 		c.live[key] = p
-		c.pending = append(c.pending, seq)
+		c.pending = append(c.pending, withID(tmpl, p.id))
+		return Placeholders(p.id, p.cols, p.rows), true
 	}
-	return Placeholders(p.id, p.cols, p.rows), true
+	if _, running := c.inflight[key]; !running && !c.isWanted(key) {
+		c.wanted = append(c.wanted, Job{Key: key, Path: path, Cols: cols, Rows: rows})
+	}
+	loading := make([]string, rows)
+	loading[0] = Label(path)
+	return loading, true
 }
 
-// sequence codifica la transmisión de la imagen con el ID dado.
-func (c *Client) sequence(path string, id, cols, rows int) (string, error) {
-	f, err := os.Open(path)
+func (c *Client) isWanted(key string) bool {
+	for _, j := range c.wanted {
+		if j.Key == key {
+			return true
+		}
+	}
+	return false
+}
+
+// sentinelID es el ID con el que Encode codifica: withID lo cambia por el real al transmitir.
+const sentinelID = 16777215
+
+// Encode hace el trabajo pesado de j: decodifica la imagen, la reduce y arma la secuencia de
+// transmisión (PNG en base64, en trozos). No toca ningún estado: es seguro correrlo en una goroutine.
+func Encode(j Job) (string, error) {
+	f, err := os.Open(j.Path)
 	if err != nil {
 		return "", err
 	}
@@ -224,16 +331,26 @@ func (c *Client) sequence(path string, id, cols, rows int) (string, error) {
 	var b strings.Builder
 	err = kitty.EncodeGraphics(&b, scaleDown(img, maxSide), &kitty.Options{
 		Action:           kitty.TransmitAndPut,
-		ID:               id,
+		ID:               sentinelID,
 		Format:           kitty.PNG,
 		Transmission:     kitty.Direct,
 		Chunk:            true,
-		Columns:          cols,
-		Rows:             rows,
+		Columns:          j.Cols,
+		Rows:             j.Rows,
 		VirtualPlacement: true,
 		Quiet:            2,
 	})
 	return b.String(), err
+}
+
+// withID pone el ID real en la primera parte de control de una secuencia hecha por Encode (las
+// demás partes del trozo solo llevan m y q).
+func withID(tmpl string, id int) string {
+	end := strings.IndexByte(tmpl, ';')
+	if end < 0 {
+		return tmpl
+	}
+	return strings.Replace(tmpl[:end], "i="+strconv.Itoa(sentinelID), "i="+strconv.Itoa(id), 1) + tmpl[end:]
 }
 
 // scaleDown reduce src para que su lado mayor no pase de limit, promediando

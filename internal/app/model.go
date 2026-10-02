@@ -1,8 +1,6 @@
 package app
 
 import (
-	"slices"
-
 	tea "charm.land/bubbletea/v2"
 	"github.com/MathiasDrizzy/lazymark/internal/clipboard"
 	"github.com/MathiasDrizzy/lazymark/internal/config"
@@ -22,11 +20,12 @@ type AppModel struct {
 	layout Layout
 	w, h   int
 
-	focus    panelID
-	lastLeft panelID
-	zoom     bool
-	kanbanOn bool
-	ratio    float64
+	focus      panelID
+	lastLeft   panelID
+	zoom       bool
+	kanbanOn   bool
+	imgTickSel int // selección para la que ya se armó el tick de carga de imágenes
+	ratio      float64
 
 	notes   *notesPanel
 	tasks   tasksPanel
@@ -138,6 +137,10 @@ func (m *AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 func (m *AppModel) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
+	case imageTickMsg:
+		return m, m.startImageJobs(msg)
+	case imageLoadedMsg:
+		m.c.kitty.Done(msg.sel, msg.job, msg.tmpl, msg.err)
 	case uv.KittyGraphicsEvent:
 		if image.IsSupportReply(msg) {
 			m.c.kitty.SetSupported(true)
@@ -435,49 +438,4 @@ func (m *AppModel) quit() tea.Cmd {
 	_ = m.c.cfg.Save()
 	m.c.kitty.Reset() // no dejar imágenes en la terminal al salir
 	return tea.Quit
-}
-
-// displayedNote es la nota que el panel derecho está mostrando (nil si es una
-// carpeta, un tag o no hay selección).
-func (m *AppModel) displayedNote() *storage.Note {
-	if m.zoom && m.focus == panelPreview {
-		return m.previewNote() // el render maximizado muestra siempre la nota
-	}
-	switch m.lastLeft {
-	case panelTags:
-		return nil
-	case panelTasks:
-		return m.previewNote()
-	}
-	return m.notes.currentNote()
-}
-
-// prepareImages deja los gráficos coherentes con lo que se va a dibujar y
-// devuelve los comandos que los mandan a la terminal. Cambiar de nota borra las
-// imágenes (a=d); al volver se transmiten de nuevo. Un popup NO las borra: con
-// placeholders Unicode la imagen es texto (https://sw.kovidgoyal.net/kitty/graphics-protocol/#graphics-unicode-placeholders),
-// así que el popup se pinta encima y solo tapa las celdas que ocupa. Se
-// ejecuta dentro de Update para que el render de View ya encuentre el
-// markdown en caché y no tenga que emitir nada.
-func (m *AppModel) prepareImages() []tea.Cmd {
-	k := m.c.kitty
-	visible := !m.kanbanOn && !m.layout.TooSmall && !m.quitting && !m.c.editing
-	k.SetVisible(visible)
-	note := m.displayedNote()
-	path := ""
-	if note != nil {
-		path = note.Path
-	}
-	if path != m.imgNote {
-		m.imgNote = path
-		k.Reset()
-	}
-	if visible && note != nil && !m.quitting {
-		m.preview.lines(note, m.layout.Preview.W-3)
-	}
-	var cmds []tea.Cmd
-	for _, seq := range k.TakePending() {
-		cmds = append(cmds, m.emit(seq))
-	}
-	return slices.DeleteFunc(cmds, func(c tea.Cmd) bool { return c == nil })
 }
