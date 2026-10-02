@@ -1,0 +1,15 @@
+[{
+  "Name": "lazymark",
+  "Description": "Paste the image you have copied as a markdown reference, saving it in the note's assets/ folder (managed by lazymark editor-plugins)",
+  "Website": "https://github.com/MathiasDrizzy/lazymark",
+  "Tags": ["markdown", "image", "lazymark"],
+  "Versions": [
+    {
+      "Version": "1.0.0",
+      "Url": "https://github.com/MathiasDrizzy/lazymark",
+      "Require": {
+        "micro": ">=2.0.0"
+      }
+    }
+  ]
+}]

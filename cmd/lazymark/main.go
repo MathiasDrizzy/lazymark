@@ -9,7 +9,9 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"github.com/MathiasDrizzy/lazymark/internal/app"
 	"github.com/MathiasDrizzy/lazymark/internal/cli"
+	"github.com/MathiasDrizzy/lazymark/internal/clipboard"
 	"github.com/MathiasDrizzy/lazymark/internal/config"
+	"github.com/MathiasDrizzy/lazymark/internal/editors"
 	"github.com/MathiasDrizzy/lazymark/internal/i18n"
 	"github.com/MathiasDrizzy/lazymark/internal/mcp"
 	"github.com/MathiasDrizzy/lazymark/internal/ui/theme"
@@ -36,6 +38,8 @@ func usageHeader() string {
 		"  task toggle --path <note> --line <n> [--dir <dir>]\n" +
 		"  note list [--json] [--dir <dir>]\n" +
 		"  note get <path> [--dir <dir>]\n" +
+		"  paste [--no-newline] [<note.md>]\n" +
+		"  editor-plugins install|uninstall [micro|vim|nano]\n" +
 		"  mcp [--dir <dir>]\n\n" +
 		i18n.T("Opciones:\n", "Options:\n")
 }
@@ -64,6 +68,17 @@ func main() {
 				os.Exit(1)
 			}
 			return
+		}
+		if arg == "paste" {
+			os.Exit(cli.RunPaste(os.Args[idx+2:], os.Getenv, clipboard.New(), os.Stdout, os.Stderr))
+		}
+		if arg == "editor-plugins" {
+			home, err := os.UserHomeDir()
+			if err != nil {
+				fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+				os.Exit(1)
+			}
+			os.Exit(cli.RunEditorPlugins(os.Args[idx+2:], editors.Env{Home: home, Getenv: os.Getenv}, os.Stdout, os.Stderr))
 		}
 		if arg == "mcp" {
 			dir := extractDirArg(os.Args[1:])

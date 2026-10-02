@@ -62,7 +62,7 @@ What lazymark reads from your notes:
 |---|---|---|---|
 | `notes_dir` | a folder path | `~/Documents/notes` | The notes folder. |
 | `editor` | a command, with arguments if you want | `$EDITOR`, else `micro`, `vim` or `nano` | Opened with `Enter` or `e`. A path with spaces works. |
-| `theme` | `catppuccin-mocha`, `catppuccin-latte`, `catppuccin-frappe`, `catppuccin-macchiato`, `tokyo-night`, `gruvbox-dark`, `nord` | `catppuccin-mocha` | Colors. Changes live in Settings. |
+| `theme` | `catppuccin-mocha`, `catppuccin-latte`, `catppuccin-frappe`, `catppuccin-macchiato`, `tokyo-night`, `gruvbox-dark`, `nord`, `dracula`, `one-dark`, `rose-pine`, `kanagawa`, `everforest-dark`, `solarized-dark`, `solarized-light` | `catppuccin-mocha` | Colors of the whole interface, including the markdown preview and its code blocks. Changes live in Settings. |
 | `language` | `auto`, `en`, `es` | `auto` | `auto` follows `LANG`, `LC_ALL` and `LC_MESSAGES`: Spanish if they mention `es`, otherwise English. |
 | `popup_background` | `none`, `theme` | `none` | `none` leaves the terminal background behind popups, so a translucent terminal stays translucent. `theme` paints the theme's base color. Every popup uses the theme palette either way. |
 | `task_scope` | `all`, `tag:<tag>`, `folder:<folder>` | `all` | Which notes feed the Tasks panel: all of them, the ones with a tag, or the ones inside a folder. |
@@ -115,6 +115,8 @@ Commands that run without the interface, for scripts and other tools:
 | `lazymark task toggle --path <note> --line <n>` | Toggle one task. |
 | `lazymark note list [--json]` | List the notes. |
 | `lazymark note get <path>` | Print a note. |
+| `lazymark paste [--no-newline] [<note.md>]` | Save the image you have copied (a screenshot or an image file) in the note's `assets/` folder and print `![](assets/…)`. Without a note it uses `$LAZYMARK_NOTE`. Exits with an error and prints nothing if there is no image. |
+| `lazymark editor-plugins install\|uninstall [micro\|vim\|nano]` | Add or remove the plugins that paste images from micro, vim and nano. See [editor-plugins.md](editor-plugins.md). |
 | `lazymark mcp` | Start an MCP server over stdio (`list_notes`, `read_note`, `list_tasks`, `toggle_task`, `get_kanban`). |
 
-All of them accept `--dir <folder>`.
+`task`, `note` and `mcp` accept `--dir <folder>`.

@@ -1,0 +1,10 @@
+# >>> lazymark (pegar imágenes; se quita con `lazymark editor-plugins uninstall nano`) >>>
+# Inserta en el cursor la referencia markdown de la imagen que tengas copiada (una captura
+# o un archivo de imagen copiado en el Finder): ![](assets/...). La imagen se guarda en la
+# carpeta assets/ de la nota con `lazymark paste`. Hace falta GNU nano (en macOS:
+# `brew install nano`; el nano de macOS es Pico y no tiene bind) y abrir la nota desde
+# lazymark, que define $LAZYMARK_NOTE.
+# Tecla: M-7 (Alt-7). Ejecuta "Execute" (inserta la salida del comando en el cursor).
+# Docs: https://www.nano-editor.org/dist/latest/nanorc.5.html (bind, execute)
+bind M-7 "{execute}lazymark paste --no-newline 2>/dev/null{enter}" main
+# <<< lazymark <<<
