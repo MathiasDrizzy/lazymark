@@ -57,7 +57,7 @@ func main() {
 			dir := extractDirArg(os.Args[1:])
 			if err := cli.RunTask(os.Args[idx+2:], dir); err != nil {
 				fmt.Fprintf(os.Stderr, "Error: %v\n", err)
-				os.Exit(1)
+				os.Exit(cli.ExitCode(err))
 			}
 			return
 		}
@@ -65,7 +65,7 @@ func main() {
 			dir := extractDirArg(os.Args[1:])
 			if err := cli.RunNote(os.Args[idx+2:], dir); err != nil {
 				fmt.Fprintf(os.Stderr, "Error: %v\n", err)
-				os.Exit(1)
+				os.Exit(cli.ExitCode(err))
 			}
 			return
 		}

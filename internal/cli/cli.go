@@ -249,7 +249,13 @@ func RunNoteWithWriter(w io.Writer, args []string, defaultNotesDir string) error
 			return fmt.Errorf("se requiere la ruta de la nota: lazymark note get <path>")
 		}
 
-		notePath := remaining[0]
+		if notesDir == "" {
+			notesDir = config.DefaultNotesDir()
+		}
+		notePath, err := storage.New(notesDir).ResolveNote(remaining[0])
+		if err != nil {
+			return usageErr(err)
+		}
 		data, err := os.ReadFile(notePath)
 		if err != nil {
 			return fmt.Errorf("error al leer nota en '%s': %w", notePath, err)

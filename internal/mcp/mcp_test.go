@@ -135,3 +135,31 @@ func TestMCPServerLifecycleAndTools(t *testing.T) {
 		t.Fatalf("Error en call toggle_task: %+v", callToggle.Error)
 	}
 }
+
+// TestMCPStaysInsideNotes (seguridad): read_note y toggle_task rechazan archivos de fuera de la carpeta de
+// notas (ruta absoluta, "..") con IsError y sin tocarlos. Antes leían y escribían cualquier archivo.
+func TestMCPStaysInsideNotes(t *testing.T) {
+	root := t.TempDir()
+	notes := root + "/notas"
+	os.MkdirAll(notes, 0o755)
+	secret := root + "/secreto.md"
+	os.WriteFile(secret, []byte("clave\n- [ ] fuera\n"), 0o644)
+	os.WriteFile(notes+"/a.md", []byte("# A\n- [ ] dentro\n"), 0o644)
+	server := NewServer(notes)
+	for _, p := range []string{secret, notes + "/../secreto.md", "/etc/hosts"} {
+		r := server.callTool("read_note", map[string]interface{}{"path": p})
+		if !r.IsError || strings.Contains(r.Content[0].Text, "clave") {
+			t.Errorf("read_note %q debía rechazarse: %+v", p, r)
+		}
+		r = server.callTool("toggle_task", map[string]interface{}{"path": p, "line": float64(2)})
+		if !r.IsError {
+			t.Errorf("toggle_task %q debía rechazarse: %+v", p, r)
+		}
+	}
+	if b, _ := os.ReadFile(secret); string(b) != "clave\n- [ ] fuera\n" {
+		t.Errorf("se modificó un archivo de fuera: %q", b)
+	}
+	if r := server.callTool("read_note", map[string]interface{}{"path": notes + "/a.md"}); r.IsError {
+		t.Errorf("read_note dentro: %+v", r)
+	}
+}

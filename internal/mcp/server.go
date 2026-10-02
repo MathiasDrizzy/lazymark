@@ -273,6 +273,10 @@ func (s *Server) callTool(name string, args map[string]interface{}) CallToolResu
 		if p == "" {
 			return CallToolResult{IsError: true, Content: []ToolContent{{Type: "text", Text: "Error: parámetro 'path' requerido"}}}
 		}
+		p, err := s.storage.ResolveNote(p)
+		if err != nil {
+			return CallToolResult{IsError: true, Content: []ToolContent{{Type: "text", Text: "Error: " + err.Error()}}}
+		}
 		bytes, err := os.ReadFile(p)
 		if err != nil {
 			return CallToolResult{IsError: true, Content: []ToolContent{{Type: "text", Text: "Error al leer archivo: " + err.Error()}}}

@@ -428,8 +428,12 @@ func (s *Storage) ToggleTask(notePath string, lineNum int) (bool, error) {
 // el que se cargó (expected); si cambió por fuera devuelve ErrNoteChanged y no
 // escribe nada (X10). Un expected cero omite esa comprobación.
 func (s *Storage) ToggleTaskIfUnchanged(notePath string, lineNum int, expected time.Time) (bool, error) {
+	notePath, err := s.ResolveNote(notePath)
+	if err != nil {
+		return false, err
+	}
 	var newDone bool
-	err := rewriteLine(notePath, lineNum, expected, func(line string) (string, error) {
+	err = rewriteLine(notePath, lineNum, expected, func(line string) (string, error) {
 		m := toggleTaskRegex.FindStringSubmatch(line)
 		if len(m) != 4 {
 			return "", fmt.Errorf("la línea %d no es una tarea válida de markdown", lineNum)
@@ -522,6 +526,10 @@ func GetTaskStage(task Task) TaskStage {
 
 // UpdateTaskStage actualiza de forma atómica en disco el estado Kanban de una tarea
 func (s *Storage) UpdateTaskStage(notePath string, lineNum int, targetStage TaskStage) error {
+	notePath, err := s.ResolveNote(notePath)
+	if err != nil {
+		return err
+	}
 	return rewriteLine(notePath, lineNum, time.Time{}, func(line string) (string, error) {
 		m := toggleTaskRegex.FindStringSubmatch(line)
 		if len(m) != 4 {
@@ -578,6 +586,10 @@ var ErrNoteChanged = errors.New("la nota cambió por fuera; recarga antes de edi
 // anterior. Si la nota cambió por fuera desde que se cargó (expected), no
 // escribe y devuelve ErrNoteChanged (X10).
 func (s *Storage) AppendToNote(notePath, text string, expected time.Time) error {
+	notePath, err := s.ResolveNote(notePath)
+	if err != nil {
+		return err
+	}
 	fi, err := os.Stat(notePath)
 	if err != nil {
 		return err
@@ -617,6 +629,10 @@ func (s *Storage) AppendToNote(notePath, text string, expected time.Time) error 
 // línea lineNum (desde 1), sin tocar el resto del archivo. Comprueba el mtime
 // igual que AppendToNote.
 func (s *Storage) InsertAfterLine(notePath string, lineNum int, text string, expected time.Time) error {
+	notePath, err := s.ResolveNote(notePath)
+	if err != nil {
+		return err
+	}
 	return rewriteLine(notePath, lineNum, expected, func(line string) (string, error) {
 		nl := "\n"
 		if strings.HasSuffix(line, "\r") {
