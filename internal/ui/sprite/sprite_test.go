@@ -29,68 +29,83 @@ func TestParseEmbeddedSVG(t *testing.T) {
 	}
 }
 
-// TestHalfBlocksComeFromSVG (Z2): el render de medios bloques sale del SVG: cambiar un píxel del
-// SVG cambia exactamente la celda que lo contiene (y solo esa), con el color exacto.
-func TestHalfBlocksComeFromSVG(t *testing.T) {
-	base, _ := ParseSVG(brand.SleepingSVG)
-	baseCells := HalfBlockCells(base)
-	if len(baseCells) != 16 {
-		t.Fatalf("32 píxeles de alto son 16 filas, hay %d", len(baseCells))
+func px(r, g, b uint8) Pixel { return Pixel{r, g, b, true} }
+
+// TestQuadrants: cada celda muestra 2x2 píxeles con a lo sumo dos colores exactos; un píxel transparente deja el
+// fondo de la pantalla; y cambiar un píxel cambia solo su celda.
+func TestQuadrants(t *testing.T) {
+	red, blue := px(255, 0, 0), px(0, 0, 255)
+	// rojo arriba, azul abajo → "▀" con fg rojo y bg azul
+	l := Quadrants(Grid{{red, red}, {blue, blue}})
+	if len(l) != 1 || !strings.Contains(l[0], "▀") || !strings.Contains(l[0], "\x1b[38;2;255;0;0m") || !strings.Contains(l[0], "\x1b[48;2;0;0;255m") {
+		t.Errorf("mitad rojo y mitad azul: %q", l)
 	}
-	for _, l := range HalfBlocks(base) {
-		if w := ansi.StringWidth(l); w != 32 {
-			t.Fatalf("cada fila mide 32 celdas, mide %d", w)
+	// un solo color: bloque lleno
+	if l := Quadrants(Grid{{red, red}, {red, red}}); !strings.Contains(l[0], "█") {
+		t.Errorf("un color: %q", l)
+	}
+	// diagonal: rojo arriba a la izquierda y azul abajo a la derecha, el resto transparente: sin fondo
+	l = Quadrants(Grid{{red, {}}, {{}, blue}})
+	if strings.Contains(l[0], "\x1b[48;") {
+		t.Errorf("un píxel transparente no debe pintar fondo: %q", l)
+	}
+	// todo transparente: un espacio sin color
+	if l := Quadrants(Grid{{{}, {}}, {{}, {}}}); l[0] != " " {
+		t.Errorf("transparente: %q", l)
+	}
+	// 16x8 píxeles son 8 celdas x 4 filas
+	g := make(Grid, 8)
+	for y := range g {
+		g[y] = make([]Pixel, 16)
+		for x := range g[y] {
+			g[y][x] = px(uint8(x*10), uint8(y*10), 40)
 		}
 	}
-	// el píxel (9,2) es el contorno de la cabeza (#11111b); pintarlo de rojo puro cambia la celda (9, 1)
-	svg := strings.Replace(brand.SleepingSVG, `<rect x="9" y="2" width="1" height="1" fill="#11111b"/>`, `<rect x="9" y="2" width="1" height="1" fill="#ff0000"/>`, 1)
-	if svg == brand.SleepingSVG {
-		t.Fatal("el píxel de prueba no está en el SVG")
+	lines := Quadrants(g)
+	if len(lines) != 4 {
+		t.Fatalf("8 píxeles de alto son 4 filas: %d", len(lines))
 	}
-	g, _ := ParseSVG(svg)
-	cells := HalfBlockCells(g)
+	for _, line := range lines {
+		if w := ansi.StringWidth(line); w != 8 {
+			t.Errorf("cada fila mide 8 celdas, mide %d", w)
+		}
+	}
+	base := QuadrantCells(g)
+	g[5][9] = px(255, 255, 255) // pertenece a la celda (4, 2)
 	changed := 0
-	for y := range cells {
-		for x := 0; x < 32; x++ {
-			if cells[y][x] != baseCells[y][x] {
+	for y, row := range QuadrantCells(g) {
+		for x, cell := range row {
+			if cell != base[y][x] {
 				changed++
-				if x != 9 || y != 1 {
+				if x != 4 || y != 2 {
 					t.Errorf("cambió la celda (%d,%d), que no es la del píxel", x, y)
 				}
 			}
 		}
 	}
 	if changed != 1 {
-		t.Fatalf("debía cambiar 1 celda y cambiaron %d", changed)
-	}
-	if got := cells[1][9]; !strings.Contains(got, "\x1b[38;2;255;0;0m") {
-		t.Errorf("la celda no lleva el rojo exacto del SVG: %q", got)
+		t.Errorf("debía cambiar 1 celda y cambiaron %d", changed)
 	}
 }
 
-func TestTransparentPixels(t *testing.T) {
-	g := Grid{{{255, 0, 0, true}, {}}, {{}, {0, 0, 255, true}}}
-	l := HalfBlocks(g)
-	if len(l) != 1 || !strings.Contains(l[0], "▀") || !strings.Contains(l[0], "▄") {
-		t.Errorf("rojo arriba a la izquierda y azul abajo a la derecha: %q", l)
+func loadBoth(t *testing.T) (f8, f36 *Frames) {
+	t.Helper()
+	var err error
+	if f8, err = ParseFrames(brand.Sprite8); err != nil {
+		t.Fatal(err)
 	}
-	if strings.Contains(l[0], "\x1b[48;") {
-		t.Error("un píxel transparente no debe pintar fondo")
+	if f36, err = ParseFrames(brand.Sprite36); err != nil {
+		t.Fatal(err)
 	}
+	return
 }
 
 // TestImageIsIntegerNearestNeighbor (M2): el cuadro se escala en un múltiplo entero de su grilla, con vecino más
-// cercano (solo los colores del sprite y el transparente, sin mezclas), centrado en un lienzo del tamaño exacto pedido.
+// cercano (solo los colores del sprite y el transparente, sin mezclas), centrado a los lados y apoyado en el borde
+// de abajo del lienzo del tamaño exacto pedido.
 func TestImageIsIntegerNearestNeighbor(t *testing.T) {
-	f, err := ParseFrames(brand.Sprite16)
-	if err != nil {
-		t.Fatal(err)
-	}
-	g := f.Grids["sleep"]
-	img, k := g.Image(144, 144)
-	if k != 9 || img.Bounds().Dx() != 144 || img.Bounds().Dy() != 144 {
-		t.Fatalf("144x144 debía dar factor 9: k=%d %v", k, img.Bounds())
-	}
+	_, f36 := loadBoth(t)
+	g := f36.Grids["sleep"]
 	pal := map[[4]uint8]bool{{0, 0, 0, 0}: true}
 	for _, row := range g {
 		for _, p := range row {
@@ -99,103 +114,117 @@ func TestImageIsIntegerNearestNeighbor(t *testing.T) {
 			}
 		}
 	}
-	for y := 0; y < 144; y++ {
-		for x := 0; x < 144; x++ {
-			c := img.NRGBAAt(x, y)
-			if !pal[[4]uint8{c.R, c.G, c.B, c.A}] {
-				t.Fatalf("(%d,%d) tiene un color mezclado %v: el escalado no es de vecino más cercano", x, y, c)
-			}
-			// cada píxel de la grilla es un bloque k x k uniforme
-			if c != img.NRGBAAt(x/9*9, y/9*9) {
-				t.Fatalf("(%d,%d) no es del mismo bloque que su esquina", x, y)
+	for _, c := range []struct{ w, h, k int }{{144, 144, 4}, {72, 72, 2}, {80, 84, 2}, {160, 168, 4}} {
+		img, k := g.Image(c.w, c.h)
+		if k != c.k || img.Bounds().Dx() != c.w || img.Bounds().Dy() != c.h {
+			t.Fatalf("%dx%d debía dar factor %d: k=%d %v", c.w, c.h, c.k, k, img.Bounds())
+		}
+		ox, oy := (c.w-36*k)/2, c.h-36*k
+		for y := 0; y < c.h; y++ {
+			for x := 0; x < c.w; x++ {
+				p := img.NRGBAAt(x, y)
+				if !pal[[4]uint8{p.R, p.G, p.B, p.A}] {
+					t.Fatalf("%dx%d (%d,%d) tiene un color mezclado %v", c.w, c.h, x, y, p)
+				}
+				if y >= oy && x >= ox && x < ox+36*k { // cada píxel de la grilla es un bloque k x k uniforme
+					bx, by := ox+(x-ox)/k*k, oy+(y-oy)/k*k
+					if p != img.NRGBAAt(bx, by) {
+						t.Fatalf("%dx%d (%d,%d) no es del mismo bloque que su esquina", c.w, c.h, x, y)
+					}
+				} else if p.A != 0 {
+					t.Fatalf("%dx%d (%d,%d): el margen del lienzo debe ser transparente", c.w, c.h, x, y)
+				}
 			}
 		}
 	}
-	// un lienzo mayor que el sprite escalado lo deja centrado; uno menor da factor 1 mínimo
-	img2, k2 := g.Image(160, 168)
-	if k2 != 10 || img2.Bounds().Dx() != 160 || img2.Bounds().Dy() != 168 {
-		t.Errorf("160x168: k=%d %v", k2, img2.Bounds())
-	}
-	if corner := img2.NRGBAAt(0, 0); corner.A != 0 {
-		t.Error("el borde del lienzo debe ser transparente")
+	// el sprite descansa abajo: la última fila del lienzo es la última de la grilla (aquí, transparente si el
+	// margen de abajo del cuadro lo es); un lienzo más alto deja el espacio de más arriba
+	img, _ := g.Image(144, 200)
+	for x := 0; x < 144; x++ {
+		if img.NRGBAAt(x, 0).A != 0 {
+			t.Fatal("con un lienzo más alto el espacio sobrante queda arriba")
+		}
 	}
 }
 
 func TestParseFramesErrors(t *testing.T) {
 	for name, text := range map[string]string{
 		"letra sin paleta":   "K 000000\n@frame a\nKX\nKK\n",
-		"no cuadrado":        "K 000000\n@frame a\nKK\n",
+		"filas desiguales":   "K 000000\n@frame a\nKK\nK\n",
+		"tamaños distintos":  "K 000000\n@frame a\nKK\nKK\n@frame b\nKKK\nKKK\n",
 		"animación inválida": "K 000000\n@frame a\nKK\nKK\n@anim x b\n",
+		"vacío":              "K 000000\n@frame a\n",
 	} {
 		if _, err := ParseFrames(text); err == nil {
 			t.Errorf("%s: debía fallar", name)
 		}
 	}
-	f, _ := ParseFrames(brand.Sprite16)
-	if len(f.Anims) < 4 {
-		t.Errorf("faltan animaciones: %d", len(f.Anims))
+	if f, err := ParseFrames("K 000000\n@frame a\nKKKK\nKKKK\n@anim x a a\n"); err != nil || f.Grids["a"] == nil {
+		t.Errorf("un cuadro que no es cuadrado es válido: %v", err)
 	}
 }
 
-// TestSprite32 (rev 3): los cuadros de 32x32 (los de Kitty) tienen los mismos nombres y animaciones que los
-// de 16x16; el cuadro dormido es el logo (reposo/lazymark.svg) píxel por píxel; y a 16x8 celdas de 9x18 px se
-// escalan por un factor entero (4).
-func TestSprite32(t *testing.T) {
-	f32, err := ParseFrames(brand.Sprite32)
-	if err != nil {
-		t.Fatal(err)
-	}
-	f16, _ := ParseFrames(brand.Sprite16)
-	for name, g := range f32.Grids {
-		if w, h := g.Size(); w != 32 || h != 32 {
+// TestSprites (C.2): los dos sprites (36x36 para Kitty y 16x8 para cuadrantes) tienen los mismos cuadros, animaciones y
+// secuencias; el cuadro dormido de Kitty es el logo (reposo/lazymark.svg) píxel por píxel, corrido (2,4); y las
+// animaciones se mueven: cada una cambia el cuadro casi en cada paso y todas terminan dormidas.
+func TestSprites(t *testing.T) {
+	f8, f36 := loadBoth(t)
+	for name, g := range f36.Grids {
+		if w, h := g.Size(); w != 36 || h != 36 {
 			t.Errorf("%s mide %dx%d", name, w, h)
 		}
-		if _, ok := f16.Grids[name]; !ok {
-			t.Errorf("el cuadro %s está en 32x32 y no en 16x16", name)
+		if _, ok := f8.Grids[name]; !ok {
+			t.Errorf("el cuadro %s está en 36x36 y no en 16x8", name)
 		}
 	}
-	for name := range f16.Grids {
-		if _, ok := f32.Grids[name]; !ok {
-			t.Errorf("el cuadro %s está en 16x16 y no en 32x32", name)
+	for name, g := range f8.Grids {
+		if w, h := g.Size(); w != 16 || h != 8 {
+			t.Errorf("%s mide %dx%d", name, w, h)
+		}
+		if _, ok := f36.Grids[name]; !ok {
+			t.Errorf("el cuadro %s está en 16x8 y no en 36x36", name)
 		}
 	}
-	if len(f32.Anims) != len(f16.Anims) {
-		t.Fatalf("animaciones: %d en 32x32 y %d en 16x16", len(f32.Anims), len(f16.Anims))
+	if len(f36.Anims) != 5 || len(f8.Anims) != 5 {
+		t.Fatalf("animaciones: %d y %d, se esperaban 5 (wake, wave, dance, jump, spin)", len(f36.Anims), len(f8.Anims))
 	}
-	for i, a := range f32.Anims {
-		if a.Name != f16.Anims[i].Name || strings.Join(a.Frames, " ") != strings.Join(f16.Anims[i].Frames, " ") {
-			t.Errorf("la animación %s difiere entre 32x32 y 16x16", a.Name)
+	for i, a := range f36.Anims {
+		if a.Name != f8.Anims[i].Name || strings.Join(a.Frames, " ") != strings.Join(f8.Anims[i].Frames, " ") {
+			t.Errorf("la animación %s difiere entre los dos sprites", a.Name)
+		}
+		if a.Frames[len(a.Frames)-1] != "sleep" {
+			t.Errorf("%s no termina dormida", a.Name)
+		}
+		moves := 0
+		for j := 1; j < len(a.Frames); j++ {
+			if a.Frames[j] != a.Frames[j-1] {
+				moves++
+			}
+		}
+		if moves*100 < (len(a.Frames)-1)*70 {
+			t.Errorf("%s: solo cambia el cuadro en %d de %d pasos (se pide >= 70%%): no es fluida", a.Name, moves, len(a.Frames)-1)
+		}
+		if len(a.Frames) < 16 {
+			t.Errorf("%s tiene %d cuadros: faltan cuadros intermedios", a.Name, len(a.Frames))
 		}
 	}
 	logo, _ := ParseSVG(brand.SleepingSVG)
-	sleep := f32.Grids["sleep"]
-	for y := range logo {
-		for x := range logo[y] {
-			if logo[y][x] != sleep[y][x] {
-				t.Fatalf("el cuadro dormido de 32x32 difiere del logo en (%d,%d): %v vs %v", x, y, sleep[y][x], logo[y][x])
+	sleep := f36.Grids["sleep"]
+	for y := range sleep {
+		for x := range sleep[y] {
+			var want Pixel
+			if lx, ly := x-2, y-4; lx >= 0 && ly >= 0 && lx < 32 && ly < 32 {
+				want = logo[ly][lx]
+			}
+			if sleep[y][x] != want {
+				t.Fatalf("el cuadro dormido difiere del logo en (%d,%d): %v vs %v", x, y, sleep[y][x], want)
 			}
 		}
 	}
-	if _, k := sleep.Image(16*9, 8*18); k != 4 {
+	if _, k := sleep.Image(8*18, 4*36); k != 4 {
 		t.Errorf("a 144x144 px el factor debe ser 4: %d", k)
 	}
-	// cada animación cambia el cuadro: ningún cuadro de una animación es idéntico al dormido salvo el propio dormido
-	for _, a := range f32.Anims {
-		for _, fr := range a.Frames {
-			if fr == "sleep" || fr == "blink" {
-				continue
-			}
-			same := true
-			for y := range sleep {
-				for x := range sleep[y] {
-					if sleep[y][x] != f32.Grids[fr][y][x] {
-						same = false
-					}
-				}
-			}
-			if same {
-				t.Errorf("%s/%s es igual al cuadro dormido", a.Name, fr)
-			}
-		}
+	if _, k := sleep.Image(8*9, 4*18); k != 2 {
+		t.Errorf("a 72x72 px el factor debe ser 2: %d", k)
 	}
 }

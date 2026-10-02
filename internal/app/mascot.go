@@ -10,39 +10,42 @@ import (
 	"github.com/charmbracelet/x/ansi"
 )
 
-// La mascota: con Kitty, el logo de 32x32 (variante c2) y sus animaciones, hechas desde sus capas, escalados
-// en un factor entero; sin Kitty, una versión de 16x16 dibujada a mano (a 16 columnas de medios bloques el de
-// 32x32 no se lee). Ocupa 16 columnas x 8 filas y duerme abajo a la derecha de los estados de reposo. Un clic en ella lanza una animación corta (abrir los ojos, saludar con el
-// lápiz, bailar, dar una vuelta), una distinta en cada clic y en orden, y vuelve a dormir sola.
+// La mascota: con Kitty, el logo de 32x32 (variante c2) sobre un lienzo de 36x36 con sitio para saltar, y sus
+// animaciones, hechas desde sus capas, escalados en un factor entero; sin Kitty, un perezoso de 14x7 dibujado
+// a mano sobre bloques de cuadrante (2x2 píxeles por celda). Ocupa 8 columnas x 4 filas y duerme abajo a la
+// derecha de los estados de reposo. Un clic en ella lanza una animación corta (despertar, saludar con el lápiz,
+// bailar, saltar, dar una vuelta), una distinta en cada clic y en orden, y vuelve a dormir sola. Cada animación
+// dura de 1 a 1,7 s a unos 16 cuadros por segundo, con cuadros intermedios (aplastar, estirar, giro).
 const (
-	mascotCols = 16
-	mascotRows = 8
-	// mascotInterval es lo que dura cada cuadro de la animación.
-	mascotInterval = 160 * time.Millisecond
+	mascotCols = 8
+	mascotRows = 4
+	// mascotInterval es lo que dura cada cuadro de la animación (~16 fps).
+	mascotInterval = 60 * time.Millisecond
 	// Tamaño de celda que se supone mientras la terminal no contesta a CSI 16 t.
 	defaultCellW, defaultCellH = 9, 18
 )
 
 var (
-	mascotOnce         sync.Once
-	mascot16, mascot32 *sprite.Frames
+	mascotOnce        sync.Once
+	mascot8, mascot36 *sprite.Frames
 )
 
-// frames devuelve los cuadros de 16x16 (medios bloques) y frames32 los de 32x32 (Kitty), leídos una vez.
+// frames devuelve los cuadros de cuadrantes (16x8) y frames36 los de Kitty (36x36), leídos una vez. Tienen los
+// mismos nombres de cuadro y las mismas animaciones.
 func loadMascot() {
 	mascotOnce.Do(func() {
 		var err error
-		if mascot16, err = sprite.ParseFrames(brand.Sprite16); err != nil {
-			panic("lazymark: la mascota de 16x16 embebida no se puede leer: " + err.Error()) // un error del repo
+		if mascot8, err = sprite.ParseFrames(brand.Sprite8); err != nil {
+			panic("lazymark: la mascota de cuadrantes embebida no se puede leer: " + err.Error()) // un error del repo
 		}
-		if mascot32, err = sprite.ParseFrames(brand.Sprite32); err != nil {
-			panic("lazymark: la mascota de 32x32 embebida no se puede leer: " + err.Error())
+		if mascot36, err = sprite.ParseFrames(brand.Sprite36); err != nil {
+			panic("lazymark: la mascota de Kitty embebida no se puede leer: " + err.Error())
 		}
 	})
 }
 
-func frames() *sprite.Frames   { loadMascot(); return mascot16 }
-func frames32() *sprite.Frames { loadMascot(); return mascot32 }
+func frames() *sprite.Frames   { loadMascot(); return mascot8 }
+func frames36() *sprite.Frames { loadMascot(); return mascot36 }
 
 // mascotState lleva la animación en curso.
 type mascotState struct {
@@ -101,17 +104,17 @@ func (m *AppModel) frameName() string {
 	return "sleep"
 }
 
-// mascotLines devuelve las 8 filas de la mascota: con Kitty, la imagen (el cuadro de 32x32 escalado en un
+// mascotLines devuelve las 4 filas de la mascota: con Kitty, la imagen (el cuadro de 36x36 escalado en un
 // factor entero, con vecino más cercano, sobre un lienzo del tamaño exacto en píxeles de las celdas: la
-// terminal no tiene que reescalarla ni suavizarla); sin Kitty, medios bloques del cuadro de 16x16.
+// terminal no tiene que reescalarla ni suavizarla); sin Kitty, bloques de cuadrante del cuadro de 16x8.
 func (m *AppModel) mascotLines() []string {
 	name := m.frameName()
 	cw, ch := m.cellSize()
-	img, _ := frames32().Grids[name].Image(mascotCols*cw, mascotRows*ch)
+	img, _ := frames36().Grids[name].Image(mascotCols*cw, mascotRows*ch)
 	if lines, ok := m.c.kitty.BlockImage("mascot-"+name, img, mascotCols, mascotRows); ok {
 		return lines
 	}
-	return sprite.HalfBlocks(frames().Grids[name])
+	return sprite.Quadrants(frames().Grids[name])
 }
 
 // mascotClick maneja un clic: si cae en la mascota, lanza la siguiente animación.

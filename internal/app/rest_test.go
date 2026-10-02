@@ -5,6 +5,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	tea "charm.land/bubbletea/v2"
 	"github.com/MathiasDrizzy/lazymark/internal/ui/sprite"
@@ -33,10 +34,10 @@ func gridOf(content string, w, h int) *uv.ScreenBuffer {
 	return &buf
 }
 
-// mascotMatches comprueba, celda por celda, que la mascota de la pantalla es el cuadro name en medios bloques.
+// mascotMatches comprueba, celda por celda, que la mascota de la pantalla es el cuadro name en bloques de cuadrante.
 func mascotMatches(t *testing.T, r *imageRig, name string) bool {
 	t.Helper()
-	want := sprite.HalfBlocks(frames().Grids[name])
+	want := sprite.Quadrants(frames().Grids[name])
 	rect := r.mascotRect()
 	got := gridOf(r.View().Content, r.w, r.h)
 	exp := gridOf(strings.Join(want, "\n"), mascotCols, mascotRows)
@@ -52,7 +53,7 @@ func mascotMatches(t *testing.T, r *imageRig, name string) bool {
 }
 
 // TestMascotBottomRight (M1): a 120x35 y 80x24, con la carpeta vacía, una carpeta sin notas, una nota vacía
-// y sin selección, la mascota (16x8 celdas, sin Kitty en medios bloques con los colores exactos del
+// y sin selección, la mascota (8x4 celdas, sin Kitty en bloques de cuadrante con los colores exactos del
 // cuadro) está abajo a la derecha del panel de la vista previa y el texto queda arriba, sin tapar.
 func TestMascotBottomRight(t *testing.T) {
 	for _, sz := range []struct{ w, h int }{{120, 35}, {80, 24}} {
@@ -64,7 +65,7 @@ func TestMascotBottomRight(t *testing.T) {
 				t.Fatalf("%dx%d %s: falta %q:\n%s", sz.w, sz.h, state, wantText, out)
 			}
 			rect, pv := r.mascotRect(), r.layout.Preview
-			if rect.X+rect.W != pv.X+pv.W-2 || rect.Y+rect.H != pv.Y+pv.H-1 || rect.W != 16 || rect.H != 8 {
+			if rect.X+rect.W != pv.X+pv.W-2 || rect.Y+rect.H != pv.Y+pv.H-1 || rect.W != 8 || rect.H != 4 {
 				t.Errorf("%dx%d %s: la mascota %+v no está abajo a la derecha de %+v", sz.w, sz.h, state, rect, pv)
 			}
 			if !mascotMatches(t, r, "sleep") {
@@ -97,14 +98,17 @@ func TestMascotBottomRight(t *testing.T) {
 		os.WriteFile(filepath.Join(r.c.store.BaseDir, "vacia.md"), []byte("# Hola\n\ntexto\n"), 0o644)
 		r.afterChange()
 		r.notes.selectPath(filepath.Join(r.c.store.BaseDir, "vacia.md"))
-		if strings.ContainsAny(plain(r.AppModel), "▀▄") {
+		if strings.ContainsAny(plain(r.AppModel), quadrantRunes) {
 			t.Errorf("%dx%d: con una nota con contenido no debe verse la mascota", sz.w, sz.h)
 		}
 	}
-	// a 60x20 no cabe: sin mascota y sin romper el layout
+	// a 60x20 (el mínimo) la mascota de 8x4 cabe debajo del texto, sin romper el layout ni taparlo
 	small := newEmptyRig(t, 60, 20, false)
-	if strings.ContainsAny(plain(small.AppModel), "▀▄") || !strings.Contains(plain(small.AppModel), "carpeta de notas está vacía") {
-		t.Errorf("a 60x20 no cabe: sin mascota y con el texto:\n%s", plain(small.AppModel))
+	if !strings.Contains(plain(small.AppModel), "carpeta de notas está vacía") {
+		t.Errorf("a 60x20 debe verse el texto:\n%s", plain(small.AppModel))
+	}
+	if rect := small.mascotRect(); small.mascotVisible() && !small.layout.Preview.Contains(rect.X, rect.Y) {
+		t.Errorf("a 60x20 la mascota %+v se sale de la vista previa %+v", rect, small.layout.Preview)
 	}
 	for i, l := range screen(small.AppModel) {
 		if w := ansi.StringWidth(l); w != 60 {
@@ -113,7 +117,7 @@ func TestMascotBottomRight(t *testing.T) {
 	}
 }
 
-// TestMascotKitty (M1, M2): con Kitty la mascota son 16x8 celdas de placeholders de una imagen cuyo tamaño
+// TestMascotKitty (M1, M2): con Kitty la mascota son 8x4 celdas de placeholders de una imagen cuyo tamaño
 // en píxeles es el de esas celdas (con el tamaño de celda que contestó la terminal), una sola transmisión por cuadro.
 func TestMascotKitty(t *testing.T) {
 	r := newEmptyRig(t, 120, 35, true)
@@ -122,8 +126,8 @@ func TestMascotKitty(t *testing.T) {
 	if r.cellW != 10 || r.cellH != 21 {
 		t.Fatalf("el tamaño de celda no se guardó: %dx%d", r.cellW, r.cellH)
 	}
-	if n := placeholderCells(r.AppModel); n != 16*8 {
-		t.Errorf("celdas de la mascota = %d, se esperaban 128", n)
+	if n := placeholderCells(r.AppModel); n != 8*4 {
+		t.Errorf("celdas de la mascota = %d, se esperaban 32", n)
 	}
 	got := r.take()
 	if transmits(got) != 1 {
@@ -135,9 +139,9 @@ func TestMascotKitty(t *testing.T) {
 		t.Errorf("repintar no debe emitir nada: %q", again)
 	}
 	// la imagen tiene el tamaño exacto de las celdas, con el sprite en múltiplos enteros (nitidez)
-	img, k := frames32().Grids["sleep"].Image(16*10, 8*21)
-	if b := img.Bounds(); b.Dx() != 160 || b.Dy() != 168 || k != 5 {
-		t.Errorf("imagen %dx%d con factor %d, se esperaba 160x168 con 5 (el cuadro de 32x32)", b.Dx(), b.Dy(), k)
+	img, k := frames36().Grids["sleep"].Image(8*10, 4*21)
+	if b := img.Bounds(); b.Dx() != 80 || b.Dy() != 84 || k != 2 {
+		t.Errorf("imagen %dx%d con factor %d, se esperaba 80x84 con 2 (el cuadro de 36x36)", b.Dx(), b.Dy(), k)
 	}
 }
 
@@ -164,7 +168,7 @@ func TestMascotSetting(t *testing.T) {
 	if mascotVisibleOnScreen(r) {
 		t.Errorf("con Mascota = no no debe quedar nada:\n%s", plain(r.AppModel))
 	}
-	click(r.AppModel, rect.X+3, rect.Y+3)
+	click(r.AppModel, rect.X+3, rect.Y+2)
 	if r.mascot.playing {
 		t.Error("un clic donde estaba no debe animar nada")
 	}
@@ -175,18 +179,21 @@ func TestMascotSetting(t *testing.T) {
 	}
 }
 
+// quadrantRunes son los bloques con los que se dibuja la mascota sin Kitty.
+const quadrantRunes = "▀▄▘▝▖▗▌▐▚▞▛▜▙▟█"
+
 func mascotVisibleOnScreen(r *imageRig) bool {
-	return strings.ContainsAny(plain(r.AppModel), "▀▄") || placeholderCells(r.AppModel) > 0
+	return strings.ContainsAny(plain(r.AppModel), quadrantRunes) || placeholderCells(r.AppModel) > 0
 }
 
 // TestMascotAnimates (M4): un clic en la mascota lanza una animación por ticks (cada clic la siguiente: abrir los
-// ojos, saludar, bailar, dar una vuelta), cada cuadro se ve en pantalla, al terminar vuelve a dormir; con un popup
+// ojos, saludar, bailar, saltar, dar una vuelta), cada cuadro se ve en pantalla, al terminar vuelve a dormir; con un popup
 // abierto no se anima y abrir uno corta la que suena.
 func TestMascotAnimates(t *testing.T) {
 	r := newEmptyRig(t, 120, 35, false)
 	rect := r.mascotRect()
 	for i, anim := range frames().Anims {
-		if cmd, ok := r.mascotClick(rect.X+5, rect.Y+4); !ok || cmd == nil {
+		if cmd, ok := r.mascotClick(rect.X+5, rect.Y+3); !ok || cmd == nil {
 			t.Fatalf("clic %d: no lanzó la animación", i)
 		}
 		if !r.mascot.playing || frames().Anims[r.mascot.anim].Name != anim.Name {
@@ -247,8 +254,67 @@ func TestMascotAnimates(t *testing.T) {
 func TestMascotClickViaMouse(t *testing.T) {
 	r := newEmptyRig(t, 120, 35, false)
 	rect := r.mascotRect()
-	click(r.AppModel, rect.X+8, rect.Y+4)
+	click(r.AppModel, rect.X+4, rect.Y+2)
 	if !r.mascot.playing {
 		t.Error("el clic del mouse en la mascota debe lanzar la animación")
+	}
+}
+
+// TestMascotTimingAndIdle (C.2): cada animación dura de 1 a 2 s a 15-20 cuadros por segundo; el reloj solo corre
+// mientras suena (al terminar no queda ningún tick pendiente: sin CPU en reposo) y un tick suelto no lo reactiva.
+func TestMascotTimingAndIdle(t *testing.T) {
+	if fps := time.Second / mascotInterval; fps < 15 || fps > 20 {
+		t.Errorf("%d cuadros por segundo, se piden 15-20", fps)
+	}
+	for _, a := range frames().Anims {
+		if d := time.Duration(len(a.Frames)) * mascotInterval; d < time.Second || d > 2*time.Second {
+			t.Errorf("%s dura %v, se piden 1-2 s", a.Name, d)
+		}
+	}
+	r := newEmptyRig(t, 120, 35, false)
+	rect := r.mascotRect()
+	if cmd := r.mascot.playing; cmd {
+		t.Fatal("en reposo no hay animación")
+	}
+	if _, cmd := r.Update(mascotTickMsg{gen: r.mascot.gen}); cmd != nil {
+		t.Error("un tick en reposo no debe pedir otro")
+	}
+	r.mascotClick(rect.X+1, rect.Y+1)
+	for r.mascot.playing {
+		_, cmd := r.Update(mascotTickMsg{gen: r.mascot.gen})
+		if r.mascot.playing && cmd == nil {
+			t.Fatal("mientras suena hace falta el siguiente tick")
+		}
+		if !r.mascot.playing && cmd != nil {
+			t.Error("al terminar no debe quedar un tick pendiente")
+		}
+	}
+}
+
+// TestMascotKittyAnimationTransmitsOnce (C.2): con Kitty cada cuadro distinto se transmite una sola vez: repetir la
+// animación no vuelve a enviar imágenes.
+func TestMascotKittyAnimationTransmitsOnce(t *testing.T) {
+	r := newEmptyRig(t, 120, 35, true)
+	r.Update(uv.CellSizeEvent{Width: 18, Height: 36})
+	r.Update(tea.WindowSizeMsg{Width: 120, Height: 35})
+	r.take()
+	rect := r.mascotRect()
+	play := func() int {
+		n := 0
+		r.mascot.next = 0 // siempre la misma animación
+		r.mascotClick(rect.X+1, rect.Y+1)
+		for r.mascot.playing {
+			r.Update(mascotTickMsg{gen: r.mascot.gen})
+			_ = r.View()
+			n += transmits(r.take())
+		}
+		return n
+	}
+	first := play()
+	if first < 5 {
+		t.Errorf("la primera vez deben transmitirse los cuadros nuevos: %d", first)
+	}
+	if second := play(); second != 0 {
+		t.Errorf("la segunda vez no debe transmitirse nada: %d", second)
 	}
 }
