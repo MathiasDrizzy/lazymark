@@ -8,11 +8,13 @@
 package image
 
 import (
+	"bytes"
 	"fmt"
 	goimage "image"
 	_ "image/gif"
 	_ "image/jpeg"
 	_ "image/png"
+	"io"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -107,6 +109,7 @@ type placed struct {
 // tamaño del archivo y celdas, así un archivo cambiado o un ancho distinto no reusan el resultado.
 type Job struct {
 	Key, Path  string
+	Data       []byte // imagen embebida en el binario (si no es nil, se usa en vez de Path)
 	Cols, Rows int
 }
 
@@ -304,6 +307,33 @@ func (c *Client) Block(path string, maxCols, maxRows int) (lines []string, ok bo
 	return loading, true
 }
 
+// BlockData es Block para una imagen embebida en el binario (data), que se muestra en exactamente
+// cols x rows celdas. A diferencia de Block, mientras no esté lista devuelve ok=false (el llamador
+// dibuja su alternativa, por ejemplo medios bloques) y pide el trabajo igual.
+func (c *Client) BlockData(name string, data []byte, cols, rows int) (lines []string, ok bool) {
+	if !c.supported || !c.visible || cols < 1 || rows < 1 {
+		return nil, false
+	}
+	key := fmt.Sprintf("data:%s|%d|%d", name, cols, rows)
+	if p, ok := c.live[key]; ok {
+		return Placeholders(p.id, p.cols, p.rows), true
+	}
+	if c.failed[key] {
+		return nil, false
+	}
+	if tmpl, ok := c.ready[key]; ok {
+		p := placed{id: c.nextID, cols: cols, rows: rows}
+		c.nextID++
+		c.live[key] = p
+		c.pending = append(c.pending, withID(tmpl, p.id))
+		return Placeholders(p.id, p.cols, p.rows), true
+	}
+	if _, running := c.inflight[key]; !running && !c.isWanted(key) {
+		c.wanted = append(c.wanted, Job{Key: key, Data: data, Cols: cols, Rows: rows})
+	}
+	return nil, false
+}
+
 func (c *Client) isWanted(key string) bool {
 	for _, j := range c.wanted {
 		if j.Key == key {
@@ -319,12 +349,16 @@ const sentinelID = 16777215
 // Encode hace el trabajo pesado de j: decodifica la imagen, la reduce y arma la secuencia de
 // transmisión (PNG en base64, en trozos). No toca ningún estado: es seguro correrlo en una goroutine.
 func Encode(j Job) (string, error) {
-	f, err := os.Open(j.Path)
-	if err != nil {
-		return "", err
+	var src io.Reader = bytes.NewReader(j.Data)
+	if j.Data == nil {
+		f, err := os.Open(j.Path)
+		if err != nil {
+			return "", err
+		}
+		defer f.Close() //nolint:errcheck
+		src = f
 	}
-	defer f.Close() //nolint:errcheck
-	img, _, err := goimage.Decode(f)
+	img, _, err := goimage.Decode(src)
 	if err != nil {
 		return "", err
 	}

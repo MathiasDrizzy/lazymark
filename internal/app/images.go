@@ -81,6 +81,9 @@ func (m *AppModel) prepareImages() []tea.Cmd {
 	if visible && note != nil && !m.quitting {
 		m.preview.lines(note, m.layout.Preview.W-3)
 	}
+	if visible && m.wantsSleeper() {
+		m.sleeper() // pide su imagen (y la deja en la cola de transmisión) antes del render
+	}
 	var cmds []tea.Cmd
 	if k.HasWanted() && m.imgTickSel != k.Selection() {
 		// hay imágenes por cargar: se espera un instante a que la selección se asiente

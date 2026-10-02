@@ -78,6 +78,14 @@ func (m *AppModel) render() string {
 // renderPreview elige qué mostrar a la derecha según el último panel izquierdo.
 func (m *AppModel) renderPreview() string {
 	r, active := m.layout.Preview, m.focus == panelPreview
+	if kind := m.restKind(); kind != "" {
+		title := i18n.T("[4]─Vista previa", "[4]─Preview")
+		if e := m.notes.current(); kind == restFolder && e != nil {
+			title = "[4]─" + iconFolderOpen + " " + e.Name
+			return m.renderRest(kind, title, fmt.Sprintf(i18n.T("%d nota(s)", "%d note(s)"), 0), r, active)
+		}
+		return m.renderRest(kind, title, "", r, active)
+	}
 	switch m.lastLeft {
 	case panelTasks:
 		// la nota de la tarea seleccionada, posicionada en su línea
