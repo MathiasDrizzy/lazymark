@@ -157,9 +157,9 @@ func TestImageFitsTerminal(t *testing.T) {
 	}
 }
 
-// TestImageDeleteEvents (H3-3, C4): abrir un popup, cambiar de nota, volver del
-// editor y salir emiten a=d (borrar todo); al volver a la nota se transmite de
-// nuevo; con el popup abierto no queda ninguna celda de imagen en pantalla.
+// TestImageDeleteEvents (H3-3, C4): cambiar de nota, abrir el editor, volver de él y
+// salir emiten a=d (borrar todo) y la imagen se transmite de nuevo al volver. Abrir un
+// popup ya NO borra la imagen (ORD-007 C.4, ver TestImageSurvivesPopups).
 func TestImageDeleteEvents(t *testing.T) {
 	r := newImageRig(t, 120, 35, true)
 	r.show("imagen.md")
@@ -174,20 +174,17 @@ func TestImageDeleteEvents(t *testing.T) {
 		t.Fatalf("sin cambios de nota ni popups no debe enviarse nada: %q", got)
 	}
 
-	// popup abierto: a=d y ninguna imagen sobre el popup
+	// popup abierto: la imagen se queda; no se emite nada y no se retransmite al cerrar
 	press(r.AppModel, "?")
-	if got := r.take(); len(got) != 1 || got[0] != deleteAll {
-		t.Fatalf("abrir un popup debe emitir solo a=d: %q", got)
-	}
-	if n := placeholderCells(r.AppModel); n != 0 {
-		t.Errorf("con el popup abierto quedan %d celdas de imagen (restos)", n)
+	if got := r.take(); len(got) != 0 {
+		t.Fatalf("abrir un popup no debe emitir nada: %q", got)
 	}
 	press(r.AppModel, "esc")
-	if got := r.take(); transmits(got) != 1 || strings.Contains(strings.Join(got, ""), "a=d") {
-		t.Errorf("al cerrar el popup la imagen debe volver a transmitirse: %q", got)
+	if got := r.take(); len(got) != 0 {
+		t.Errorf("cerrar el popup no debe emitir nada: %q", got)
 	}
 	if placeholderCells(r.AppModel) == 0 {
-		t.Error("al cerrar el popup la imagen debe volver a verse")
+		t.Error("al cerrar el popup la imagen debe seguir viéndose")
 	}
 
 	// cambiar de nota
@@ -255,5 +252,57 @@ func TestImageDetection(t *testing.T) {
 	}
 	if got := r.take(); transmits(got) != 1 || placeholderCells(r.AppModel) == 0 {
 		t.Errorf("al detectar soporte la imagen debe transmitirse y verse: %q", got)
+	}
+}
+
+// TestImageSurvivesPopups (I1): con un popup abierto la imagen de la vista previa se
+// sigue viendo: las celdas fuera del popup siguen siendo placeholders Kitty, el
+// texto de reemplazo "[imagen: …]" no aparece y no se emite a=d. Solo las celdas que
+// tapa el popup quedan ocultas. Antes, abrir cualquier popup borraba la imagen
+// (a=d) y la reemplazaba por el texto.
+func TestImageSurvivesPopups(t *testing.T) {
+	for _, keys := range [][]string{{"?"}, {","}, {"x"}, {"r"}} {
+		r := newImageRig(t, 120, 35, true)
+		r.show("imagen.md")
+		r.take()
+		total := placeholderCells(r.AppModel)
+		if total == 0 {
+			t.Fatal("sin popup debe verse la imagen")
+		}
+		press(r.AppModel, keys...)
+		p := r.c.top()
+		if p == nil {
+			t.Fatalf("%v: no abrió un popup", keys)
+		}
+		if got := r.take(); len(got) != 0 {
+			t.Errorf("%v: abrir el popup no debe emitir nada (a=d borra la imagen): %q", keys, got)
+		}
+		out := plain(r.AppModel)
+		if strings.Contains(out, "[imagen:") {
+			t.Errorf("%v: la imagen se reemplazó por su texto con el popup abierto:\n%s", keys, out)
+		}
+		visible := placeholderCells(r.AppModel)
+		if visible == 0 {
+			t.Errorf("%v: con el popup abierto no queda ninguna celda de imagen", keys)
+		}
+		// ninguna celda de imagen dentro del rectángulo del popup
+		rect := popupRect(r.layout, p, p.render(r.layout))
+		for y, line := range screen(r.AppModel) {
+			if y < rect.Y || y >= rect.Y+rect.H {
+				continue
+			}
+			inside := ansi.Strip(ansi.Cut(line, rect.X, rect.X+rect.W))
+			if strings.Contains(inside, string(kitty.Placeholder)) {
+				t.Errorf("%v: hay celdas de imagen dentro del popup, fila %d", keys, y)
+			}
+		}
+		// al cerrar, la imagen sigue entera y no se retransmite
+		press(r.AppModel, "esc")
+		if got := r.take(); len(got) != 0 {
+			t.Errorf("%v: cerrar el popup no debe emitir nada: %q", keys, got)
+		}
+		if after := placeholderCells(r.AppModel); after != total {
+			t.Errorf("%v: tras cerrar, celdas de imagen = %d, se esperaban %d", keys, after, total)
+		}
 	}
 }

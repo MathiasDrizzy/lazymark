@@ -453,13 +453,15 @@ func (m *AppModel) displayedNote() *storage.Note {
 }
 
 // prepareImages deja los gráficos coherentes con lo que se va a dibujar y
-// devuelve los comandos que los mandan a la terminal. Cambiar de nota o abrir
-// un popup borra las imágenes (a=d); al volver se transmiten de nuevo. Se
+// devuelve los comandos que los mandan a la terminal. Cambiar de nota borra las
+// imágenes (a=d); al volver se transmiten de nuevo. Un popup NO las borra: con
+// placeholders Unicode la imagen es texto (https://sw.kovidgoyal.net/kitty/graphics-protocol/#graphics-unicode-placeholders),
+// así que el popup se pinta encima y solo tapa las celdas que ocupa. Se
 // ejecuta dentro de Update para que el render de View ya encuentre el
 // markdown en caché y no tenga que emitir nada.
 func (m *AppModel) prepareImages() []tea.Cmd {
 	k := m.c.kitty
-	visible := len(m.c.popups) == 0 && !m.kanbanOn && !m.layout.TooSmall && !m.quitting && !m.c.editing
+	visible := !m.kanbanOn && !m.layout.TooSmall && !m.quitting && !m.c.editing
 	k.SetVisible(visible)
 	note := m.displayedNote()
 	path := ""
