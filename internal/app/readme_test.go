@@ -143,6 +143,13 @@ func TestReadmeAssetsAndLinks(t *testing.T) {
 				t.Errorf("%s: su tape no escribe esa salida", src)
 			}
 		case ".png":
+			if strings.HasPrefix(src, "assets/brand/") {
+				// El logo sale de assets/brand/generate.py, no de una captura.
+				if _, err := os.Stat(repoFile("assets/brand/generate.py")); err != nil {
+					t.Errorf("%s: falta el generador assets/brand/generate.py", src)
+				}
+				continue
+			}
 			if !strings.Contains(captures, filepath.Base(src)) {
 				t.Errorf("%s: la captura no está documentada en assets/readme/CAPTURES.md", src)
 			}
@@ -216,5 +223,26 @@ func TestInstallCommandMatchesModule(t *testing.T) {
 	goVer := regexp.MustCompile(`(?m)^go (\S+)`).FindStringSubmatch(readRepo(t, "go.mod"))
 	if goVer == nil || !strings.Contains(readRepo(t, "README.md"), "Go "+goVer[1]+" or newer") {
 		t.Errorf("el README debe decir la versión de Go de go.mod (%v)", goVer)
+	}
+}
+
+// TestBrandLayers: el logo viaja en capas (base, objeto, mano y compuesto) con la misma
+// grilla de 32x32, un <rect> por píxel y crispEdges, tanto en c1 (logo) como en c2 (reposo).
+func TestBrandLayers(t *testing.T) {
+	for _, dir := range []string{"assets/brand", "assets/brand/reposo"} {
+		for _, name := range []string{"perezoso-base.svg", "objeto-lapiz.svg", "perezoso-mano.svg", "lazymark.svg"} {
+			svg := readRepo(t, dir+"/"+name)
+			if !strings.Contains(svg, `viewBox="0 0 32 32"`) || !strings.Contains(svg, `shape-rendering="crispEdges"`) {
+				t.Errorf("%s/%s: debe usar la grilla 32x32 y crispEdges", dir, name)
+			}
+			if strings.Contains(svg, "<circle") || strings.Contains(svg, "<path") || !strings.Contains(svg, "<rect ") {
+				t.Errorf("%s/%s: cada píxel debe ser un <rect>", dir, name)
+			}
+		}
+		for _, size := range []string{"512", "256", "128"} {
+			if _, err := os.Stat(repoFile(dir + "/lazymark-" + size + ".png")); err != nil {
+				t.Errorf("%s: falta el PNG de %s px", dir, size)
+			}
+		}
 	}
 }

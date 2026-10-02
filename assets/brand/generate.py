@@ -4,10 +4,12 @@
 The mascot is built from layers on one fixed 32x32 grid, so every product of the
 same family can reuse the sloth and draw only its own object:
 
-  perezoso-base.svg  the body, with a palm that has an empty slot ("grip")
-  objeto-lapiz.svg   only the object (a pencil), anchored to the slot
-  perezoso-mano.svg  the fingers, a front layer that wraps around the object
-  lazymark.svg       the composite: base, then the object, then the fingers
+  perezoso-base.svg  the body, with the paw that holds the object up
+  objeto-lapiz.svg   only the object (a pencil)
+  perezoso-mano.svg  the claws, a front layer hooked over the object
+  lazymark.svg       the composite: base, then the object, then the claws
+
+Variant c1 is the logo (assets/brand/); c2, the sleepy one, goes in assets/brand/reposo/.
 
 Every pixel is a <rect> with shape-rendering="crispEdges" on a transparent
 background. Run it from anywhere:  python3 assets/brand/generate.py
@@ -25,10 +27,6 @@ RED, MAROON, PEACH, YELLOW = "#f38ba8", "#eba0ac", "#fab387", "#f9e2af"
 GREEN, TEAL, BLUE, LAVENDER = "#a6e3a1", "#94e2d5", "#89b4fa", "#b4befe"
 
 OUTLINE = CRUST
-
-# The hand grips here: an empty slot where an object's handle goes. Every object
-# is drawn so that its handle passes through this rectangle (x, y, w, h).
-SLOT = (23, 13, 5, 6)
 
 
 class Layer(dict):
@@ -59,11 +57,6 @@ class Layer(dict):
         self.update(edge)
 
 
-def slot_cells():
-    x, y, w, h = SLOT
-    return {(i, j) for j in range(y, y + h) for i in range(x, x + w)}
-
-
 # --- the sloth -------------------------------------------------------------
 
 # Own earth tones (Catppuccin has no browns); only the pencil keeps a Catppuccin accent.
@@ -80,7 +73,7 @@ def mirror(x):
     return 24 - x  # the head is symmetric about x = 12
 
 
-def sloth_base(variant, grip):
+def sloth_base(variant):
     p = PALETTES[variant]
     L = Layer()
     # short legs
@@ -99,8 +92,13 @@ def sloth_base(variant, grip):
     for x in (2, 4):
         L.px(x, 27, CLAW)
     L.px(3, 28, CLAW)
-    # right arm: long, it carries the object; the shape depends on the grip
-    GRIPS[grip]["arm"](L, p)
+    # right arm: long, rising to a paw above the pencil; arm and paw are one shape,
+    # so the outline around them is continuous
+    L.rect(16, 20, 3, 3, p["arm"])
+    L.rect(18, 16, 3, 5, p["arm"])
+    L.rect(21, 15, 4, 1, p["arm"])
+    L.rect(20, 16, 6, 1, p["arm"])
+    L.rect(21, 17, 5, 1, p["arm"])
     # head
     L.ellipse(12, 10, 8, 7, p["fur"])
     # cream mask: wide at the cheeks, rising to the forehead
@@ -124,26 +122,49 @@ def sloth_base(variant, grip):
     for x in (6, 7):
         L.px(x, 12, CHEEK)
         L.px(mirror(x), 12, CHEEK)
-    L.outline(skip=GRIPS[grip]["skip"]())
+    L.outline()
     return L
 
 
-# --- the pencil ------------------------------------------------------------
+# --- the pencil: hangs from the claws, like a sloth from a branch ---------------
 
-def pencil():
-    """A vertical pencil. Its handle (the yellow body) passes through the slot."""
+WOOD, GRAPHITE = "#e3c59b", OVERLAY0  # graphite is light enough to read against the black outline
+
+
+def pencil(x0, y0, n):
+    """A horizontal pencil, 3 px tall: the graphite tip on the left, the eraser on the right."""
     L = Layer()
-    L.rect(24, 2, 3, 2, PINK)  # eraser
-    L.rect(24, 4, 3, 1, SUBTEXT0)  # ferrule
-    L.rect(24, 5, 3, 1, OVERLAY0)
-    L.rect(24, 6, 3, 15, YELLOW)  # body
-    L.rect(26, 6, 1, 15, PEACH)  # shade
-    L.rect(24, 6, 1, 15, "#fdf1cf")  # highlight
-    L.rect(24, 21, 3, 1, ROSEWATER)  # sharpened wood
-    L.rect(24, 22, 3, 1, ROSEWATER)
-    L.px(25, 23, ROSEWATER)
-    L.px(25, 24, SURFACE0)  # graphite
+    for k in range(n):
+        for j in range(3):
+            x, y = x0 + k, y0 + j
+            if k == 0:
+                if j == 1:
+                    L[(x, y)] = GRAPHITE
+                continue
+            if k == 1:
+                L[(x, y)] = GRAPHITE if j == 1 else WOOD
+            elif k == 2:
+                L[(x, y)] = WOOD
+            elif k >= n - 2:
+                L[(x, y)] = PINK  # eraser
+            elif k == n - 3:
+                L[(x, y)] = SUBTEXT0  # ferrule
+            else:
+                L[(x, y)] = ("#fdf1cf", YELLOW, PEACH)[j]
     L.outline()
+    return L
+
+
+PENCIL = (16, 19, 15)  # x0, y0, length
+
+
+# --- the claws: a front layer, hooked over the pencil ----------------------------
+
+def claws():
+    L = Layer()
+    for x in (21, 23, 25):
+        L.px(x, 18, CLAW)
+        L.px(x, 19, CLAW)
     return L
 
 
@@ -168,124 +189,17 @@ def write(path, content):
         f.write(content)
 
 
-# --- the grips: three ways to hold the object ------------------------------
-
-DARK_FINGER = "#8c5f3f"
-
-
-def pencil_axis(cells, n, w=3):
-    """Colors a pencil along its axis: k = 0 is the tip, k = n - 1 the end of the eraser."""
-    L = Layer()
-    for k in range(n):
-        for j in range(w):
-            if k == 0:
-                if j == w // 2:
-                    L[cells(k, j)] = SURFACE0  # graphite
-                continue
-            if k <= 2:
-                c = ROSEWATER  # sharpened wood
-            elif k >= n - 2:
-                c = PINK  # eraser
-            elif k == n - 3:
-                c = OVERLAY0  # ferrule
-            else:
-                c = (("#fdf1cf", YELLOW, PEACH) if w == 3 else ("#fdf1cf", YELLOW, YELLOW, PEACH))[j]
-            L[cells(k, j)] = c
-    L.outline()
-    return L
-
-
-def pencil_diag(x0, y0, n):
-    """On a 45-degree diagonal: the tip at (x0 + 1, y0), rising to the right."""
-    return pencil_axis(lambda k, j: (x0 + k + j, y0 - k), n, w=4)
-
-
-def pencil_flat(x0, y0, n):
-    """Horizontal: the tip on the left, the eraser on the right."""
-    return pencil_axis(lambda k, j: (x0 + k, y0 + j), n)
-
-
-def mitt(L, cells, color):
-    """A small rounded paw: rows of (y, x0, x1), with a black outline."""
-    for y, x0, x1 in cells:
-        L.rect(x0, y, x1 - x0 + 1, 1, color)
-    edge = {}
-    for (x, y) in L:
-        for dx, dy in ((1, 0), (-1, 0), (0, 1), (0, -1)):
-            n = (x + dx, y + dy)
-            if n not in L:
-                edge[n] = OUTLINE
-    L.update(edge)
-
-
-def arm_vertical(L, p):
-    L.rect(16, 20, 3, 3, p["arm"])
-    L.rect(18, 17, 3, 4, p["arm"])
-    L.rect(20, 13, 3, 7, p["arm"])
-
-
-def hand_sword(p):
-    """1. Sprite-sword grip: a small outlined hand block, and dark finger lines over the pencil."""
-    L = Layer()
-    for y in (14, 16, 18):
-        L.rect(23, y, 4, 1, DARK_FINGER)
-    L.px(23, 15, p["arm"])  # the knuckles of the hand block, between the fingers
-    L.px(23, 17, p["arm"])
-    return L
-
-
-def arm_low(L, p):
-    L.rect(16, 21, 3, 3, p["arm"])
-    L.rect(17, 19, 3, 3, p["arm"])
-
-
-def hand_diag(p):
-    """2. The pencil crosses the body on a diagonal; the paw holds it low, with claws over it."""
-    L = Layer()
-    mitt(L, [(19, 19, 21), (20, 18, 22), (21, 18, 22), (22, 19, 21)], p["arm"])
-    for c in ((23, 20), (24, 19), (22, 18)):  # claws curling over the pencil, up and to the right
-        L.px(*c, CLAW)
-    return L
-
-
-def arm_up(L, p):
-    L.rect(16, 20, 3, 3, p["arm"])
-    L.rect(18, 16, 3, 5, p["arm"])
-
-
-def hand_branch(p):
-    """3. The pencil hangs from the claws, like a sloth from a branch: the paw is above it."""
-    L = Layer()
-    mitt(L, [(15, 21, 24), (16, 20, 25), (17, 21, 24)], p["arm"])
-    for x in (21, 23, 25):  # three claws hooked over the pencil
-        L.px(x, 18, CLAW)
-        L.px(x, 19, CLAW)
-    return L
-
-
-def no_skip():
-    return set()
-
-
-GRIPS = {
-    "1": dict(arm=arm_vertical, skip=slot_cells, hand=hand_sword, pencil=pencil, crop=(18, 9)),
-    "2": dict(arm=arm_low, skip=no_skip, hand=hand_diag, pencil=lambda: pencil_diag(12, 27, 16), crop=(15, 13)),
-    "3": dict(arm=arm_up, skip=no_skip, hand=hand_branch, pencil=lambda: pencil_flat(16, 19, 15), crop=(16, 12)),
-}
-
-
-def build(variant, grip, directory):
+def build(variant, directory):
     os.makedirs(directory, exist_ok=True)
-    g = GRIPS[grip]
-    base, obj, hand = sloth_base(variant, grip), g["pencil"](), g["hand"](PALETTES[variant])
+    base, obj, hand = sloth_base(variant), pencil(*PENCIL), claws()
     write(os.path.join(directory, "perezoso-base.svg"), svg([("perezoso", base)], "Sloth"))
-    write(os.path.join(directory, "perezoso-mano.svg"), svg([("mano", hand)], "Sloth paw (front layer)"))
     write(os.path.join(directory, "objeto-lapiz.svg"), svg([("lapiz", obj)], "Pencil"))
-    # order matters: base, then the object, then the paw in front of it
+    write(os.path.join(directory, "perezoso-mano.svg"), svg([("mano", hand)], "Claws (front layer)"))
+    # order matters: base, then the object, then the claws hooked over it
     write(os.path.join(directory, "lazymark.svg"), svg([("perezoso", base), ("lapiz", obj), ("mano", hand)], "lazymark"))
 
 
 if __name__ == "__main__":
-    for grip in GRIPS:
-        build("c1", grip, os.path.join(HERE, "variantes", f"c1-agarre-{grip}"))
+    build("c1", HERE)  # the logo
+    build("c2", os.path.join(HERE, "reposo"))  # the sleepy one, for the app's idle states
     print("ok")
