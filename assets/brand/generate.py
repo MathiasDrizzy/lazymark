@@ -4,9 +4,10 @@
 The mascot is built from layers on one fixed 32x32 grid, so every product of the
 same family can reuse the sloth and draw only its own object:
 
-  perezoso-base.svg  the body, with a hand that has an empty slot ("grip")
+  perezoso-base.svg  the body, with a palm that has an empty slot ("grip")
   objeto-lapiz.svg   only the object (a pencil), anchored to the slot
-  lazymark.svg       the composite: base, then the object on top
+  perezoso-mano.svg  the fingers, a front layer that wraps around the object
+  lazymark.svg       the composite: base, then the object, then the fingers
 
 Every pixel is a <rect> with shape-rendering="crispEdges" on a transparent
 background. Run it from anywhere:  python3 assets/brand/generate.py
@@ -65,88 +66,74 @@ def slot_cells():
 
 # --- the sloth -------------------------------------------------------------
 
-# Earth and cream tones inside the palette
+# Earth and cream tones, all Catppuccin Mocha tokens.
+#  b1: peach limbs, cream belly (peach only on the limbs and cheeks)
+#  b2: maroon limbs, flamingo belly (a muted, pinker earth tone)
 PALETTES = {
-    "a": dict(fur=ROSEWATER, face=ROSEWATER, belly=FLAMINGO, limb=FLAMINGO, mask=SURFACE1, claw=YELLOW, cheek=PINK),
-    "b": dict(fur=ROSEWATER, face=ROSEWATER, belly=PEACH, limb=PEACH, mask=SURFACE0, claw=YELLOW, cheek=MAROON),
-    "c": dict(fur=FLAMINGO, face=ROSEWATER, belly=ROSEWATER, limb=MAROON, mask=SURFACE1, claw=YELLOW, cheek=PINK),
+    "b1": dict(fur=ROSEWATER, face=ROSEWATER, belly=ROSEWATER, limb=PEACH, band=SURFACE2, claw=YELLOW, cheek=MAROON),
+    "b2": dict(fur=ROSEWATER, face=ROSEWATER, belly=FLAMINGO, limb=MAROON, band=SURFACE2, claw=YELLOW, cheek=MAROON),
 }
+
+
+def claw(L, x, y, dx, color):
+    """A curved claw: two pixels, hooking toward dx."""
+    L.px(x, y, color)
+    L.px(x + dx, y + 1, color)
 
 
 def sloth_base(variant):
     p = PALETTES[variant]
     L = Layer()
-    # feet: two pads with three claws each
-    L.ellipse(7, 29, 3, 1, p["limb"])
-    L.ellipse(15, 29, 3, 1, p["limb"])
+    # feet with claws
+    L.ellipse(7, 27, 2, 1, p["limb"])
+    L.ellipse(15, 27, 2, 1, p["limb"])
     for x in (5, 7, 9, 13, 15, 17):
-        L.px(x, 30, p["claw"])
-    # body and belly
-    L.ellipse(11, 23, 8, 6, p["fur"])
-    L.ellipse(11, 24, 5, 4, p["belly"])
-    # left arm hanging down, with three claws
-    L.rect(2, 19, 3, 8, p["limb"])
-    for x in (1, 3, 5):
+        L.px(x, 29, p["claw"])
+    # body, with shoulders that join the head, smaller than the arms so the arms read as long
+    L.ellipse(11, 22, 7, 6, p["fur"])
+    L.rect(4, 17, 15, 4, p["fur"])
+    L.ellipse(11, 23, 4, 4, p["belly"])
+    # left arm: long, from the shoulder to the ground, with hooked claws
+    L.rect(2, 16, 3, 12, p["limb"])
+    for x in (2, 4):
         L.px(x, 28, p["claw"])
-    L.px(2, 27, p["claw"])
-    L.px(4, 27, p["claw"])
-    # right arm raised to the hand
-    L.rect(18, 19, 3, 3, p["limb"])
-    L.rect(19, 16, 3, 3, p["limb"])
-    # the hand: palm to the left of the slot, three fingers with claws to its right
-    L.rect(20, 13, 3, 6, p["limb"])
-    for y in (13, 15, 17):
-        L.rect(28, y, 2, 1, p["limb"])
-        L.px(30, y, p["claw"])
-    # head and face
+    L.px(1, 28, p["claw"])
+    L.px(3, 29, p["claw"])
+    L.px(5, 28, p["claw"])
+    # right arm: long, rising from the shoulder to the hand
+    L.rect(17, 18, 3, 5, p["limb"])
+    L.rect(19, 13, 4, 7, p["limb"])  # palm, left of the slot
+    # head
     L.ellipse(11, 10, 9, 7, p["fur"])
     L.ellipse(11, 11, 7, 5, p["face"])
-    # eye masks: dark band around each eye that sweeps down and out, like a real sloth
-    L.rect(5, 9, 4, 3, p["mask"])
-    L.rect(14, 9, 4, 3, p["mask"])
-    L.px(4, 10, p["mask"])
-    L.px(4, 11, p["mask"])
-    L.px(4, 12, p["mask"])
-    L.px(18, 10, p["mask"])
-    L.px(19, 11, p["mask"])
-    L.px(19, 12, p["mask"])
-    # nose
+    # the sloth's dark band: crosses the face through both eyes and sweeps down and out
+    L.rect(4, 9, 15, 3, p["band"])
+    for (x, y) in ((3, 10), (3, 11), (3, 12), (4, 12), (19, 10), (19, 11), (19, 12), (18, 12)):
+        L.px(x, y, p["band"])
+    for x in (9, 10, 11, 12):
+        L.px(x, 9, p["face"])  # the band narrows over the nose
+    # sleepy: closed eyes, a nose and a calm smile
+    L.rect(6, 10, 3, 1, CRUST)
+    L.rect(14, 10, 3, 1, CRUST)
     L.rect(10, 12, 2, 1, CRUST)
-    face(L, variant, p)
+    L.px(9, 14, CRUST)
+    L.rect(10, 15, 2, 1, CRUST)
+    L.px(12, 14, CRUST)
+    L.px(7, 13, p["cheek"])
+    L.px(15, 13, p["cheek"])
     L.outline(skip=slot_cells())
     return L
 
 
-def face(L, variant, p):
-    """The expression is what changes between variants A, B and C."""
-    if variant == "a":  # awake and happy: open eyes with a glint, smile, cheeks
-        L.px(6, 10, TEXT)
-        L.px(7, 10, CRUST)
-        L.px(16, 10, CRUST)
-        L.px(15, 10, TEXT)
-        L.px(9, 14, CRUST)
-        L.px(12, 14, CRUST)
-        L.rect(10, 15, 2, 1, CRUST)
-        L.px(7, 13, p["cheek"])
-        L.px(15, 13, p["cheek"])
-    elif variant == "b":  # sleepy: closed eyes (a line each) and a small calm smile
-        L.rect(5, 10, 4, 1, CRUST)
-        L.rect(14, 10, 4, 1, CRUST)
-        L.px(6, 11, p["mask"])
-        L.px(15, 11, p["mask"])
-        L.rect(10, 14, 2, 1, CRUST)
-        L.px(7, 13, p["cheek"])
-        L.px(15, 13, p["cheek"])
-    else:  # c: focused, ready to write: brows, big eyes, a straight mouth
-        L.px(6, 10, TEXT)
-        L.px(7, 10, CRUST)
-        L.px(7, 11, CRUST)
-        L.px(16, 10, CRUST)
-        L.px(15, 10, TEXT)
-        L.px(15, 11, CRUST)
-        L.rect(5, 8, 3, 1, CRUST)
-        L.rect(15, 8, 3, 1, CRUST)
-        L.rect(10, 14, 2, 1, CRUST)
+def sloth_hand(variant):
+    """The fingers, drawn in FRONT of the object so they wrap around its handle."""
+    p = PALETTES[variant]
+    L = Layer()
+    for y in (13, 15, 17):
+        L.rect(22, y, 6, 1, p["limb"])
+        L.px(28, y, p["claw"])
+    L.px(28, 18, p["claw"])
+    return L
 
 
 # --- the pencil ------------------------------------------------------------
@@ -154,15 +141,16 @@ def face(L, variant, p):
 def pencil():
     """A vertical pencil. Its handle (the yellow body) passes through the slot."""
     L = Layer()
-    L.rect(24, 4, 3, 2, PINK)  # eraser
-    L.rect(24, 6, 3, 1, SUBTEXT0)  # ferrule
-    L.rect(24, 7, 3, 1, OVERLAY0)
-    L.rect(24, 8, 3, 11, YELLOW)  # body
-    L.rect(26, 8, 1, 11, PEACH)  # shade
-    L.rect(24, 8, 1, 11, "#fdf1cf")  # highlight
-    L.rect(24, 19, 3, 1, ROSEWATER)  # sharpened wood
-    L.px(25, 20, ROSEWATER)
-    L.px(25, 21, SURFACE0)  # graphite
+    L.rect(24, 2, 3, 2, PINK)  # eraser
+    L.rect(24, 4, 3, 1, SUBTEXT0)  # ferrule
+    L.rect(24, 5, 3, 1, OVERLAY0)
+    L.rect(24, 6, 3, 15, YELLOW)  # body
+    L.rect(26, 6, 1, 15, PEACH)  # shade
+    L.rect(24, 6, 1, 15, "#fdf1cf")  # highlight
+    L.rect(24, 21, 3, 1, ROSEWATER)  # sharpened wood
+    L.rect(24, 22, 3, 1, ROSEWATER)
+    L.px(25, 23, ROSEWATER)
+    L.px(25, 24, SURFACE0)  # graphite
     L.outline()
     return L
 
@@ -190,13 +178,15 @@ def write(path, content):
 
 def build(variant, directory):
     os.makedirs(directory, exist_ok=True)
-    base, obj = sloth_base(variant), pencil()
-    write(os.path.join(directory, "perezoso-base.svg"), svg([("perezoso", base)], f"Sloth, variant {variant.upper()}"))
+    base, obj, hand = sloth_base(variant), pencil(), sloth_hand(variant)
+    write(os.path.join(directory, "perezoso-base.svg"), svg([("perezoso", base)], "Sloth"))
+    write(os.path.join(directory, "perezoso-mano.svg"), svg([("mano", hand)], "Sloth fingers (front layer)"))
     write(os.path.join(directory, "objeto-lapiz.svg"), svg([("lapiz", obj)], "Pencil"))
-    write(os.path.join(directory, "lazymark.svg"), svg([("perezoso", base), ("lapiz", obj)], f"lazymark, variant {variant.upper()}"))
+    # order matters: base, then the object, then the fingers wrapped around it
+    write(os.path.join(directory, "lazymark.svg"), svg([("perezoso", base), ("lapiz", obj), ("mano", hand)], "lazymark"))
 
 
 if __name__ == "__main__":
-    for v in "abc":
+    for v in PALETTES:
         build(v, os.path.join(HERE, "variantes", v))
     print("ok")
