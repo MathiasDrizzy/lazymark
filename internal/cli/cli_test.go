@@ -70,9 +70,14 @@ var timeRe = regexp.MustCompile(`"mod_time": "[^"]*"`)
 
 // normalize vuelve estable la salida: la carpeta temporal es <DIR> y las horas <TIME>.
 func normalize(out, dir string) string {
+	// en JSON las barras de Windows van escapadas (\\): se normaliza la carpeta y el resto de la ruta a "/"
+	out = strings.ReplaceAll(out, strings.ReplaceAll(dir, `\`, `\\`), "<DIR>")
 	out = strings.ReplaceAll(out, dir, "<DIR>")
+	out = dirTailRe.ReplaceAllStringFunc(out, func(m string) string { return strings.ReplaceAll(m, `\\`, "/") })
 	return timeRe.ReplaceAllString(out, `"mod_time": "<TIME>"`)
 }
+
+var dirTailRe = regexp.MustCompile(`<DIR>[^"]*`)
 
 func run(t *testing.T, dir string, args ...string) (string, error) {
 	t.Helper()

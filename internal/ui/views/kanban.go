@@ -191,7 +191,7 @@ func RenderKanban(board KanbanBoard, activeCol int, selectedRows []int, width, h
 				if ht != nil { // las tarjetas se registran después de las columnas: ganan al clic
 					rowY := offsetY + 1 + (i - startIdx)
 					ht.Register(fmt.Sprintf("kanban-card-%d-%d", c, i), mouse.ZoneKanbanCard, colStartX+1, rowY, colStartX+w-2, rowY, i,
-						fmt.Sprintf("%d:%s:%d", c, card.NotePath, card.Task.Line))
+						fmt.Sprintf("%d|%d|%s", c, card.Task.Line, card.NotePath)) // la ruta va al final: puede llevar ":" (Windows)
 				}
 			}
 		}

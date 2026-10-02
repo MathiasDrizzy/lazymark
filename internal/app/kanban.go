@@ -153,23 +153,23 @@ func (k *kanbanSheet) click(z *mouse.Zone, double bool) tea.Cmd {
 	case mouse.ZoneKanbanCol:
 		k.col = clamp(z.Index, 0, k.numCols()-1)
 	case mouse.ZoneKanbanCard:
-		parts := strings.SplitN(z.Payload, ":", 3)
+		parts := strings.SplitN(z.Payload, "|", 3) // columna|línea|ruta
 		if len(parts) < 3 {
 			return nil
 		}
 		var col, line int
 		fmt.Sscanf(parts[0], "%d", &col)
-		fmt.Sscanf(parts[2], "%d", &line)
+		fmt.Sscanf(parts[1], "%d", &line)
 		k.col = clamp(col, 0, k.numCols()-1)
 		for i, card := range k.c.board.ColumnCards(k.col) {
-			if card.NotePath == parts[1] && card.Task.Line == line {
+			if card.NotePath == parts[2] && card.Task.Line == line {
 				k.selected[k.col] = i
 				k.press = &kanbanPress{col: k.col, idx: i}
 			}
 		}
 		if double {
 			k.press = nil
-			return k.c.openEditor(parts[1], line)
+			return k.c.openEditor(parts[2], line)
 		}
 	}
 	return nil
