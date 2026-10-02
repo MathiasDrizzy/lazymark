@@ -11,6 +11,7 @@ import (
 	"sort"
 	"strings"
 	"time"
+	"unicode"
 
 	"github.com/MathiasDrizzy/lazymark/internal/config"
 	"github.com/MathiasDrizzy/lazymark/internal/i18n"
@@ -178,22 +179,26 @@ func (s *Service) NewNote(title, folder string, empty bool) (NoteDTO, error) {
 	if strings.TrimSpace(title) == "" {
 		return NoteDTO{}, usage("falta el título de la nota")
 	}
+	if strings.ContainsFunc(title, unicode.IsControl) { // un salto de línea en el título escribiría contenido arbitrario
+		return NoteDTO{}, usage("el título no puede llevar saltos de línea ni caracteres de control")
+	}
+	if len([]rune(title)) > 200 {
+		return NoteDTO{}, usage("el título es demasiado largo (máximo 200 caracteres)")
+	}
 	dir, err := s.Store.ResolveFolder(folder)
 	if err != nil {
 		return NoteDTO{}, err
 	}
-	n, err := s.Store.CreateNoteInDir(dir, title)
+	body := ""
+	if empty {
+		body = "# " + title + "\n"
+	}
+	n, err := s.Store.CreateNoteInDirWithBody(dir, title, body)
 	if err != nil {
-		if strings.Contains(err.Error(), "ya existe") || strings.Contains(err.Error(), "vacío") {
+		if errors.Is(err, storage.ErrNoteExists) || strings.Contains(err.Error(), "vacío") {
 			return NoteDTO{}, usage("%v", err)
 		}
 		return NoteDTO{}, err
-	}
-	if empty {
-		if err := os.WriteFile(n.Path, []byte("# "+title+"\n"), 0o644); err != nil {
-			return NoteDTO{}, err
-		}
-		n.Tasks, n.Tags = nil, nil
 	}
 	full, err := s.ShowNote(n.Path) // con sus etiquetas y su cantidad de tareas ya leídas del archivo
 	if err != nil {

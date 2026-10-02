@@ -291,7 +291,7 @@ func (SystemReader) ReadImage(dest string) error {
 			Add-Type -AssemblyName System.Drawing
 			$img = [System.Windows.Forms.Clipboard]::GetImage()
 			if ($img -ne $null) { $img.Save('%s', [System.Drawing.Imaging.ImageFormat]::Png) } else { exit 1 }
-		`, strings.ReplaceAll(dest, "'", "''"))
+		`, psQuote(dest))
 		return run(exec.Command("powershell", "-NoProfile", "-NonInteractive", "-Command", ps))
 	}
 	return fmt.Errorf("sistema operativo no soportado: %s", runtime.GOOS)
@@ -354,4 +354,19 @@ func runToFile(cmd *exec.Cmd, dest string) error {
 		return fmt.Errorf("no hay una imagen en el portapapeles (%v)", err)
 	}
 	return nil
+}
+
+// psQuote escapa una ruta para un literal entre comillas simples de PowerShell. PowerShell trata como comilla simple
+// no solo ' sino también las tipográficas ‘ ’ ‚ ‛ (U+2018, U+2019, U+201A, U+201B): todas se duplican, si no una
+// nota llamada `a’);calc;(’.md` cerraría el literal.
+func psQuote(s string) string {
+	var b strings.Builder
+	for _, r := range s {
+		switch r {
+		case '\'', '\u2018', '\u2019', '\u201A', '\u201B':
+			b.WriteRune(r)
+		}
+		b.WriteRune(r)
+	}
+	return b.String()
 }

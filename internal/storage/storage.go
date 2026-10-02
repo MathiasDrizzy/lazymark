@@ -63,6 +63,8 @@ type NoteEntry struct {
 type Storage struct {
 	BaseDir       string
 	CurrentSubDir string
+
+	trashIssues []string // entradas de trash.json que se ignoraron por inválidas (TrashIssues)
 }
 
 func New(baseDir string) *Storage {
@@ -148,6 +150,9 @@ func (s *Storage) ListTreeEntries(expanded map[string]bool) ([]NoteEntry, error)
 					Children: childrenCount,
 				})
 			} else if strings.HasSuffix(strings.ToLower(name), ".md") {
+				if !s.linkStaysInside(fullPath, de) {
+					continue
+				}
 				contentBytes, err := os.ReadFile(fullPath)
 				if err != nil {
 					continue
@@ -224,6 +229,9 @@ func (s *Storage) ListNotes() ([]Note, error) {
 			return nil
 		}
 		if !strings.HasSuffix(strings.ToLower(d.Name()), ".md") {
+			return nil
+		}
+		if !s.linkStaysInside(path, d) {
 			return nil
 		}
 
@@ -321,6 +329,16 @@ func (s *Storage) extractImages(content string) []string {
 
 // CreateNoteInDir crea una nueva nota en blanco en el directorio indicado
 func (s *Storage) CreateNoteInDir(dir, title string) (*Note, error) {
+	return s.CreateNoteInDirWithBody(dir, title, "")
+}
+
+// ErrNoteExists es el error de crear una nota o carpeta cuyo nombre ya está ocupado (por un archivo, una carpeta o
+// un enlace simbólico, también colgante). No se escribió nada.
+var ErrNoteExists = errors.New("ya existe")
+
+// CreateNoteInDirWithBody crea la nota con body como contenido (vacío: la plantilla con fecha y primera tarea). Se
+// crea con O_EXCL: no sigue enlaces simbólicos ni pisa nada, y si el nombre está ocupado no escribe.
+func (s *Storage) CreateNoteInDirWithBody(dir, title, body string) (*Note, error) {
 	if dir == "" {
 		dir = s.BaseDir
 	}
@@ -331,25 +349,32 @@ func (s *Storage) CreateNoteInDir(dir, title string) (*Note, error) {
 	fileName := fmt.Sprintf("%s.md", cleanName)
 	fullPath := filepath.Join(dir, fileName)
 
-	if _, err := os.Stat(fullPath); err == nil {
-		return nil, fmt.Errorf("ya existe una nota con el nombre: %s", fileName)
+	content := body
+	if content == "" {
+		content = fmt.Sprintf("# %s\n\n%s: %s\nTags: #general\n\n- [ ] %s\n",
+			title, i18n.T("Fecha", "Date"), time.Now().Format("2006-01-02 15:04"), i18n.T("Primera tarea pendiente", "First pending task"))
 	}
 
-	initialContent := fmt.Sprintf("# %s\n\n%s: %s\nTags: #general\n\n- [ ] %s\n",
-		title, i18n.T("Fecha", "Date"), time.Now().Format("2006-01-02 15:04"), i18n.T("Primera tarea pendiente", "First pending task"))
-
-	if err := os.WriteFile(fullPath, []byte(initialContent), 0644); err != nil {
+	f, err := os.OpenFile(fullPath, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o644)
+	if err != nil {
+		if errors.Is(err, os.ErrExist) {
+			return nil, fmt.Errorf("%w una nota con el nombre: %s", ErrNoteExists, fileName)
+		}
+		return nil, err
+	}
+	_, err = f.WriteString(content)
+	if cerr := f.Close(); err == nil {
+		err = cerr
+	}
+	if err != nil {
+		_ = os.Remove(fullPath)
 		return nil, err
 	}
 
-	return &Note{
-		ID:      fileName,
-		Title:   title,
-		Path:    fullPath,
-		Content: initialContent,
-		ModTime: time.Now(),
-		Tags:    []string{"general"},
-	}, nil
+	note := &Note{ID: fileName, Title: title, Path: fullPath, Content: content, ModTime: time.Now()}
+	note.Tags = s.extractTags(content)
+	note.Tasks = s.extractTasks(title, fullPath, content)
+	return note, nil
 }
 
 // CreateNote crea una nueva nota en blanco o con plantilla en el directorio actual o raíz
@@ -367,8 +392,8 @@ func (s *Storage) CreateFolderInDir(parentDir, name string) (string, error) {
 		return "", fmt.Errorf("nombre de carpeta vacío")
 	}
 	fullPath := filepath.Join(parentDir, cleanName)
-	if _, err := os.Stat(fullPath); err == nil {
-		return "", fmt.Errorf("ya existe: %s", cleanName)
+	if _, err := os.Lstat(fullPath); err == nil { // Lstat: un enlace simbólico (también colgante) cuenta como ocupado
+		return "", fmt.Errorf("%w: %s", ErrNoteExists, cleanName)
 	}
 	return fullPath, os.MkdirAll(fullPath, 0755)
 }
@@ -478,9 +503,24 @@ func rewriteLine(notePath string, lineNum int, expected time.Time, fn func(line 
 	}
 	lines[idx] = newLine
 
-	tmp := notePath + ".tmp"
-	if err := os.WriteFile(tmp, []byte(strings.Join(lines, "\n")), before.Mode().Perm()); err != nil {
-		return fmt.Errorf("error al escribir archivo temporal: %w", err)
+	// el temporal lleva un nombre aleatorio y se crea con O_EXCL en la misma carpeta: un enlace simbólico
+	// preparado de antemano (`<nota>.md.tmp`) no puede desviar la escritura a otro archivo
+	tmpFile, err := os.CreateTemp(filepath.Dir(notePath), ".lazymark-*.tmp")
+	if err != nil {
+		return fmt.Errorf("error al crear archivo temporal: %w", err)
+	}
+	tmp := tmpFile.Name()
+	_, werr := tmpFile.Write([]byte(strings.Join(lines, "\n")))
+	cerr := tmpFile.Close()
+	if werr == nil {
+		werr = cerr
+	}
+	if werr == nil {
+		werr = os.Chmod(tmp, before.Mode().Perm())
+	}
+	if werr != nil {
+		_ = os.Remove(tmp)
+		return fmt.Errorf("error al escribir archivo temporal: %w", werr)
 	}
 	after, err := os.Stat(notePath)
 	if err != nil || !after.ModTime().Equal(before.ModTime()) || after.Size() != before.Size() {
@@ -521,8 +561,8 @@ func (s *Storage) Rename(path, newName string) (string, error) {
 	if dest == path {
 		return path, nil
 	}
-	if _, err := os.Stat(dest); err == nil {
-		return "", fmt.Errorf("ya existe: %s", clean)
+	if _, err := os.Lstat(dest); err == nil {
+		return "", fmt.Errorf("%w: %s", ErrNoteExists, clean)
 	}
 	return dest, os.Rename(path, dest)
 }

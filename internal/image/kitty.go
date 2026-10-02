@@ -9,6 +9,7 @@ package image
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
 	goimage "image"
 	_ "image/gif"
@@ -278,6 +279,9 @@ func (c *Client) Block(path string, maxCols, maxRows int) (lines []string, ok bo
 		if err != nil {
 			return nil, false
 		}
+		if checkPixels(cfg.Width, cfg.Height) != nil {
+			return nil, false // se queda como texto, sin decodificar
+		}
 		d = [2]int{cfg.Width, cfg.Height}
 		c.dims[dkey] = d
 	}
@@ -343,21 +347,53 @@ func (c *Client) isWanted(key string) bool {
 	return false
 }
 
+// MaxPixels es el tope de píxeles de una imagen para mostrarla (unos 40 MP): más que eso se rechaza sin decodificar.
+const MaxPixels = 40_000_000
+
+// ErrTooLarge es el error de una imagen con más de MaxPixels.
+var ErrTooLarge = errors.New("la imagen tiene demasiados píxeles")
+
+func checkPixels(w, h int) error {
+	if w <= 0 || h <= 0 || int64(w)*int64(h) > MaxPixels {
+		return fmt.Errorf("%w (%dx%d, máximo %d)", ErrTooLarge, w, h, MaxPixels)
+	}
+	return nil
+}
+
 // sentinelID es el ID con el que Encode codifica: withID lo cambia por el real al transmitir.
 const sentinelID = 16777215
 
 // Encode hace el trabajo pesado de j: decodifica la imagen, la reduce y arma la secuencia de
 // transmisión (PNG en base64, en trozos). No toca ningún estado: es seguro correrlo en una goroutine.
 func Encode(j Job) (string, error) {
-	var src io.Reader = bytes.NewReader(j.Data)
-	if j.Data == nil {
+	open := func() (io.Reader, func(), error) {
+		if j.Data != nil {
+			return bytes.NewReader(j.Data), func() {}, nil
+		}
 		f, err := os.Open(j.Path)
 		if err != nil {
-			return "", err
+			return nil, nil, err
 		}
-		defer f.Close() //nolint:errcheck
-		src = f
+		return f, func() { _ = f.Close() }, nil
 	}
+	// primero solo la cabecera: una imagen "bomba" (un PNG chico que declara miles de millones de píxeles) no se
+	// decodifica nunca
+	src, closeSrc, err := open()
+	if err != nil {
+		return "", err
+	}
+	cfg, _, err := goimage.DecodeConfig(src)
+	closeSrc()
+	if err != nil {
+		return "", err
+	}
+	if err := checkPixels(cfg.Width, cfg.Height); err != nil {
+		return "", err
+	}
+	if src, closeSrc, err = open(); err != nil {
+		return "", err
+	}
+	defer closeSrc()
 	img, _, err := goimage.Decode(src)
 	if err != nil {
 		return "", err

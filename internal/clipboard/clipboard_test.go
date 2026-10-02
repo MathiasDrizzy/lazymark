@@ -157,3 +157,18 @@ func TestFilePathFromURL(t *testing.T) {
 		}
 	}
 }
+
+// TestPSQuote (S7, INFERIDO en Windows): todas las comillas simples de PowerShell, también las tipográficas, se
+// duplican; el resto de la ruta queda igual.
+func TestPSQuote(t *testing.T) {
+	for in, want := range map[string]string{
+		`C:\notas\a.png`:           `C:\notas\a.png`,
+		`it's.png`:                 `it''s.png`,
+		"a\u2019);calc;(\u2019.md": "a\u2019\u2019);calc;(\u2019\u2019.md",
+		"\u2018\u201a\u201b":       "\u2018\u2018\u201a\u201a\u201b\u201b",
+	} {
+		if got := psQuote(in); got != want {
+			t.Errorf("psQuote(%q) = %q, se esperaba %q", in, got, want)
+		}
+	}
+}

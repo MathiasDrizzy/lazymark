@@ -33,12 +33,13 @@ type core struct {
 	clip  *clipboard.Saver
 	keys  Keymap
 
-	notes      []storage.Note
-	tags       []views.TagInfo
-	tasks      []views.FlatTask
-	taskFilter views.TaskFilter
-	board      views.KanbanBoard
-	trashCount int
+	notes       []storage.Note
+	tags        []views.TagInfo
+	tasks       []views.FlatTask
+	taskFilter  views.TaskFilter
+	board       views.KanbanBoard
+	trashCount  int
+	trashWarned int // cuántas entradas inválidas de la papelera ya se avisaron
 
 	status string
 	popups []popup
@@ -60,6 +61,10 @@ func (c *core) reload() {
 	c.tasks = views.CollectTasks(c.scopedNotes(), c.taskFilter)
 	c.board = views.CollectKanban(c.notes, c.cols(), c.columnTitles())
 	c.trashCount = c.store.CountTrash()
+	if issues := c.store.TrashIssues(); len(issues) > 0 && len(issues) != c.trashWarned {
+		c.trashWarned = len(issues) // se avisa una vez por cambio, no en cada recarga
+		c.setStatus("%s", i18n.T("Papelera: se ignoraron entradas inválidas de trash.json", "Trash: invalid trash.json entries were ignored"))
+	}
 }
 
 // scopedNotes aplica el alcance de tareas de la config: "all", "tag:<tag>" o

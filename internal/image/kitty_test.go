@@ -3,12 +3,14 @@ package image
 import (
 	"bytes"
 	"encoding/base64"
+	"errors"
 	goimage "image"
 	"image/color"
 	"image/png"
 	"math/rand"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strconv"
 	"strings"
 	"testing"
@@ -322,5 +324,42 @@ func TestScaleDown(t *testing.T) {
 	out := scaleDown(big, 1024).Bounds()
 	if out.Dx() != 1024 || out.Dy() != 341 {
 		t.Errorf("3000x1000 -> %dx%d, se esperaba 1024x341", out.Dx(), out.Dy())
+	}
+}
+
+// TestEncodeRejectsPixelBomb (S6): una imagen que declara más de MaxPixels se rechaza leyendo solo la cabecera, sin
+// decodificarla (un PNG de 420 KB de 20000x20000 pedía 416 MB).
+func TestEncodeRejectsPixelBomb(t *testing.T) {
+	var buf bytes.Buffer
+	if err := png.Encode(&buf, goimage.NewGray(goimage.Rect(0, 0, 8000, 6000))); err != nil { // 48 MP
+		t.Fatal(err)
+	}
+	var before, after runtime.MemStats
+	runtime.GC()
+	runtime.ReadMemStats(&before)
+	_, err := Encode(Job{Data: buf.Bytes(), Cols: 10, Rows: 5})
+	runtime.ReadMemStats(&after)
+	if !errors.Is(err, ErrTooLarge) {
+		t.Fatalf("se esperaba ErrTooLarge: %v", err)
+	}
+	if grown := after.TotalAlloc - before.TotalAlloc; grown > 8<<20 {
+		t.Errorf("rechazar una imagen grande reservó %d MB: se decodificó", grown>>20)
+	}
+	// una imagen normal sigue funcionando
+	buf.Reset()
+	png.Encode(&buf, goimage.NewGray(goimage.Rect(0, 0, 64, 64)))
+	if _, err := Encode(Job{Data: buf.Bytes(), Cols: 4, Rows: 2}); err != nil {
+		t.Errorf("imagen normal: %v", err)
+	}
+	// y Block la deja como texto (sin placeholders) en lugar de encolarla
+	dir := t.TempDir()
+	big := filepath.Join(dir, "bomba.png")
+	var b2 bytes.Buffer
+	png.Encode(&b2, goimage.NewGray(goimage.Rect(0, 0, 8000, 6000)))
+	os.WriteFile(big, b2.Bytes(), 0o644)
+	c := New()
+	c.supported, c.visible = true, true
+	if _, ok := c.Block(big, 20, 10); ok || len(c.TakeJobs()) != 0 {
+		t.Error("una imagen sobre el tope no se encola")
 	}
 }

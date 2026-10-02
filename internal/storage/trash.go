@@ -53,8 +53,30 @@ func (s *Storage) readTrashMeta() ([]TrashItem, error) {
 	if err := json.Unmarshal(data, &items); err != nil {
 		return []TrashItem{}, nil
 	}
-	return items, nil
+	// trash.json vive dentro de la carpeta de notas: es contenido no confiable. Una entrada cuyo id no sea el
+	// nombre de un archivo dentro de .trash/ se ignora y se reporta (TrashIssues); nunca se usa para borrar.
+	valid := items[:0]
+	s.trashIssues = nil
+	for _, it := range items {
+		if !validTrashID(it.ID) {
+			s.trashIssues = append(s.trashIssues, fmt.Sprintf("papelera: id inválido %q (ignorado)", it.ID))
+			continue
+		}
+		valid = append(valid, it)
+	}
+	return valid, nil
 }
+
+// validTrashID indica si id es un único nombre de archivo (sin separadores ni "..") y no el de los metadatos.
+func validTrashID(id string) bool {
+	if id == "" || id == "." || id == ".." || id == "trash.json" {
+		return false
+	}
+	return !strings.ContainsAny(id, `/\`+"\x00") && id == filepath.Base(id) && filepath.VolumeName(id) == ""
+}
+
+// TrashIssues devuelve las entradas de la papelera que la última lectura ignoró por inválidas.
+func (s *Storage) TrashIssues() []string { return append([]string(nil), s.trashIssues...) }
 
 func (s *Storage) saveTrashMeta(items []TrashItem) error {
 	td := s.trashDir()
@@ -170,6 +192,9 @@ func (s *Storage) RestoreTrashItem(id string) error {
 	}
 
 	srcPath := filepath.Join(s.trashDir(), target.ID)
+	if err := s.confineNewPath(target.OriginalPath); err != nil { // original_path también viene del archivo
+		return err
+	}
 	// Asegurar que el directorio de destino exista
 	parentDir := filepath.Dir(target.OriginalPath)
 	if err := os.MkdirAll(parentDir, 0755); err != nil {
@@ -193,6 +218,9 @@ func (s *Storage) RestoreTrashItem(id string) error {
 
 // DeleteTrashItem elimina permanentemente un elemento específico de la papelera
 func (s *Storage) DeleteTrashItem(id string) error {
+	if !validTrashID(id) {
+		return fmt.Errorf("id de papelera inválido: %q", id)
+	}
 	items, err := s.readTrashMeta()
 	if err != nil {
 		return err

@@ -350,3 +350,47 @@ func TestLegacyToggleByLine(t *testing.T) {
 		t.Errorf("no se marcó:\n%s", b)
 	}
 }
+
+// TestTextOutputStripsControlChars (S5): la salida de texto no lleva escapes de terminal del contenido de las notas
+// (OSC 52 escribiría en el portapapeles); --json los escapa y conserva el texto exacto.
+func TestTextOutputStripsControlChars(t *testing.T) {
+	dir := fixture(t)
+	evil := "# e\x1b]0;titulo\x07\n- [ ] x \x1b]52;c;cHduZWQ=\x07 y\x9b31m z\r\n"
+	if err := os.WriteFile(filepath.Join(dir, "e.md"), []byte(evil), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	for _, args := range [][]string{{"task", "list"}, {"note", "list"}, {"note", "show", "e.md"}} {
+		out, err := run(t, dir, args...)
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, r := range out {
+			if r != '\n' && r != '\t' && (r < 0x20 || (r >= 0x7f && r <= 0x9f)) {
+				t.Errorf("%v: la salida lleva el carácter de control %q:\n%q", args, r, out)
+				break
+			}
+		}
+	}
+	out, _ := run(t, dir, "task", "list")
+	if !strings.Contains(out, "x ]52;c;cHduZWQ= y") {
+		t.Errorf("el texto visible se conserva: %q", out)
+	}
+	out, _ = run(t, dir, "task", "list", "--json")
+	if !strings.Contains(out, `\u001b]52`) {
+		t.Errorf("--json conserva el texto exacto, escapado: %q", out)
+	}
+}
+
+// TestNewNoteRejectsControlCharsInTitle (S7): un título con salto de línea no escribe contenido arbitrario.
+func TestNewNoteRejectsControlCharsInTitle(t *testing.T) {
+	dir := fixture(t)
+	before := snapshot(t, dir)
+	for _, title := range []string{"t\n- [ ] inyectada", "t\r\nx", "t\x1b[0m", strings.Repeat("a", 201)} {
+		if _, err := run(t, dir, "note", "new", title, "--empty"); ExitCode(err) != ExitUsage {
+			t.Errorf("%q: código %d: %v", title, ExitCode(err), err)
+		}
+	}
+	if after := snapshot(t, dir); len(after) != len(before) {
+		t.Error("no debía crearse nada")
+	}
+}

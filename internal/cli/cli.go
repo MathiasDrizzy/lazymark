@@ -8,6 +8,7 @@ import (
 	"io"
 	"os"
 	"strings"
+	"unicode"
 
 	"github.com/MathiasDrizzy/lazymark/internal/config"
 	"github.com/MathiasDrizzy/lazymark/internal/i18n"
@@ -63,6 +64,21 @@ func (p *parser) service() (*ops.Service, error) {
 		dir = config.DefaultNotesDir()
 	}
 	return ops.New(dir)
+}
+
+// plain quita de un texto los caracteres de control (ESC, BEL, C1, \r…) menos el salto de línea y el tabulador: el
+// contenido de una nota no es confiable y una secuencia como OSC 52 escribiría en el portapapeles de la terminal.
+// Es solo para la salida de texto; `--json` ya los escapa y lleva el contenido exacto.
+func plain(s string) string {
+	return strings.Map(func(r rune) rune {
+		if r == '\n' || r == '\t' {
+			return r
+		}
+		if unicode.IsControl(r) {
+			return -1
+		}
+		return r
+	}, s)
 }
 
 // printJSON escribe v con sangría (el esquema de cada comando está en docs/cli.md).
@@ -162,7 +178,7 @@ func RunTaskWithWriter(w io.Writer, args []string, defaultNotesDir string) error
 			if t.Done {
 				mark = "[x]"
 			}
-			fmt.Fprintf(w, "%s %s  %s  (%s)\n", mark, t.ID, t.Text, t.Column)
+			fmt.Fprint(w, plain(fmt.Sprintf("%s %s  %s  (%s)\n", mark, t.ID, t.Text, t.Column)))
 		}
 		return nil
 
@@ -271,7 +287,7 @@ func RunNoteWithWriter(w io.Writer, args []string, defaultNotesDir string) error
 			return printJSON(w, notes)
 		}
 		for _, n := range notes {
-			fmt.Fprintf(w, "%s (%s)\n", n.Title, n.Path)
+			fmt.Fprintf(w, "%s (%s)\n", plain(n.Title), plain(n.Path))
 		}
 		return nil
 
@@ -290,7 +306,7 @@ func RunNoteWithWriter(w io.Writer, args []string, defaultNotesDir string) error
 		if p.json {
 			return printJSON(w, n)
 		}
-		_, err = io.WriteString(w, n.Content)
+		_, err = io.WriteString(w, plain(n.Content))
 		return err
 
 	default: // new

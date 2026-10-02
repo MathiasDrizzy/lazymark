@@ -2,6 +2,7 @@ package app
 
 import (
 	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -379,5 +380,27 @@ func TestKanbanDragAndDrop(t *testing.T) {
 	m.Update(tea.MouseReleaseMsg{X: 2, Y: y, Button: tea.MouseLeft})
 	if m.kanbanOn == false || len(diffLines(snapshot, fileLines(t, card.NotePath))) != 0 {
 		t.Error("Esc debe cancelar el arrastre sin salir del Kanban ni escribir")
+	}
+}
+
+// TestHostileTrashJSONDoesNotDeleteOnOpen (S1): abrir la app con un trash.json hostil en la carpeta de notas no
+// borra nada fuera y avisa de las entradas ignoradas.
+func TestHostileTrashJSONDoesNotDeleteOnOpen(t *testing.T) {
+	m := newTestModel(t, 120, 35)
+	dir := m.c.store.BaseDir
+	victim := filepath.Join(filepath.Dir(dir), "victima-trash")
+	os.MkdirAll(victim, 0o755)
+	t.Cleanup(func() { os.RemoveAll(victim) })
+	os.WriteFile(filepath.Join(victim, "importante.txt"), []byte("dato"), 0o644)
+	os.MkdirAll(filepath.Join(dir, ".trash"), 0o755)
+	rel, _ := filepath.Rel(filepath.Join(dir, ".trash"), victim)
+	meta := `[{"id":"` + filepath.ToSlash(rel) + `","name":"x","original_path":"/nonexistent/x","deleted_at":"2000-01-01T00:00:00Z","is_dir":true}]`
+	os.WriteFile(filepath.Join(dir, ".trash", "trash.json"), []byte(meta), 0o644)
+	m.c.reload()
+	if _, err := os.Stat(filepath.Join(victim, "importante.txt")); err != nil {
+		t.Fatalf("abrir la app borró una carpeta de fuera: %v", err)
+	}
+	if !strings.Contains(m.c.status, "trash.json") {
+		t.Errorf("debía avisar: %q", m.c.status)
 	}
 }

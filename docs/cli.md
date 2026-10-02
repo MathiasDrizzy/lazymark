@@ -27,6 +27,8 @@ lazymark task move   <id> <column> [--json]
 
 Errors go to stderr; stdout stays empty.
 
+The text output (without `--json`) drops control characters from the notes (escape sequences, BEL, `\r`), so a note cannot write to your terminal. `--json` escapes them and keeps the exact text.
+
 ## Task ids
 
 A task id is `<note path relative to the notes folder>#<8 hex>`, and `.2`, `.3`… for the second and later tasks with the same text in the same note: `projects/plan.md#16de6420`. The hash is of the task text without its Kanban tag, lowercased, so the id survives editing or inserting other lines, moving the task to another column and ticking it. It changes if you edit the task's own text.

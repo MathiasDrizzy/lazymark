@@ -3,6 +3,7 @@ package storage
 import (
 	"errors"
 	"fmt"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"strings"
@@ -64,4 +65,51 @@ func (s *Storage) lexicallyOutside(path, base string) bool {
 	}
 	abs, err := filepath.Abs(s.BaseDir)
 	return outside(base) && (err != nil || outside(abs))
+}
+
+// linkStaysInside indica si la entrada se puede leer como nota: un archivo normal sí; un enlace simbólico solo si
+// su destino es una nota de la carpeta de notas (la misma regla que ResolveNote). Así un `enlace.md` hacia un
+// archivo de fuera no expone su contenido ni sus tareas.
+func (s *Storage) linkStaysInside(path string, d fs.DirEntry) bool {
+	if d.Type()&fs.ModeSymlink == 0 {
+		return true
+	}
+	_, err := s.ResolveNote(path)
+	return err == nil
+}
+
+// confineNewPath valida un destino que puede no existir todavía (restaurar de la papelera): una vez resueltos ".." y
+// los enlaces simbólicos del tramo que ya existe, debe quedar dentro de la carpeta de notas.
+func (s *Storage) confineNewPath(path string) error {
+	if !filepath.IsAbs(path) {
+		return fmt.Errorf("%w: la ruta %q no es absoluta", ErrOutsideNotes, path)
+	}
+	base, err := filepath.EvalSymlinks(s.BaseDir)
+	if err != nil {
+		return err
+	}
+	if base, err = filepath.Abs(base); err != nil {
+		return err
+	}
+	existing, rest := filepath.Clean(path), ""
+	for {
+		if _, err := os.Lstat(existing); err == nil {
+			break
+		}
+		parent := filepath.Dir(existing)
+		if parent == existing {
+			return fmt.Errorf("%w: %q", ErrOutsideNotes, path)
+		}
+		rest = filepath.Join(filepath.Base(existing), rest)
+		existing = parent
+	}
+	real, err := filepath.EvalSymlinks(existing)
+	if err != nil {
+		return err
+	}
+	rel, err := filepath.Rel(base, filepath.Join(real, rest))
+	if err != nil || rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) || filepath.IsAbs(rel) {
+		return fmt.Errorf("%w: %q está fuera de %q", ErrOutsideNotes, path, s.BaseDir)
+	}
+	return nil
 }
