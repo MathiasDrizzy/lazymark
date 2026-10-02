@@ -3,13 +3,25 @@
 #   - builds lazymark into a temporary folder and puts it on PATH;
 #   - uses a temporary HOME with a copy of assets/readme/demo-home, so recording
 #     never touches real notes or writes inside the repository;
+#   - fakes the clipboard and installs the micro plugin in that HOME;
 #   - fixes the notes' dates so the dates shown are always the same.
-DEMO_TMP="$(mktemp -d)"
+# a fixed, neutral folder (not a random one in the system temp dir): some editors show the full path of the note
+DEMO_TMP=/tmp/lazymark-demo
+rm -rf "${DEMO_TMP:?}"
+mkdir -p "$DEMO_TMP"
 go build -o "$DEMO_TMP/lazymark" ./cmd/lazymark || return 1   # before changing HOME: Go uses its cache there
 export HOME="$DEMO_TMP/home"
 mkdir -p "$HOME"
 cp -R assets/readme/demo-home/. "$HOME/"
-export PATH="$DEMO_TMP:$PATH"
+# A fake clipboard (never the real one): `pngpaste`, `wl-paste` and `osascript` that "have copied"
+# the demo architecture diagram, so `lazymark paste` can be recorded without touching yours.
+mkdir -p "$DEMO_TMP/clip"
+printf '#!/bin/sh\ncp "$HOME/Documents/notes/assets/architecture.png" "$1"\n' > "$DEMO_TMP/clip/pngpaste"
+printf '#!/bin/sh\ncase "$*" in *image/png*) cat "$HOME/Documents/notes/assets/architecture.png" ;; *) exit 1 ;; esac\n' > "$DEMO_TMP/clip/wl-paste"
+printf '#!/bin/sh\nexit 1\n' > "$DEMO_TMP/clip/osascript"
+chmod +x "$DEMO_TMP/clip/"*
+export PATH="$DEMO_TMP/clip:$DEMO_TMP:$PATH"
+lazymark editor-plugins install micro >/dev/null   # into the temporary HOME
 export LANG=en_US.UTF-8
 unset LC_ALL LC_MESSAGES
 

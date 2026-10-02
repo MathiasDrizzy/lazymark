@@ -1,4 +1,4 @@
-# Kanban: the board is built from the tasks in your notes; H and L move a card.
+# Kanban: the board is built from the tasks in your notes; H and L move a card, and the buttons are on screen.
 Output assets/readme/feature-kanban.gif
 Source assets/readme/tapes/lib/common.tape
 

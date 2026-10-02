@@ -2,7 +2,7 @@
 
 | File | Made with | Source |
 |---|---|---|
-| `main.gif`, `feature-notes.gif`, `feature-tasks.gif`, `feature-categories.gif`, `feature-kanban.gif`, `feature-settings.gif` | [VHS](https://github.com/charmbracelet/vhs) | `tapes/*.tape` |
+| `main.gif`, `feature-notes.gif`, `feature-tasks.gif`, `feature-categories.gif`, `feature-kanban.gif`, `feature-settings.gif`, `feature-paste.gif` | [VHS](https://github.com/charmbracelet/vhs) | `tapes/*.tape` |
 | `feature-images.png` | A real Ghostty window | the command below |
 
 ## GIFs
@@ -19,8 +19,15 @@ All tapes share `tapes/lib/common.tape`: Catppuccin Mocha, JetBrainsMono Nerd Fo
 first, the plain "JetBrains Mono" shows boxes instead of icons), 1200x700, font size 16, same
 typing speed. `demo-env.sh` prepares the isolated environment.
 
-Only dark themes appear in the recordings: lazymark does not paint a background of its own, so
-the light Latte theme is unreadable on the recorder's dark terminal.
+lazymark paints the whole screen with the theme's base color (Screen background = theme), so light
+themes such as Solarized Light are readable on the recorder's dark terminal and appear in the
+recordings.
+
+`demo-env.sh` also fakes the clipboard (`pngpaste`, `wl-paste` and `osascript` stand-ins that "have
+copied" the demo architecture diagram, so the real clipboard is never read) and installs the micro
+plugin in the temporary `HOME`. VHS cannot send `Alt-i` to micro (it types an `i`), so
+`feature-paste.tape` runs the plugin's `pasteimage` command, which `Alt-i` also runs. The demo uses the
+fixed folder `/tmp/lazymark-demo`, because micro shows the full path of the note.
 
 ## Image screenshot
 

@@ -48,7 +48,7 @@ Every `#tag` in your notes. `Enter` on a tag shows only the notes that have it.
 
 ### Kanban board
 
-The same tasks as three columns: To Do, In Progress and Done. Move a card with `H` and `L`; the change is written back to the note.
+The same tasks as three columns: To Do, In Progress and Done. Move a card with `H` and `L` or `Shift+←` and `Shift+→`, and the change is written back to the note. Nothing is hidden: `Kanban (W)` opens the board from the notes view, `Notes (W)` and `← Notes (Esc)` take you back, and the bottom bar always lists what the selected card can do.
 
 <img src="assets/readme/feature-kanban.gif" alt="Moving cards between the columns of the Kanban board" width="100%">
 
@@ -60,9 +60,15 @@ Images in a note show up in the preview, in place, in terminals that support the
 
 ### Settings and themes
 
-Press `,`. Seven themes, changed live. Popups can keep your terminal's background (so a translucent terminal stays translucent) or use the theme's. You can also pick the notes folder here.
+Press `,`. Fourteen themes (Catppuccin ×4, Tokyo Night, Gruvbox, Nord, Dracula, One Dark, Rosé Pine, Kanagawa, Everforest, Solarized Dark and Light), changed live, and the whole interface follows them, including the markdown preview. **Screen background** is `theme` by default and paints the whole screen with the theme's base color; `terminal` keeps your terminal's background, so a translucent terminal stays translucent. You can also pick the notes folder here.
 
-<img src="assets/readme/feature-settings.gif" alt="Cycling the color theme live and switching the popup background" width="100%">
+<img src="assets/readme/feature-settings.gif" alt="Switching to Solarized Light and Dracula live, then turning the screen background from theme to terminal" width="100%">
+
+### Paste images from your editor
+
+Copy a screenshot, or an image file in the file manager, open the note in micro, vim or GNU nano and press one key: the `![](assets/…)` reference lands at the cursor and the image is saved next to the note. `lazymark editor-plugins install` sets it up; the keys are `Alt-i` in micro, `\ip` in vim and `Alt-7` in nano (on macOS terminals, set Option to act as Alt). The GIF runs micro's `pasteimage` command, which `Alt-i` also runs. The nano that ships with macOS is Pico and has no key bindings: use GNU nano (`brew install nano`). See [docs/editor-plugins.md](docs/editor-plugins.md).
+
+<img src="assets/readme/feature-paste.gif" alt="Opening a note in micro and pasting a copied image as a markdown reference at the cursor" width="100%">
 
 ## Install
 
@@ -123,6 +129,7 @@ Most things are in Settings (`,`) and are saved at once. They live in a `config.
 {
   "theme": "tokyo-night",
   "editor": "code --wait",
+  "screen_background": "theme",
   "popup_background": "none"
 }
 ```
@@ -147,7 +154,8 @@ Limitations:
 
 - Tasks are the lines that start with `- [ ]` or `- [x]`; checkboxes inside an indented list are not listed yet.
 - The Kanban board has three fixed columns.
-- Pasting an image from the clipboard needs `osascript` or `pngpaste` (macOS), `wl-paste` or `xclip` (Linux) or PowerShell (Windows).
+- Pasting an image from the clipboard (`Ctrl+V`, or `lazymark paste` from an editor) needs `osascript` or `pngpaste` (macOS), `wl-paste` or `xclip` (Linux) or PowerShell (Windows).
+- The editor plugins need micro, vim or GNU nano; nano also needs the note to be opened from lazymark.
 - The terminal must be at least 60 columns by 20 rows.
 
 ## Contributing
