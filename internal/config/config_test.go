@@ -167,29 +167,40 @@ func TestSplitEditor(t *testing.T) {
 	}
 }
 
-// TestPopupBackgroundSetting (H1-11): por defecto "none"; "theme" se conserva al
-// recargar y cualquier otro valor vuelve a "none".
+// TestPopupBackgroundSetting (C.4): los valores son los mismos que los de screen_background (theme | terminal);
+// por defecto "terminal"; "theme" se conserva al recargar; el valor de antes, "none" (sin fondo), y cualquier otro
+// se migran en silencio a "terminal".
 func TestPopupBackgroundSetting(t *testing.T) {
 	isolate(t)
 	cfg, err := Load(t.TempDir())
 	if err != nil {
 		t.Fatal(err)
 	}
-	if cfg.PopupBackground != PopupBackgroundNone {
-		t.Fatalf("por defecto = %q, se esperaba none", cfg.PopupBackground)
+	if cfg.PopupBackground != PopupBackgroundTheme {
+		t.Fatalf("por defecto = %q, se esperaba theme (como la pantalla)", cfg.PopupBackground)
 	}
-	cfg.PopupBackground = PopupBackgroundTheme
-	if err := cfg.Save(); err != nil {
-		t.Fatal(err)
+	for _, v := range []string{PopupBackgroundTheme, PopupBackgroundTerminal} {
+		cfg.PopupBackground = v
+		if err := cfg.Save(); err != nil {
+			t.Fatal(err)
+		}
+		if again, _ := Load(cfg.NotesDir); again.PopupBackground != v {
+			t.Errorf("tras recargar = %q, se esperaba %q", again.PopupBackground, v)
+		}
 	}
-	if again, _ := Load(cfg.NotesDir); again.PopupBackground != PopupBackgroundTheme {
-		t.Errorf("tras recargar = %q, se esperaba theme", again.PopupBackground)
+	writeDiskConfig(t, `{"keymap_version":2,"popup_background":"none"}`)
+	if got, _ := Load(t.TempDir()); got.PopupBackground != PopupBackgroundTerminal {
+		t.Errorf(`"none" -> %q, se esperaba terminal`, got.PopupBackground)
 	}
 	for _, bad := range []string{`"rojo"`, `""`, `3`} {
 		writeDiskConfig(t, `{"keymap_version":2,"popup_background":`+bad+`}`)
-		if got, _ := Load(t.TempDir()); got.PopupBackground != PopupBackgroundNone {
-			t.Errorf("valor %s -> %q, se esperaba none", bad, got.PopupBackground)
+		if got, _ := Load(t.TempDir()); got.PopupBackground != PopupBackgroundTheme {
+			t.Errorf("valor %s -> %q, se esperaba theme", bad, got.PopupBackground)
 		}
+	}
+	writeDiskConfig(t, `{"keymap_version":2}`)
+	if got, _ := Load(t.TempDir()); got.PopupBackground != PopupBackgroundTheme {
+		t.Errorf("ausente -> %q, se esperaba theme", got.PopupBackground)
 	}
 }
 

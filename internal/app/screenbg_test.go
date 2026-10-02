@@ -40,11 +40,12 @@ func bgCells(m *AppModel) [][]string {
 }
 
 // TestScreenBackgroundTheme (T4): con "theme" ninguna celda queda con el fondo de la terminal: en
-// notas, Kanban, Ajustes y el cheatsheet, también con popups "sin fondo", y todas las celdas llevan
+// notas, Kanban, Ajustes y el cheatsheet (con popups del tema), y todas las celdas llevan
 // el color Base del tema o un color de la paleta; los huecos y los espacios, exactamente Base.
 // Con "terminal" quedan celdas sin fondo (la transparencia se respeta).
 func TestScreenBackgroundTheme(t *testing.T) {
 	defer theme.ApplyThemeByName("catppuccin-mocha")
+	defer func() { theme.PopupSolid = false }()
 	states := []struct {
 		name string
 		keys []string
@@ -56,8 +57,9 @@ func TestScreenBackgroundTheme(t *testing.T) {
 		for _, st := range states {
 			m := newTestModel(t, 120, 35)
 			theme.ApplyThemeByName(name)
-			m.c.cfg.PopupBackground = config.PopupBackgroundNone
+			m.c.cfg.PopupBackground = config.PopupBackgroundTheme // con popups "terminal" sus celdas dejan el fondo de la terminal a propósito (TestPopupTerminalOnThemedScreen)
 			m.c.cfg.ScreenBackground = config.ScreenBackgroundTheme
+			m.onSettingsChange()
 			press(m, st.keys...)
 			holes, spaces := 0, 0
 			for y, row := range bgCells(m) {
@@ -116,5 +118,52 @@ func TestScreenBackgroundSettingInSettings(t *testing.T) {
 	press(m, "right")
 	if m.c.cfg.ScreenBackground != config.ScreenBackgroundTheme {
 		t.Error("el segundo cambio debe volver a tema")
+	}
+}
+
+// TestPopupTerminalOnThemedScreen (C.4): con la pantalla pintada con el tema y el fondo de popups en "terminal", las
+// celdas del popup quedan con el fondo por defecto de la terminal (respeta su transparencia) y las de fuera siguen con
+// el Base del tema; con "theme" el popup lleva el Base. En los dos casos el popup tapa todas sus celdas.
+func TestPopupTerminalOnThemedScreen(t *testing.T) {
+	defer theme.ApplyThemeByName("catppuccin-mocha")
+	defer func() { theme.PopupSolid = false }()
+	for _, name := range []string{"dracula", "solarized-light"} {
+		p := theme.AvailableThemes[name]
+		base := hexOf(p.Base)
+		for _, mode := range []string{config.PopupBackgroundTerminal, config.PopupBackgroundTheme} {
+			m := newTestModel(t, 120, 35)
+			theme.ApplyThemeByName(name)
+			m.c.cfg.PopupBackground = mode
+			m.c.cfg.ScreenBackground = config.ScreenBackgroundTheme
+			m.onSettingsChange()
+			press(m, "?")
+			top := m.c.top()
+			r := popupRect(m.layout, top, top.render(m.layout))
+			cells := bgCells(m)
+			inside, outside := map[string]int{}, map[string]int{}
+			for y := r.Y; y < r.Y+r.H; y++ {
+				for x := r.X; x < r.X+r.W; x++ {
+					inside[cells[y][x]]++
+				}
+			}
+			for x := 0; x < r.X; x++ { // la franja de la izquierda del popup, en las filas del popup
+				for y := r.Y; y < r.Y+r.H; y++ {
+					outside[cells[y][x]]++
+				}
+			}
+			if outside[base] == 0 || outside[""] != 0 {
+				t.Errorf("%s/%s: fuera del popup la pantalla debe estar pintada con el Base: %v", name, mode, outside)
+			}
+			switch mode {
+			case config.PopupBackgroundTerminal:
+				if inside[""] < r.W*r.H*3/4 || inside[base] != 0 {
+					t.Errorf("%s/terminal: las celdas del popup deben quedar con el fondo de la terminal: %v", name, inside)
+				}
+			case config.PopupBackgroundTheme:
+				if inside[""] != 0 || inside[base] < r.W*r.H/2 {
+					t.Errorf("%s/theme: las celdas del popup deben llevar el Base: %v", name, inside)
+				}
+			}
+		}
 	}
 }

@@ -20,16 +20,21 @@ import (
 // View declara pantalla alternativa y mouse; Bubble Tea v2 los reaplica en cada
 // frame, también al volver del editor externo.
 func (m *AppModel) View() tea.View {
-	content := m.render()
-	if m.c.cfg.ScreenBackground != config.ScreenBackgroundTerminal {
-		content = theme.PaintBackground(content, theme.ColorBase)
-	}
-	v := tea.NewView(content)
+	v := tea.NewView(m.render())
 	v.AltScreen = true
 	if m.c.cfg.MouseClick {
 		v.MouseMode = tea.MouseModeCellMotion
 	}
 	return v
+}
+
+// paintScreen pinta el fondo del tema en todas las celdas de s que no tengan uno propio, salvo con
+// screen_background = terminal, que deja el de la terminal.
+func (m *AppModel) paintScreen(s string) string {
+	if m.c.cfg.ScreenBackground == config.ScreenBackgroundTerminal {
+		return s
+	}
+	return theme.PaintBackground(s, theme.ColorBase)
 }
 
 // render compone la pantalla: paneles según el Layout y, encima, los popups
@@ -40,7 +45,7 @@ func (m *AppModel) render() string {
 	}
 	l := m.layout
 	if l.TooSmall {
-		return m.renderTooSmall()
+		return m.paintScreen(m.renderTooSmall())
 	}
 	m.ht.Clear()
 
@@ -61,7 +66,9 @@ func (m *AppModel) render() string {
 		col := strings.Join(left, "\n")
 		body = lipgloss.JoinHorizontal(lipgloss.Top, col, m.renderPreview())
 	}
-	base := body + "\n" + m.renderFooter()
+	// la pantalla se pinta con el fondo del tema (si el ajuste lo pide) ANTES de poner los popups encima: así un popup
+	// con el fondo de la terminal conserva el de la terminal aunque la pantalla esté pintada
+	base := m.paintScreen(body + "\n" + m.renderFooter())
 
 	if len(m.c.popups) == 0 {
 		return base

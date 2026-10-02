@@ -64,7 +64,7 @@ func TestPopupsFollowThemeAndBackground(t *testing.T) {
 	for _, name := range theme.ThemeNames() {
 		pal := theme.AvailableThemes[name]
 		allowed := paletteSet(pal)
-		for _, mode := range []string{config.PopupBackgroundNone, config.PopupBackgroundTheme} {
+		for _, mode := range []string{config.PopupBackgroundTerminal, config.PopupBackgroundTheme} {
 			for _, kind := range popupKinds {
 				t.Run(fmt.Sprintf("%s/%s/%s", name, mode, kind.name), func(t *testing.T) {
 					m := newTestModel(t, 120, 35)
@@ -114,9 +114,9 @@ func TestPopupsFollowThemeAndBackground(t *testing.T) {
 							isSel := bg != nil && rgb(bg) == rgb(pal.Surface1)
 							sawSelection = sawSelection || isSel
 							switch mode {
-							case config.PopupBackgroundNone:
+							case config.PopupBackgroundTerminal:
 								if bg != nil && !isSel {
-									t.Fatalf("modo none: la celda (%d,%d) pinta fondo %v", x, y, allowed[rgb(bg)])
+									t.Fatalf("modo terminal: la celda (%d,%d) pinta fondo %v", x, y, allowed[rgb(bg)])
 								}
 							case config.PopupBackgroundTheme:
 								if bg == nil || (!isSel && rgb(bg) != rgb(pal.Base)) {
@@ -139,34 +139,33 @@ func TestPopupsFollowThemeAndBackground(t *testing.T) {
 	}
 }
 
-// TestPopupBackgroundSettingToggles (H1-11): el ajuste "Fondo de popups" se
-// recorre desde Ajustes con ← y →, se aplica al momento y se guarda.
+// TestPopupBackgroundSettingToggles (H1-11, C.4): el ajuste "Fondo de popups" (tema | terminal, como el de pantalla)
+// se recorre desde Ajustes con ← y →, se aplica al momento y se guarda.
 func TestPopupBackgroundSettingToggles(t *testing.T) {
 	t.Cleanup(func() { theme.PopupSolid = false })
 	m := newTestModel(t, 120, 35)
-	if m.c.cfg.PopupBackground != config.PopupBackgroundNone || theme.PopupSolid {
-		t.Fatal("por defecto los popups no deben pintar fondo")
+	if m.c.cfg.PopupBackground != config.PopupBackgroundTheme || !theme.PopupSolid {
+		t.Fatal("por defecto los popups llevan el fondo del tema, como la pantalla")
 	}
 	press(m, ",")
 	sp := m.c.top().(*settingsPopup)
 	sp.list.set(int(setPopupBg), sp.n)
-	if got := plain(m); !strings.Contains(got, "Fondo de popups") || !strings.Contains(got, "sin fondo") {
+	if got := plain(m); !strings.Contains(got, "Fondo de popups") || !strings.Contains(got, "tema") {
 		t.Errorf("el ajuste no aparece con su valor:\n%s", got)
 	}
 	press(m, "right")
-	if m.c.cfg.PopupBackground != config.PopupBackgroundTheme || !theme.PopupSolid {
-		t.Fatalf("tras → debería ser theme (cfg=%q solid=%v)", m.c.cfg.PopupBackground, theme.PopupSolid)
+	if m.c.cfg.PopupBackground != config.PopupBackgroundTerminal || theme.PopupSolid {
+		t.Fatalf("tras → debería ser terminal (cfg=%q solid=%v)", m.c.cfg.PopupBackground, theme.PopupSolid)
 	}
-	if got := plain(m); !strings.Contains(got, "tema") {
+	if got := plain(m); !strings.Contains(got, "terminal") {
 		t.Errorf("el valor nuevo no se ve:\n%s", got)
 	}
-	press(m, "left")
-	if m.c.cfg.PopupBackground != config.PopupBackgroundNone || theme.PopupSolid {
-		t.Errorf("tras ← debería volver a none")
-	}
-	press(m, "right")
 	data, err := os.ReadFile(m.c.cfg.Path())
-	if err != nil || !strings.Contains(string(data), `"popup_background": "theme"`) {
+	if err != nil || !strings.Contains(string(data), `"popup_background": "terminal"`) {
 		t.Errorf("el ajuste no se guardó (%v):\n%s", err, data)
+	}
+	press(m, "left")
+	if m.c.cfg.PopupBackground != config.PopupBackgroundTheme || !theme.PopupSolid {
+		t.Errorf("tras ← debería volver a theme")
 	}
 }

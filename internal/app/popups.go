@@ -136,7 +136,7 @@ func (p *settingsPopup) value(id settingID) string {
 		if cfg.PopupBackground == config.PopupBackgroundTheme {
 			return i18n.T("tema", "theme")
 		}
-		return i18n.T("sin fondo", "none")
+		return "terminal"
 	case setNotesDir:
 		return leftTruncate(shortPath(cfg.NotesDir), 24)
 	}
@@ -182,7 +182,7 @@ func (p *settingsPopup) change(id settingID, dir int) {
 		p.c.kitty.Reset() // si se apaga, sus placeholders ya no se piden: se borra lo transmitido
 	case setPopupBg:
 		if cfg.PopupBackground == config.PopupBackgroundTheme {
-			cfg.PopupBackground = config.PopupBackgroundNone
+			cfg.PopupBackground = config.PopupBackgroundTerminal
 		} else {
 			cfg.PopupBackground = config.PopupBackgroundTheme
 		}

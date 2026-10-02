@@ -52,7 +52,7 @@ What lazymark reads from your notes:
 {
   "theme": "tokyo-night",
   "editor": "code --wait",
-  "popup_background": "none",
+  "popup_background": "theme",
   "task_scope": "tag:work"
 }
 ```
@@ -68,7 +68,7 @@ What lazymark reads from your notes:
 | `language` | `auto`, `en`, `es` | `auto` | `auto` follows `LANG`, `LC_ALL` and `LC_MESSAGES`: Spanish if they mention `es`, otherwise English. |
 | `screen_background` | `theme`, `terminal` | `theme` | `theme` paints the whole screen with the theme's base color (panels, gaps, bottom bar, popups, Kanban and preview). `terminal` leaves your terminal's background, so a translucent terminal stays translucent. Changes live in Settings ("Screen background"). |
 | `mascot` | `true`, `false` | `true` | Shows the sleeping sloth, small, at the bottom right of the preview when there is nothing to show (empty notes folder, empty folder, empty note). Click it and it wakes up, waves, dances or spins, then goes back to sleep. Changes live in Settings ("Mascot"). |
-| `popup_background` | `none`, `theme` | `none` | `none` leaves the terminal background behind popups, so a translucent terminal stays translucent. `theme` paints the theme's base color. Every popup uses the theme palette either way. |
+| `popup_background` | `theme`, `terminal` | `theme` | The same two values as `screen_background`. `terminal` leaves your terminal's background behind popups, even when the screen is painted with the theme, so a translucent terminal stays translucent. `theme` paints the theme's base color, like the screen. Every popup uses the theme palette either way and covers all its cells. The old value `none` is read as `terminal`. |
 | `task_scope` | `all`, `tag:<tag>`, `folder:<folder>` | `all` | Which notes feed the Tasks panel: all of them, the ones with a tag, or the ones inside a folder. |
 | `hide_completed_tasks` | `true`, `false` | `false` | Hide finished tasks. Toggled with `H` in the Tasks panel. |
 | `confirm_delete` | `true`, `false` | `true` | Ask before moving notes to the trash. Folders with content always ask. |

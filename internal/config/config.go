@@ -50,9 +50,10 @@ const (
 	ScreenBackgroundTheme    = "theme"
 	ScreenBackgroundTerminal = "terminal"
 
-	// Valores de Config.PopupBackground.
-	PopupBackgroundNone  = "none"
-	PopupBackgroundTheme = "theme"
+	// Valores de Config.PopupBackground: los mismos que los de ScreenBackground. "terminal" (por defecto) deja el fondo
+	// de la terminal en los popups, aunque la pantalla esté pintada con el del tema; "theme" los pinta con él.
+	PopupBackgroundTheme    = "theme"
+	PopupBackgroundTerminal = "terminal"
 
 	AppName = "lazymark"
 
@@ -107,8 +108,8 @@ type Config struct {
 	Keybindings        KeybindingsConfig `json:"keybindings"`
 	KeymapVersion      int               `json:"keymap_version"`
 	TaskScope          string            `json:"task_scope"`
-	// PopupBackground: "none" (por defecto) deja el fondo de la terminal en los
-	// popups, respetando su transparencia; "theme" pinta el color base del tema.
+	// PopupBackground: "theme" (por defecto, como la pantalla) pinta el color base del tema; "terminal" deja el
+	// fondo de la terminal en los popups, respetando su transparencia, aunque la pantalla esté pintada con el tema.
 	PopupBackground string `json:"popup_background"`
 	// KanbanColumns son las columnas del tablero (por defecto todo, doing y done). La columna de una tarea
 	// se guarda como un tag al final de su línea: `- [ ] tarea #kb/doing`.
@@ -170,7 +171,7 @@ func DefaultConfig(notesDir string) *Config {
 		Keybindings:        DefaultKeybindings(),
 		KeymapVersion:      KeymapVersion,
 		TaskScope:          "all",
-		PopupBackground:    PopupBackgroundNone,
+		PopupBackground:    PopupBackgroundTheme,
 		ScreenBackground:   ScreenBackgroundTheme,
 		Mascot:             true,
 		KanbanColumns:      DefaultKanbanColumns(),
@@ -247,8 +248,12 @@ func load(customDir string, create bool) (*Config, error) {
 			if disk.ScreenBackground != ScreenBackgroundTerminal {
 				disk.ScreenBackground = ScreenBackgroundTheme // valor ausente o desconocido
 			}
-			if disk.PopupBackground != PopupBackgroundTheme {
-				disk.PopupBackground = PopupBackgroundNone // valor ausente o desconocido
+			switch disk.PopupBackground {
+			case PopupBackgroundTheme, PopupBackgroundTerminal:
+			case "none": // el valor de antes (sin fondo): es el fondo de la terminal
+				disk.PopupBackground = PopupBackgroundTerminal
+			default: // ausente o desconocido: el de por defecto, como la pantalla
+				disk.PopupBackground = PopupBackgroundTheme
 			}
 			disk.savedNotesDir = disk.NotesDir
 			disk.notesDirFromFlag = customDir != ""
