@@ -187,8 +187,8 @@ See [docs/configuration.md](docs/configuration.md) for every setting, the comman
 | | Status |
 |---|---|
 | macOS | Developed and tested here, including the interface. |
-| Linux | Builds, and its tests run on every change. Not used interactively by the author yet. |
-| Windows | Builds, and its tests run on every change. Not used interactively by the author yet. |
+| Linux | Builds, and its tests run on every change, and its interface tests (a terminal emulator driving the real binary) also run in a Linux container. Not used interactively by the author yet. |
+| Windows | Builds, and its tests run on every change. Not used interactively by the author yet; [docs/windows.md](docs/windows.md) has a checklist to try it by hand. |
 
 | Terminal | Inline images |
 |---|---|
