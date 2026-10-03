@@ -40,6 +40,8 @@ func usageHeader() string {
 		"  task list [--json] [--pending] [--column <id>] [--note <path>] [--dir <dir>]\n" +
 		"  task toggle <id> [--json] [--dir <dir>]\n" +
 		"  task move <id> <column> [--json] [--dir <dir>]\n" +
+		"  task due <id> <YYYY-MM-DD|none> [--json] [--dir <dir>]\n" +
+		"  task start <id> <YYYY-MM-DD|none> [--json] [--dir <dir>]\n" +
 		"  paste [--no-newline] [<note.md>]\n" +
 		"  editor-plugins install|uninstall [micro|vim|nano]\n" +
 		"  mcp [--dir <dir>]\n\n" +

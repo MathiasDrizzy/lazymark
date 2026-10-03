@@ -18,7 +18,7 @@ func TestUsageIsAccurate(t *testing.T) {
 				t.Errorf("%s: la ayuda conserva texto obsoleto %q", lang, stale)
 			}
 		}
-		for _, want := range []string{"task list", "task toggle", "task move", "note list", "note show", "note new", "mcp", "?", ","} {
+		for _, want := range []string{"task list", "task toggle", "task move", "task due", "task start", "note list", "note show", "note new", "mcp", "?", ","} {
 			if !strings.Contains(text, want) {
 				t.Errorf("%s: a la ayuda le falta %q", lang, want)
 			}
