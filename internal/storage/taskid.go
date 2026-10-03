@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"path"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -104,4 +105,30 @@ func (s *Storage) ResolveFolder(rel string) (string, error) {
 		return "", fmt.Errorf("%w: %q no es una carpeta", ErrOutsideNotes, rel)
 	}
 	return real, nil
+}
+
+// EnsureFolder devuelve la carpeta rel (relativa a la carpeta de notas, con "/") y la crea, con las que falten en el camino, si no
+// existe. Solo crea dentro de la carpeta de notas: rechaza rutas absolutas, ".." y nombres vacíos o con caracteres de control, y no
+// sigue enlaces simbólicos que salgan de ella (ResolveFolder lo comprueba en cada tramo).
+func (s *Storage) EnsureFolder(rel string) (string, error) {
+	rel = filepath.ToSlash(rel)
+	if rel == "" || rel == "." {
+		return s.BaseDir, nil
+	}
+	cur := ""
+	for _, seg := range strings.Split(rel, "/") {
+		if seg == "" || seg == "." || seg == ".." || strings.ContainsAny(seg, "\\:") || strings.IndexFunc(seg, func(r rune) bool { return r < 0x20 || r == 0x7f }) >= 0 {
+			return "", fmt.Errorf("%w: la carpeta %q no es válida", ErrOutsideNotes, rel)
+		}
+		cur = path.Join(cur, seg)
+		if _, err := os.Lstat(filepath.Join(s.BaseDir, filepath.FromSlash(cur))); errors.Is(err, os.ErrNotExist) {
+			if err := os.Mkdir(filepath.Join(s.BaseDir, filepath.FromSlash(cur)), 0o755); err != nil {
+				return "", err
+			}
+		}
+		if _, err := s.ResolveFolder(filepath.FromSlash(cur)); err != nil {
+			return "", err
+		}
+	}
+	return s.ResolveFolder(filepath.FromSlash(cur))
 }

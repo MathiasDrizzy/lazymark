@@ -2,6 +2,7 @@ package app
 
 import (
 	"fmt"
+	"path"
 	"path/filepath"
 	"strings"
 	"time"
@@ -200,9 +201,10 @@ func (m *AppModel) followLink(k int) tea.Cmd {
 		func() tea.Cmd {
 			dir := l.Dir
 			if strings.Contains(name, "/") {
-				// un enlace de ruta ([[carpeta/nota]]) crea la nota en esa carpeta solo si existe y está dentro de la carpeta de notas
-				// (ResolveFolder confina ".." y los enlaces simbólicos: `[[../../x]]` no escribe fuera); si no, junto a la nota que lo contiene
-				if real, err := m.c.store.ResolveFolder(filepath.ToSlash(filepath.Dir(filepath.FromSlash(name)))); err == nil {
+				// un enlace de ruta ([[carpeta/nota]]) crea la nota en esa carpeta, y la carpeta si no existe, siempre dentro de la carpeta de
+				// notas (EnsureFolder rechaza ".." y rutas absolutas y no sigue enlaces simbólicos hacia fuera: `[[../../x]]` no escribe
+				// fuera); si la ruta no vale, la crea junto a la nota que contiene el enlace
+				if real, err := m.c.store.EnsureFolder(path.Dir(name)); err == nil {
 					dir = real
 				}
 				name = filepath.Base(filepath.FromSlash(name))
@@ -224,8 +226,21 @@ func (m *AppModel) followLink(k int) tea.Cmd {
 // headingLine devuelve la línea de la nota donde está el encabezado (o el bloque ^id) del anchor; 1 si no lo encuentra.
 func headingLine(n *storage.Note, anchor string) int {
 	want := strings.ToLower(strings.TrimSpace(anchor))
+	fence := "" // lo que está en un bloque de código no es un encabezado ni un bloque de la nota
 	for i, l := range strings.Split(n.Content, "\n") {
 		t := strings.TrimSpace(l)
+		if f := storage.FenceMarker(t); f != "" {
+			switch {
+			case fence == "":
+				fence = f
+			case f[0] == fence[0] && len(f) >= len(fence) && strings.Trim(t, f[:1]) == "":
+				fence = ""
+			}
+			continue
+		}
+		if fence != "" {
+			continue
+		}
 		if strings.HasPrefix(want, "^") {
 			if strings.HasSuffix(t, " "+anchor) || t == anchor {
 				return i + 1

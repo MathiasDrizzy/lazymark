@@ -301,18 +301,27 @@ func (s *Storage) extractTags(content string) []string {
 
 func (s *Storage) extractTasks(title, path, content string) []Task {
 	var tasks []Task
-	fence := ""     // el vallado de código abierto (``` o ~~~, con su largo), o ""
-	inList := false // estamos dentro de una lista: ahí una sangría de 4 o más es una sublista y no un bloque de código
+	var (
+		fence       string // el vallado de código abierto (``` o ~~~, con su largo), o ""
+		fenceIndent int    // la sangría con que se abrió: una línea con menos cierra el ítem que lo contenía, y con él el vallado
+		fenceInList bool   // se abrió dentro de una lista: ahí un vallado puede llevar 4 o más espacios de sangría
+		inList      bool   // estamos dentro de una lista: ahí una sangría de 4 o más es una sublista y no un bloque de código
+	)
 	for i, raw := range strings.Split(content, "\n") {
 		line := strings.TrimSuffix(raw, "\r")
-		if f := fenceMarker(line); f != "" {
-			if !strings.HasPrefix(line, " ") && !strings.HasPrefix(line, "\t") {
-				inList = false // un vallado al margen corta la lista
-			}
+		body := strings.TrimLeft(line, " \t")
+		indent := indentWidth(line[:len(line)-len(body)])
+		if fence != "" && body != "" && indent < fenceIndent {
+			fence = "" // CommonMark: un vallado sin cerrar termina con el ítem de lista que lo contiene
+		}
+		if f := fenceMarker(body); f != "" && (indent < 4 || inList || fence != "") {
 			switch {
 			case fence == "":
-				fence = f
-			case f[0] == fence[0] && len(f) >= len(fence) && strings.TrimSpace(line)[len(f):] == "":
+				fence, fenceIndent, fenceInList = f, indent, inList
+				if indent == 0 {
+					inList = false // un vallado al margen corta la lista
+				}
+			case f[0] == fence[0] && len(f) >= len(fence) && strings.TrimSpace(body)[len(f):] == "" && (indent < 4 || fenceInList):
 				fence = ""
 			}
 			continue
@@ -320,11 +329,9 @@ func (s *Storage) extractTasks(title, path, content string) []Task {
 		if fence != "" { // lo que está dentro de un bloque de código no es una tarea
 			continue
 		}
-		body := strings.TrimLeft(line, " \t")
 		if body == "" { // las líneas en blanco no cortan una lista
 			continue
 		}
-		indent := indentWidth(line[:len(line)-len(body)])
 		item := listItemRegex.MatchString(body)
 		switch {
 		case item && indent < 4:
@@ -361,6 +368,9 @@ func indentWidth(ws string) int {
 	}
 	return w
 }
+
+// FenceMarker devuelve el vallado de código con el que empieza la línea (ver fenceMarker), o "".
+func FenceMarker(line string) string { return fenceMarker(line) }
 
 // fenceMarker devuelve el vallado de código (3 o más ` o ~) con el que empieza la línea, o "".
 func fenceMarker(line string) string {
@@ -543,6 +553,23 @@ func (s *Storage) ToggleTaskIfUnchanged(notePath string, lineNum int, expected t
 // atómica. Si expected no es cero y el mtime en disco es otro, no escribe. Si
 // la nota cambia entre la lectura y la escritura, tampoco (X10).
 func rewriteLine(notePath string, lineNum int, expected time.Time, fn func(line string) (string, error)) error {
+	return rewriteLines(notePath, expected, func(lines []string) ([]string, error) {
+		idx := lineNum - 1
+		if idx < 0 || idx >= len(lines) {
+			return nil, fmt.Errorf("índice de línea %d fuera de rango", lineNum)
+		}
+		newLine, err := fn(lines[idx])
+		if err != nil {
+			return nil, err
+		}
+		lines[idx] = newLine
+		return lines, nil
+	})
+}
+
+// rewriteLines es rewriteLine para una edición de varias líneas: edit recibe las líneas de la nota y devuelve las nuevas; el
+// archivo se guarda de forma atómica y con las mismas comprobaciones del mtime.
+func rewriteLines(notePath string, expected time.Time, edit func(lines []string) ([]string, error)) error {
 	before, err := os.Stat(notePath)
 	if err != nil {
 		return fmt.Errorf("error al obtener info de archivo: %w", err)
@@ -554,16 +581,10 @@ func rewriteLine(notePath string, lineNum int, expected time.Time, fn func(line 
 	if err != nil {
 		return fmt.Errorf("error al leer la nota: %w", err)
 	}
-	lines := strings.Split(string(data), "\n")
-	idx := lineNum - 1
-	if idx < 0 || idx >= len(lines) {
-		return fmt.Errorf("índice de línea %d fuera de rango", lineNum)
-	}
-	newLine, err := fn(lines[idx])
+	lines, err := edit(strings.Split(string(data), "\n"))
 	if err != nil {
 		return err
 	}
-	lines[idx] = newLine
 
 	// el temporal lleva un nombre aleatorio y se crea con O_EXCL en la misma carpeta: un enlace simbólico
 	// preparado de antemano (`<nota>.md.tmp`) no puede desviar la escritura a otro archivo

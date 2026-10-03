@@ -2,6 +2,7 @@ package app
 
 import (
 	"fmt"
+	"github.com/MathiasDrizzy/lazymark/internal/storage"
 	"image/color"
 	"os"
 	"path/filepath"
@@ -280,7 +281,7 @@ func TestCreatingFromAPathLinkStaysInsideNotes(t *testing.T) {
 	m, dir := linksModel(t)
 	outside := filepath.Join(filepath.Dir(dir), "fuera")
 	os.MkdirAll(outside, 0o755)
-	os.WriteFile(filepath.Join(dir, "malo.md"), []byte("# Malo\n\nver [[../fuera/escapada]] y [[sub/nueva]] y [[/tmp/absoluta]]\n"), 0o644)
+	os.WriteFile(filepath.Join(dir, "malo.md"), []byte("# Malo\n\nver [[../fuera/escapada]] y [[sub/nueva]] y [[/tmp/absoluta]] y [[carpeta/nueva/profunda]]\n"), 0o644)
 	m.c.reload()
 	m.afterChange()
 	m.notes.selectPath(filepath.Join(dir, "malo.md"))
@@ -300,6 +301,10 @@ func TestCreatingFromAPathLinkStaysInsideNotes(t *testing.T) {
 	create("../fuera/escapada")
 	create("sub/nueva")
 	create("/tmp/absoluta")
+	create("carpeta/nueva/profunda")
+	if _, err := os.Stat(filepath.Join(dir, "carpeta", "nueva", "profunda.md")); err != nil {
+		t.Errorf("[[carpeta/nueva/profunda]] crea las carpetas que faltan dentro de la de notas: %v", err)
+	}
 	if entries, _ := os.ReadDir(outside); len(entries) != 0 {
 		t.Errorf("se escribió fuera de la carpeta de notas: %v", entries)
 	}
@@ -349,5 +354,16 @@ func TestStaleLinkSelectionIsDropped(t *testing.T) {
 			i := strings.Index(raw, "pwned")
 			t.Errorf("el nombre de una nota con control no debe llegar a la pantalla (ni a los paneles ni a los backlinks): …%q…", raw[max(0, i-30):min(len(raw), i+30)])
 		}
+	}
+}
+
+// TestHeadingJumpIgnoresCode (C.2): [[nota#Título]] salta al encabezado de verdad, no a una línea "# Título" dentro de un bloque de código.
+func TestHeadingJumpIgnoresCode(t *testing.T) {
+	n := &storage.Note{Content: "# Inicio\n\n```sh\n# Título\n```\n\n~~~\n# Título\n~~~\n\n## Título\n\n```\ntexto ^bloque\n```\ntexto real ^bloque\n"}
+	if got := headingLine(n, "Título"); got != 11 {
+		t.Errorf("el encabezado real está en la línea 11, salta a %d", got)
+	}
+	if got := headingLine(n, "^bloque"); got != 16 {
+		t.Errorf("el bloque real está en la línea 16, salta a %d", got)
 	}
 }
