@@ -244,10 +244,11 @@ func finishMove(w io.Writer, p *parser, _ *ops.Service, do func() (ops.TaskDTO, 
 	return nil
 }
 
-// datesSuffix muestra las fechas de una tarea en la salida de texto: "  🛫 2026-05-01 📅 2026-05-10 (vencida)".
+// datesSuffix muestra las fechas de una tarea en la salida de texto con símbolos (▸ inicio, ◷ vencimiento, ✓ completada), no con
+// los emojis del archivo: "  ▸ 2026-05-01 ◷ 2026-05-10 (vencida)". `--json` lleva las fechas en sus campos.
 func datesSuffix(t ops.TaskDTO) string {
 	var parts []string
-	for _, d := range [][2]string{{"🛫", t.Start}, {"📅", t.Due}, {"✅", t.Completed}} {
+	for _, d := range [][2]string{{"▸", t.Start}, {"◷", t.Due}, {"✓", t.Completed}} {
 		if d[1] != "" {
 			parts = append(parts, d[0]+" "+d[1])
 		}

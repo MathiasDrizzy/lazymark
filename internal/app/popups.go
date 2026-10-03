@@ -253,7 +253,7 @@ func cycle(opts []string, current string, dir int) string {
 }
 
 func (p *settingsPopup) render(l Layout) string {
-	w := popupWidth(l, 54)
+	w := popupWidth(l, 56)
 	p.top, p.height = 1, p.n
 	labelW := 22
 	var lines []string
@@ -381,7 +381,7 @@ func (p *trashPopup) click(x, y int) (tea.Cmd, bool) {
 }
 
 func (p *trashPopup) render(l Layout) string {
-	w := popupWidth(l, 54)
+	w := popupWidth(l, 56)
 	p.top = 2
 	p.height = clamp(p.n, 1, max(1, l.H-12))
 	lines := []string{dim(fmt.Sprintf(i18n.T("Se borra sola a los %d días", "Auto-deleted after %d days"), storage.TrashRetentionDays))}

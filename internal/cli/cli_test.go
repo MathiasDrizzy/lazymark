@@ -200,7 +200,7 @@ func TestPlainOutput(t *testing.T) {
 	}
 	id := taskID(t, dir, "Comprar café", "ideas.md")
 	out, err = run(t, dir, "task", "move", id, "done")
-	if err != nil || out != id+" → done  ✅ 2026-10-02\n" {
+	if err != nil || out != id+" → done  ✓ 2026-10-02\n" {
 		t.Errorf("task move: %q %v", out, err)
 	}
 }
@@ -425,7 +425,7 @@ func TestTaskDueAndStart(t *testing.T) {
 		t.Errorf("proyecto.md:\n%s\nse esperaba:\n%s", after, want)
 	}
 	out, _ = run(t, dir, "task", "list", "--note", "proyecto.md")
-	if !strings.Contains(out, "🛫 2019-12-01 📅 2020-01-02 (") || strings.Contains(out, "📅 2020-01-02 🛫") {
+	if !strings.Contains(out, "▸ 2019-12-01 ◷ 2020-01-02 (") || strings.Contains(out, "◷ 2020-01-02 ▸") || strings.ContainsAny(out, "🛫📅✅") {
 		t.Errorf("la salida de texto muestra las fechas: %s", out)
 	}
 	// quitar con none

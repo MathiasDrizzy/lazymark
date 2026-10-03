@@ -35,7 +35,7 @@ The text output (without `--json`) drops control characters from the notes (esca
 
 A task id is `<note path relative to the notes folder>#<8 hex>`, and `.2`, `.3`… for the second and later tasks with the same text in the same note: `projects/plan.md#16de6420`. The hash is of the task text without its Kanban tag, lowercased, so the id survives editing or inserting other lines, moving the task to another column and ticking it. It changes if you edit the task's own text.
 
-`due` and `start` set (or, with `none`, remove) the due and start dates of a task. Setting replaces the first marker of that emoji in the line, even one with an invalid date, and drops any other marker of the same emoji, so a line never ends up with two; `none` removes all of them and tidies the spaces around. The `id` that `task due`, `task start`, `task move` and `task toggle` print (and put in `--json`) is read again after writing, so it is the task's current id: if the edit changed the text that the id is made of (for example by removing a repeated marker) it differs from the one you passed; an invalid date (not `YYYY-MM-DD`, or one that does not exist like `2026-02-30`) exits with 2 and touches nothing. The completion date is not set by hand: moving a task to the done column (or ticking it) adds `✅ today` unless it already had one, and moving it out removes it. In the text output the dates follow the column: `… (todo)  🛫 2026-05-01 📅 2026-05-10 (overdue)`.
+`due` and `start` set (or, with `none`, remove) the due and start dates of a task. Setting replaces the first marker of that emoji in the line, even one with an invalid date, and drops any other marker of the same emoji, so a line never ends up with two; `none` removes all of them and tidies the spaces around. The `id` that `task due`, `task start`, `task move` and `task toggle` print (and put in `--json`) is read again after writing, so it is the task's current id: if the edit changed the text that the id is made of (for example by removing a repeated marker) it differs from the one you passed; an invalid date (not `YYYY-MM-DD`, or one that does not exist like `2026-02-30`) exits with 2 and touches nothing. The completion date is not set by hand: moving a task to the done column (or ticking it) adds `✅ today` unless it already had one, and moving it out removes it. In the text output the dates follow the column, drawn with symbols (`▸` start, `◷` due, `✓` completed), not with the emoji of the file: `… (todo)  ▸ 2026-05-01 ◷ 2026-05-10 (overdue)`.
 
 `<column>` is a column id (`todo`, `doing`, `done`, or your own) or its visible title.
 
@@ -77,7 +77,12 @@ Notes are sorted by path, tasks by their order in the note.
 
 ## MCP server
 
-`lazymark mcp [--dir <folder>]` serves MCP over stdio (JSON-RPC 2.0, protocol `2024-11-05`). The tools are the commands above:
+`lazymark mcp [--dir <folder>]` serves MCP over stdio (newline-delimited JSON-RPC 2.0). It speaks both eras of the protocol on the same connection:
+
+- **2026-07-28 (current):** no sessions and no `initialize` handshake. Every request carries its protocol version and client capabilities in `_meta` (`io.modelcontextprotocol/protocolVersion`, `io.modelcontextprotocol/clientCapabilities`), the server answers each one on its own (`resultType: "complete"` and its name in `_meta["io.modelcontextprotocol/serverInfo"]`) and implements `server/discover` (supported versions, capabilities, identity). A version it does not support gets `UnsupportedProtocolVersion` (`-32022`) with the list of the ones it does; a request without capabilities gets `-32602`. See [Versioning and Compatibility](https://modelcontextprotocol.io/specification/2026-07-28/basic/versioning) and [stdio](https://modelcontextprotocol.io/specification/2026-07-28/basic/transports/stdio).
+- **2025-11-25 and earlier (`2025-06-18`, `2025-03-26`, `2024-11-05`):** the `initialize` handshake; the server answers with the version the client asks for if it knows it, and with `2025-11-25` otherwise.
+
+Which one is used depends on how the client opens (the same rule the specification gives for dual-era servers). Claude Code speaks 2026-07-28 with its v2 runtime, but asks stdio servers for it only when `MCP_PROTOCOL_NEGOTIATION=auto` is set, and otherwise connects as before ([Claude Code MCP documentation](https://code.claude.com/docs/en/mcp)); both paths work with lazymark. The tools are the commands above:
 
 | Tool | Arguments | Same as |
 |---|---|---|

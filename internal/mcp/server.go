@@ -29,8 +29,9 @@ type JSONRPCResponse struct {
 
 // RPCError define un error en JSON-RPC 2.0
 type RPCError struct {
-	Code    int    `json:"code"`
-	Message string `json:"message"`
+	Code    int         `json:"code"`
+	Message string      `json:"message"`
+	Data    interface{} `json:"data,omitempty"`
 }
 
 // ToolContent representa un bloque de contenido devuelto por una herramienta MCP
@@ -100,39 +101,101 @@ func (s *Server) Serve(r io.Reader, w io.Writer) error {
 	return scanner.Err()
 }
 
+// Versiones del protocolo que habla el servidor. La vigente (2026-07-28) no tiene sesiones ni handshake `initialize`: cada
+// petición lleva su versión en `_meta` y el servidor la acepta o la rechaza (https://modelcontextprotocol.io/specification/2026-07-28/basic/versioning).
+// Las anteriores (de 2025-11-25 hacia atrás) abren con `initialize`; el servidor es "de dos épocas" y elige según cómo abre el
+// cliente: una petición con `_meta` de la versión moderna se atiende sin estado, y un `initialize` usa la versión vieja negociada.
+const (
+	modernVersion   = "2026-07-28"
+	metaVersionKey  = "io.modelcontextprotocol/protocolVersion"
+	metaCapsKey     = "io.modelcontextprotocol/clientCapabilities"
+	metaServerInfo  = "io.modelcontextprotocol/serverInfo"
+	errUnsupported  = -32022 // UnsupportedProtocolVersionError
+	errInvalidParam = -32602
+)
+
+// legacyVersions son las versiones con `initialize` que acepta el servidor (las herramientas se leen y se llaman igual en todas).
+var legacyVersions = []string{"2025-11-25", "2025-06-18", "2025-03-26", "2024-11-05"}
+
+// supportedVersions son todas las que se anuncian: primero la moderna.
+func supportedVersions() []string { return append([]string{modernVersion}, legacyVersions...) }
+
+func (s *Server) serverInfo() obj { return obj{"name": config.AppName, "version": config.Version} }
+
+// requestMeta lee el `_meta` de los parámetros de una petición.
+func requestMeta(params json.RawMessage) map[string]json.RawMessage {
+	var p struct {
+		Meta map[string]json.RawMessage `json:"_meta"`
+	}
+	if len(params) > 0 {
+		_ = json.Unmarshal(params, &p)
+	}
+	return p.Meta
+}
+
+func rpcError(id interface{}, code int, msg string, data interface{}) *JSONRPCResponse {
+	return &JSONRPCResponse{JSONRPC: "2.0", ID: id, Error: &RPCError{Code: code, Message: msg, Data: data}}
+}
+
 func (s *Server) handleRequest(req *JSONRPCRequest) *JSONRPCResponse {
-	// Notificaciones (sin ID)
+	// Notificaciones (sin ID): no tienen respuesta
 	if req.ID == nil {
-		if req.Method == "notifications/initialized" {
-			return nil
-		}
 		return nil
+	}
+	meta := requestMeta(req.Params)
+	_, modern := meta[metaVersionKey]
+
+	if modern { // época moderna: la versión y las capacidades vienen en cada petición
+		var version string
+		_ = json.Unmarshal(meta[metaVersionKey], &version)
+		if version != modernVersion {
+			if !contains(legacyVersions, version) || req.Method != "server/discover" {
+				return rpcError(req.ID, errUnsupported, "Unsupported protocol version", obj{"supported": supportedVersions(), "requested": version})
+			}
+		}
+		if _, ok := meta[metaCapsKey]; !ok {
+			return rpcError(req.ID, errInvalidParam, "Invalid params: falta _meta."+metaCapsKey, nil)
+		}
+	}
+	ok := func(result obj) *JSONRPCResponse {
+		if modern {
+			result["resultType"] = "complete"
+			result["_meta"] = obj{metaServerInfo: s.serverInfo()}
+		}
+		return &JSONRPCResponse{JSONRPC: "2.0", ID: req.ID, Result: result}
 	}
 
 	switch req.Method {
-	case "initialize":
-		result := map[string]interface{}{
-			"protocolVersion": "2024-11-05",
-			"capabilities": map[string]interface{}{
-				"tools": map[string]interface{}{},
-			},
-			"serverInfo": map[string]interface{}{
-				"name":    config.AppName,
-				"version": config.Version,
-			},
+	case "server/discover":
+		return &JSONRPCResponse{JSONRPC: "2.0", ID: req.ID, Result: obj{
+			"resultType":        "complete",
+			"supportedVersions": supportedVersions(),
+			"capabilities":      obj{"tools": obj{}},
+			"_meta":             obj{metaServerInfo: s.serverInfo()},
+			"ttlMs":             3600000,
+			"cacheScope":        "public",
+		}}
+
+	case "initialize": // época anterior: se responde con la versión pedida si se conoce, y si no con la más nueva de las viejas
+		var p struct {
+			ProtocolVersion string `json:"protocolVersion"`
 		}
-		return &JSONRPCResponse{
-			JSONRPC: "2.0",
-			ID:      req.ID,
-			Result:  result,
+		_ = json.Unmarshal(req.Params, &p)
+		version := legacyVersions[0]
+		if contains(legacyVersions, p.ProtocolVersion) {
+			version = p.ProtocolVersion
 		}
+		return &JSONRPCResponse{JSONRPC: "2.0", ID: req.ID, Result: obj{
+			"protocolVersion": version,
+			"capabilities":    obj{"tools": obj{}},
+			"serverInfo":      s.serverInfo(),
+		}}
+
+	case "ping":
+		return ok(obj{})
 
 	case "tools/list":
-		return &JSONRPCResponse{
-			JSONRPC: "2.0",
-			ID:      req.ID,
-			Result:  map[string]interface{}{"tools": s.getToolsList()},
-		}
+		return ok(obj{"tools": s.getToolsList()})
 
 	case "tools/call":
 		var callParams struct {
@@ -140,27 +203,31 @@ func (s *Server) handleRequest(req *JSONRPCRequest) *JSONRPCResponse {
 			Arguments map[string]interface{} `json:"arguments"`
 		}
 		if err := json.Unmarshal(req.Params, &callParams); err != nil {
-			return &JSONRPCResponse{
-				JSONRPC: "2.0",
-				ID:      req.ID,
-				Error:   &RPCError{Code: -32602, Message: "Invalid params: " + err.Error()},
-			}
+			return rpcError(req.ID, errInvalidParam, "Invalid params: "+err.Error(), nil)
 		}
-
-		toolResult := s.callTool(callParams.Name, callParams.Arguments)
-		return &JSONRPCResponse{
-			JSONRPC: "2.0",
-			ID:      req.ID,
-			Result:  toolResult,
+		res := s.callTool(callParams.Name, callParams.Arguments)
+		content := make([]obj, len(res.Content))
+		for i, c := range res.Content {
+			content[i] = obj{"type": c.Type, "text": c.Text}
 		}
+		out := obj{"content": content}
+		if res.IsError {
+			out["isError"] = true
+		}
+		return ok(out)
 
 	default:
-		return &JSONRPCResponse{
-			JSONRPC: "2.0",
-			ID:      req.ID,
-			Error:   &RPCError{Code: -32601, Message: fmt.Sprintf("Method '%s' not found", req.Method)},
+		return rpcError(req.ID, -32601, fmt.Sprintf("Method '%s' not found", req.Method), nil)
+	}
+}
+
+func contains(list []string, v string) bool {
+	for _, x := range list {
+		if x == v {
+			return true
 		}
 	}
+	return false
 }
 
 // obj y los demás construyen los esquemas de entrada de las herramientas.

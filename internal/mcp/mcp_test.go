@@ -3,6 +3,7 @@ package mcp
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -85,7 +86,7 @@ func TestMCPSession(t *testing.T) {
 
 	// initialize
 	init, _ := json.Marshal(r[1].Result)
-	if !strings.Contains(string(init), `"protocolVersion":"2024-11-05"`) || !strings.Contains(string(init), `"tools"`) {
+	if !strings.Contains(string(init), `"protocolVersion":"2025-11-25"`) || !strings.Contains(string(init), `"tools"`) {
 		t.Errorf("initialize: %s", init)
 	}
 
@@ -207,5 +208,89 @@ func TestMCPProtocolErrors(t *testing.T) {
 	}
 	if !strings.Contains(out.String(), "-32700") || !strings.Contains(out.String(), "-32601") {
 		t.Errorf("respuestas: %s", out.String())
+	}
+}
+
+func modernMeta(version string) map[string]interface{} {
+	return map[string]interface{}{
+		metaVersionKey:                       version,
+		metaCapsKey:                          map[string]interface{}{},
+		"io.modelcontextprotocol/clientInfo": map[string]interface{}{"name": "test", "version": "1"},
+	}
+}
+
+func modernReq(id int, method string, extra map[string]interface{}, meta map[string]interface{}) map[string]interface{} {
+	params := map[string]interface{}{"_meta": meta}
+	for k, v := range extra {
+		params[k] = v
+	}
+	return map[string]interface{}{"id": id, "method": method, "params": params}
+}
+
+// TestMCPModernEra (C.0): la versión vigente (2026-07-28) no tiene sesión ni `initialize`: cada petición lleva su versión y sus
+// capacidades en `_meta`, el servidor la atiende sin estado (resultType "complete" y serverInfo en `_meta`) o la rechaza con
+// UnsupportedProtocolVersion (-32022, con las versiones que soporta) o Invalid params (-32602) si falta una capacidad. Una
+// misma conexión puede mezclar las dos épocas.
+func TestMCPModernEra(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("XDG_CONFIG_HOME", filepath.Join(home, ".config"))
+	t.Setenv("AppData", filepath.Join(home, "AppData"))
+	notes, _ := filepath.EvalSymlinks(t.TempDir())
+	os.WriteFile(filepath.Join(notes, "a.md"), []byte("# A\n- [ ] tarea\n"), 0o644)
+
+	noCaps := map[string]interface{}{metaVersionKey: modernVersion}
+	r := session(t, notes,
+		modernReq(1, "server/discover", nil, modernMeta(modernVersion)), // sin initialize previo
+		modernReq(2, "tools/list", nil, modernMeta(modernVersion)),
+		modernReq(3, "tools/call", map[string]interface{}{"name": "list_notes", "arguments": map[string]interface{}{}}, modernMeta(modernVersion)),
+		modernReq(4, "tools/list", nil, modernMeta("1900-01-01")), // versión desconocida
+		modernReq(5, "tools/list", nil, noCaps),                   // falta clientCapabilities
+		modernReq(6, "tools/call", map[string]interface{}{"name": "nada"}, modernMeta(modernVersion)),
+		modernReq(7, "ping", nil, modernMeta(modernVersion)),
+		// la misma conexión, época anterior: initialize clásico y herramientas sin _meta
+		map[string]interface{}{"id": 8, "method": "initialize", "params": map[string]interface{}{"protocolVersion": "2025-06-18"}},
+		map[string]interface{}{"id": 9, "method": "initialize", "params": map[string]interface{}{"protocolVersion": "1999-01-01"}},
+		map[string]interface{}{"id": 10, "method": "tools/list"},
+		modernReq(11, "server/discover", nil, modernMeta("2025-11-25")), // pide discover con una versión de la época anterior: se contesta
+	)
+	disc, _ := json.Marshal(r[1].Result)
+	for _, want := range []string{`"resultType":"complete"`, `"supportedVersions":["2026-07-28","2025-11-25","2025-06-18","2025-03-26","2024-11-05"]`, `"tools":{}`, metaServerInfo, `"ttlMs"`} {
+		if !strings.Contains(string(disc), want) {
+			t.Errorf("server/discover: falta %s en %s", want, disc)
+		}
+	}
+	list, _ := json.Marshal(r[2].Result)
+	if !strings.Contains(string(list), `"resultType":"complete"`) || !strings.Contains(string(list), `"name":"list_notes"`) || !strings.Contains(string(list), metaServerInfo) {
+		t.Errorf("tools/list moderno: %s", list)
+	}
+	if txt, isErr := toolText(t, r[3]); isErr || !strings.Contains(txt, `"id": "a.md"`) {
+		t.Errorf("tools/call moderno: %v %s", isErr, txt)
+	}
+	if b, _ := json.Marshal(r[3].Result); !strings.Contains(string(b), `"resultType":"complete"`) {
+		t.Errorf("tools/call moderno sin resultType: %s", b)
+	}
+	if e := r[4].Error; e == nil || e.Code != -32022 || !strings.Contains(fmt.Sprint(e.Data), "2026-07-28") || !strings.Contains(fmt.Sprint(e.Data), "1900-01-01") {
+		t.Errorf("versión desconocida: %+v", e)
+	}
+	if e := r[5].Error; e == nil || e.Code != -32602 {
+		t.Errorf("sin clientCapabilities: %+v", e)
+	}
+	if txt, isErr := toolText(t, r[6]); !isErr || !strings.Contains(txt, "no encontrada") {
+		t.Errorf("herramienta inexistente: %v %s", isErr, txt)
+	}
+	if r[7].Error != nil {
+		t.Errorf("ping: %+v", r[7].Error)
+	}
+	for id, want := range map[float64]string{8: `"protocolVersion":"2025-06-18"`, 9: `"protocolVersion":"2025-11-25"`} {
+		if b, _ := json.Marshal(r[id].Result); !strings.Contains(string(b), want) {
+			t.Errorf("initialize %v: %s", id, b)
+		}
+	}
+	if b, _ := json.Marshal(r[10].Result); strings.Contains(string(b), "resultType") || !strings.Contains(string(b), `"tools"`) {
+		t.Errorf("tools/list de la época anterior no lleva resultType: %s", b)
+	}
+	if r[11].Error != nil {
+		t.Errorf("discover con versión anterior: %+v", r[11].Error)
 	}
 }
