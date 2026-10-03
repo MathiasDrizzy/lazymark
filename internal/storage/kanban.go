@@ -3,6 +3,7 @@ package storage
 import (
 	"errors"
 	"fmt"
+	"os"
 	"regexp"
 	"sort"
 	"strings"
@@ -233,27 +234,74 @@ func withCompletion(line string, done bool) string {
 // de la otra o alguna de las líneas ya no es una tarea.
 var ErrNotSiblings = errors.New("las tareas no son hermanas")
 
-// taskBlock devuelve el rango [start, end] (índices de lines) de la tarea de la línea idx: ella y las líneas siguientes con más
-// sangría que la suya (sus subtareas y su texto de continuación). Una línea en blanco termina el bloque.
+// itemMarker reconoce el comienzo de un ítem de lista (viñeta o número) y devuelve el ancho donde empieza su contenido, que es la sangría
+// que deben tener las líneas siguientes para pertenecerle (CommonMark 5.2).
+var itemMarker = regexp.MustCompile(`^(\s*)((?:[-*+])|(?:\d{1,9}[.)]))( +|\t|$)`)
+
+// contentIndent es la sangría del contenido del ítem de la línea l (la de su viñeta o número más el espacio que le sigue; con 5 o más
+// espacios, solo uno cuenta). 0 si l no es un ítem.
+func contentIndent(l string) int {
+	m := itemMarker.FindStringSubmatch(strings.TrimSuffix(l, "\r"))
+	if m == nil {
+		return 0
+	}
+	sp := indentWidth(m[3])
+	if sp == 0 || sp > 4 {
+		sp = 1
+	}
+	return indentWidth(m[1]) + len(m[2]) + sp
+}
+
+// taskBlock devuelve el rango [start, end] (índices de lines) de la tarea de la línea idx: lo que le pertenece según CommonMark, o sea su
+// línea y las siguientes con la sangría de su contenido o más (continuaciones, sublistas, bloques de código), también si hay líneas en
+// blanco de por medio. Las líneas en blanco del final no son del bloque. Un vallado de código dentro del ítem termina con él.
 func taskBlock(lines []string, idx int) (int, int) {
-	indent := indentWidth(leadingSpace(lines[idx]))
+	ci := contentIndent(lines[idx])
+	if ci == 0 {
+		return idx, idx
+	}
 	end := idx
-	for end+1 < len(lines) {
-		next := strings.TrimSuffix(lines[end+1], "\r")
-		if strings.TrimSpace(next) == "" || indentWidth(leadingSpace(next)) <= indent {
+	for i := idx + 1; i < len(lines); i++ {
+		l := strings.TrimSuffix(lines[i], "\r")
+		if strings.TrimSpace(l) == "" {
+			continue // un blanco pertenece al ítem solo si sigue algo que también le pertenece
+		}
+		if indentWidth(leadingSpace(l)) < ci {
 			break
 		}
-		end++
+		end = i
 	}
 	return idx, end
 }
 
 func leadingSpace(l string) string { return l[:len(l)-len(strings.TrimLeft(l, " \t"))] }
 
-// SwapTasks intercambia de lugar las tareas de las líneas lineA y lineB (desde 1) de la misma nota, cada una con sus subtareas: el
-// resto del archivo, lo que haya entre las dos incluido, queda donde estaba. Solo las hermanas se intercambian (la misma sangría, sin
-// que una cuelgue de la otra) y las dos líneas deben ser tareas. Si expected no es cero y la nota cambió en disco, no escribe y
-// devuelve ErrNoteChanged. Devuelve la línea nueva de cada una (la tarea de lineA queda en newA y la de lineB en newB).
+// BlockEnd devuelve la última línea (desde 1) del bloque de la tarea de la línea line de la nota: ella y todo lo que le pertenece.
+func (s *Storage) BlockEnd(notePath string, line int) (int, error) {
+	notePath, err := s.ResolveNote(notePath)
+	if err != nil {
+		return 0, err
+	}
+	data, err := os.ReadFile(notePath)
+	if err != nil {
+		return 0, err
+	}
+	lines := strings.Split(string(data), "\n")
+	if line < 1 || line > len(lines) {
+		return 0, fmt.Errorf("índice de línea %d fuera de rango", line)
+	}
+	_, end := taskBlock(lines, line-1)
+	return end + 1, nil
+}
+
+var orderedMarker = regexp.MustCompile(`^(\s*)(\d{1,9})([.)])`)
+
+// SwapTasks intercambia de lugar las tareas de las líneas lineA y lineB (desde 1) de la misma nota, cada una con todo lo que le
+// pertenece (sus subtareas, párrafos y bloques de código): lo que haya entre las dos y el resto del archivo quedan donde estaban, con
+// sus terminaciones de línea. Solo las hermanas se intercambian: la misma sangría, el mismo padre y la misma sección (sin un
+// encabezado entre las dos), y las dos líneas deben ser tareas. Si son ítems numerados, cada posición conserva su número. Si expected
+// no es cero y la nota cambió en disco, no escribe y devuelve ErrNoteChanged. Devuelve la línea nueva de cada una (la tarea de lineA
+// queda en newA y la de lineB en newB).
 func (s *Storage) SwapTasks(notePath string, lineA, lineB int, expected time.Time) (newA, newB int, err error) {
 	notePath, err = s.ResolveNote(notePath)
 	if err != nil {
@@ -274,25 +322,52 @@ func (s *Storage) SwapTasks(notePath string, lineA, lineB int, expected time.Tim
 				return nil, fmt.Errorf("%w: la línea %d no es una tarea", ErrNotSiblings, i+1)
 			}
 		}
-		if indentWidth(leadingSpace(lines[a])) != indentWidth(leadingSpace(lines[b])) {
+		indent := indentWidth(leadingSpace(lines[a]))
+		if indent != indentWidth(leadingSpace(lines[b])) {
 			return nil, fmt.Errorf("%w: sangrías distintas", ErrNotSiblings)
 		}
 		_, ea := taskBlock(lines, a)
 		_, eb := taskBlock(lines, b)
-		// con la misma sangría, la segunda nunca cuelga de la primera; pero si entre las dos hay una línea con menos sangría (otro padre,
-		// o un párrafo) ya no tienen el mismo padre y cambiarían de sitio en el árbol
-		indent := indentWidth(leadingSpace(lines[a]))
+		if ea >= b { // la segunda es parte del bloque de la primera
+			return nil, fmt.Errorf("%w: una cuelga de la otra", ErrNotSiblings)
+		}
+		// con la misma sangría, si entre las dos hay una línea con menos sangría (otro padre) o un encabezado (otra sección) ya no son
+		// hermanas y cambiarían de sitio en el árbol
 		for _, l := range lines[ea+1 : b] {
-			if t := strings.TrimSuffix(l, "\r"); strings.TrimSpace(t) != "" && indentWidth(leadingSpace(t)) < indent {
-				return nil, fmt.Errorf("%w: tienen padres distintos", ErrNotSiblings)
+			t := strings.TrimSuffix(l, "\r")
+			if strings.TrimSpace(t) == "" {
+				continue
+			}
+			if indentWidth(leadingSpace(t)) < indent || (indentWidth(leadingSpace(t)) < 4 && strings.HasPrefix(strings.TrimLeft(t, " "), "#")) {
+				return nil, fmt.Errorf("%w: tienen padres o secciones distintos", ErrNotSiblings)
 			}
 		}
+		// cada línea conserva SU terminación (\r o no) en su posición: así un archivo CRLF sin salto final no mezcla terminaciones
+		cr := make([]bool, len(lines))
+		flat := make([]string, len(lines))
+		for i, l := range lines {
+			cr[i] = strings.HasSuffix(l, "\r")
+			flat[i] = strings.TrimSuffix(l, "\r")
+		}
+		blockA := append([]string(nil), flat[a:ea+1]...)
+		blockB := append([]string(nil), flat[b:eb+1]...)
+		// numerados: cada posición conserva su número
+		ma, mb := orderedMarker.FindStringSubmatch(blockA[0]), orderedMarker.FindStringSubmatch(blockB[0])
+		if ma != nil && mb != nil && ma[3] == mb[3] {
+			blockA[0] = ma[1] + mb[2] + ma[3] + blockA[0][len(ma[0]):]
+			blockB[0] = mb[1] + ma[2] + mb[3] + blockB[0][len(mb[0]):]
+		}
 		out := make([]string, 0, len(lines))
-		out = append(out, lines[:a]...)
-		out = append(out, lines[b:eb+1]...)
-		out = append(out, lines[ea+1:b]...)
-		out = append(out, lines[a:ea+1]...)
-		out = append(out, lines[eb+1:]...)
+		out = append(out, flat[:a]...)
+		out = append(out, blockB...)
+		out = append(out, flat[ea+1:b]...)
+		out = append(out, blockA...)
+		out = append(out, flat[eb+1:]...)
+		for i := range out {
+			if cr[i] {
+				out[i] += "\r"
+			}
+		}
 		newFirst, newSecond := first+(eb-ea), first // la primera baja detrás de la segunda; la segunda sube al lugar de la primera
 		if swapped {
 			newA, newB = newSecond, newFirst

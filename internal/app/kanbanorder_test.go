@@ -48,33 +48,43 @@ func TestKanbanReorderWithKeys(t *testing.T) {
 		}
 	}
 	want(t, todoTitles(m), "a.md:uno", "a.md:uno-hijo", "a.md:dos", "a.md:tres", "b.md:cuatro")
-	// "uno" tiene una subtarea con otra sangría: bajar "uno" lo cambia por "uno-hijo" y no se puede
+	// J sobre un padre con subtareas salta a la siguiente hermana (dos) llevando el subárbol; "medio" (otra columna) no se mueve
 	m.kanban.selected[0] = 0
 	press(m, "J")
-	if got := fileLines(t, a); strings.Join(got, "|") != "# A|- [ ] uno|  - [ ] uno-hijo|- [ ] medio #kb/doing|- [ ] dos|- [ ] tres|" {
-		t.Errorf("uno con su hijo no se intercambian: %q", got)
+	if got := fileLines(t, a); strings.Join(got, "|") != "# A|- [ ] dos|- [ ] medio #kb/doing|- [ ] uno|  - [ ] uno-hijo|- [ ] tres|" {
+		t.Errorf("uno (con su hijo) baja detrás de dos: %q", got)
 	}
-	if !strings.Contains(lastRow(m), "hermanas") {
-		t.Errorf("debe avisar que solo se intercambian hermanas: %q", lastRow(m))
+	want(t, todoTitles(m), "a.md:dos", "a.md:uno", "a.md:uno-hijo", "a.md:tres", "b.md:cuatro")
+	if c := m.kanban.current(); c == nil || c.CleanText != "uno" || m.kanban.selected[0] != 1 {
+		t.Errorf("el cursor sigue a uno: %+v idx=%d", c, m.kanban.selected[0])
 	}
-	// "dos" sube sobre "uno": uno (con su hijo) baja detrás de dos, "medio" no se mueve
+	// subir la hija: su vecina de arriba es su padre, no su hermana: no se mueve y avisa
 	m.kanban.selected[0] = 2
-	press(m, "shift+up") // dos ↔ uno-hijo: sangrías distintas
-	if !strings.Contains(lastRow(m), "hermanas") {
-		t.Errorf("dos y uno-hijo: %q", lastRow(m))
+	before := fileLines(t, a)
+	press(m, "K")
+	if len(diffLines(before, fileLines(t, a))) != 0 || !strings.Contains(lastRow(m), "hermanas") {
+		t.Errorf("la hija no sube sobre su padre: %q", lastRow(m))
 	}
+	// K sobre uno salta sobre dos (una hermana sin hijos): vuelve el orden original, con el hijo
+	m.kanban.selected[0] = 1
+	press(m, "shift+up")
+	want(t, todoTitles(m), "a.md:uno", "a.md:uno-hijo", "a.md:dos", "a.md:tres", "b.md:cuatro")
+	if got := fileLines(t, a); strings.Join(got, "|") != "# A|- [ ] uno|  - [ ] uno-hijo|- [ ] medio #kb/doing|- [ ] dos|- [ ] tres|" {
+		t.Errorf("Shift+↑ deshace el salto: %q", got)
+	}
+	// y K sobre la siguiente a una con subtareas la sube por encima de la hermana con su subárbol (saltando uno-hijo)
+	m.kanban.selected[0] = 2 // dos
+	press(m, "K")
+	want(t, todoTitles(m), "a.md:dos", "a.md:uno", "a.md:uno-hijo", "a.md:tres", "b.md:cuatro")
 	m.kanban.selected[0] = 3 // tres
 	press(m, "K")
-	want(t, todoTitles(m), "a.md:uno", "a.md:uno-hijo", "a.md:tres", "a.md:dos", "b.md:cuatro")
-	if got := m.kanban.current(); got == nil || got.CleanText != "tres" || m.kanban.selected[0] != 2 {
+	want(t, todoTitles(m), "a.md:dos", "a.md:tres", "a.md:uno", "a.md:uno-hijo", "b.md:cuatro") // tres sube sobre uno (con su hijo)
+	if got := m.kanban.current(); got == nil || got.CleanText != "tres" || m.kanban.selected[0] != 1 {
 		t.Errorf("el cursor sigue a la tarjeta movida: %+v idx=%d", got, m.kanban.selected[0])
 	}
-	if got := fileLines(t, a); strings.Join(got, "|") != "# A|- [ ] uno|  - [ ] uno-hijo|- [ ] medio #kb/doing|- [ ] tres|- [ ] dos|" {
-		t.Errorf("solo se intercambian las dos líneas:\n%q", got)
-	}
 	// bajar la última de a.md sobre una de otra nota: no hace nada y lo dice
-	m.kanban.selected[0] = 3 // dos, la última de a.md
-	before := fileLines(t, a)
+	m.kanban.selected[0] = 3 // uno-hijo: la última de a.md; la que sigue es de b.md
+	before = fileLines(t, a)
 	press(m, "J")
 	if len(diffLines(before, fileLines(t, a))) != 0 || !strings.Contains(lastRow(m), "notas") {
 		t.Errorf("entre notas no se reordena: %q", lastRow(m))

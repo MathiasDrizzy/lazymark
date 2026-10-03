@@ -22,6 +22,7 @@ type Task struct {
 	Line      int
 	Text      string
 	Done      bool
+	Indent    int   // ancho de la sangría de su línea (tab hasta el múltiplo de 4); 0 en el margen
 	Dates     Dates // inicio, vencimiento y completada (🛫 📅 ✅), leídas del texto
 }
 
@@ -353,6 +354,7 @@ func (s *Storage) extractTasks(title, path, content string) []Task {
 				Line:      i + 1,
 				Text:      m[2],
 				Done:      m[1] == "x" || m[1] == "X",
+				Indent:    indent,
 				Dates:     ParseDates(m[2]),
 			})
 		}

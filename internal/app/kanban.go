@@ -109,19 +109,32 @@ func (k *kanbanSheet) moveTo(target int) tea.Cmd {
 	return nil
 }
 
-// reorder sube (dir -1) o baja (dir 1) un lugar la tarjeta seleccionada dentro de su columna, intercambiando su tarea con la de la
-// tarjeta vecina (cada una con sus subtareas). Solo se reordena dentro de una nota y entre tareas hermanas: entre notas distintas
-// el orden de las tarjetas es el de las notas (docs/kanban). Devuelve si se movió.
+// reorder sube (dir -1) o baja (dir 1) un lugar la tarjeta seleccionada dentro de su columna: intercambia su tarea, con todo lo que le
+// pertenece (subtareas, párrafos, bloques de código), con la de la hermana vecina; las tarjetas de por medio que son subtareas (de la
+// propia tarea al bajar, de la hermana anterior al subir) se saltan. Solo se reordena dentro de una nota y entre tareas hermanas: entre
+// notas distintas el orden de las tarjetas es el de las notas (docs/configuration.md). Devuelve si se movió.
 func (k *kanbanSheet) reorder(dir int) bool {
 	cards := k.cards()
 	i := clamp(k.selection(k.col), 0, max(0, len(cards)-1))
-	j := i + dir
-	if len(cards) == 0 || j < 0 || j >= len(cards) {
+	if len(cards) == 0 || i+dir < 0 || i+dir >= len(cards) {
 		return false
 	}
-	a, b := cards[i], cards[j]
-	if a.NotePath != b.NotePath {
-		k.c.setStatus("%s", i18n.T("Entre notas: sigue su orden", "Across notes: note order"))
+	a := cards[i]
+	var b views.KanbanCard
+	found := false
+	for n := i + dir; n >= 0 && n < len(cards); n += dir {
+		c := cards[n]
+		if c.NotePath != a.NotePath {
+			k.c.setStatus("%s", i18n.T("Entre notas: sigue su orden", "Across notes: note order"))
+			return false
+		}
+		if c.Task.Indent > a.Task.Indent {
+			continue
+		}
+		b, found = c, true
+		break
+	}
+	if !found {
 		return false
 	}
 	newA, _, err := k.c.store.SwapTasks(a.NotePath, a.Task.Line, b.Task.Line, k.noteTime(a.NotePath))
