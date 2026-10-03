@@ -464,3 +464,20 @@ func TestLanguageConfig(t *testing.T) {
 		}
 	}
 }
+
+// TestNerdFontDefault (C.8): nerd_font es true por defecto y también en una config que no tiene la clave; false se conserva.
+func TestNerdFontDefault(t *testing.T) {
+	isolate(t)
+	cfg, _ := Load(t.TempDir())
+	if !cfg.NerdFont {
+		t.Fatal("por defecto debe ser true")
+	}
+	writeDiskConfig(t, `{"keymap_version":2}`)
+	if got, _ := Load(t.TempDir()); !got.NerdFont {
+		t.Error("una config sin la clave debe quedar en true")
+	}
+	writeDiskConfig(t, `{"keymap_version":2,"nerd_font":false}`)
+	if got, _ := Load(t.TempDir()); got.NerdFont {
+		t.Error("false se conserva")
+	}
+}

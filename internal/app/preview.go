@@ -36,8 +36,11 @@ func (p *previewPanel) lines(note *storage.Note, width int) []string {
 	key := fmt.Sprintf("%s|%d|%d|%s|%d|%v", note.Path, note.ModTime.UnixNano(), width, theme.CurrentThemeName, p.imgs.Generation(), views.DateIcons)
 	if key != p.cacheKey {
 		p.cacheKey = key
-		// los emojis de fecha (🛫 📅 ✅) del archivo se dibujan como glifos monocromos, después de que Glamour ajustó las líneas
-		p.cacheLines = strings.Split(views.ReplaceDateEmoji(renderMarkdown(note, width, p.imgs)), "\n")
+		// los emojis de fecha (🛫 📅 ✅) del archivo se dibujan como glifos monocromos: se cambian en el texto ANTES de
+		// pasárselo a Glamour, que mide y ajusta las líneas (y las tablas) con el ancho real de lo que se dibuja
+		shown := *note
+		shown.Content = views.ReplaceDateEmoji(note.Content)
+		p.cacheLines = strings.Split(renderMarkdown(&shown, width, p.imgs), "\n")
 	}
 	return p.cacheLines
 }

@@ -184,7 +184,7 @@ func renderCard(c KanbanCard, w int, doneCol bool, midCol bool, selected, active
 		}
 		rows = append(rows, row(prefix+textStyle.Render(l)))
 	}
-	rows = append(rows, row(muted.Render(textwidth.Truncate("· "+c.NoteTitle, inner, "…"))))
+	rows = append(rows, row(muted.Render(textwidth.Truncate("· "+ReplaceDateEmoji(c.NoteTitle), inner, "…"))))
 	if c.Task.Dates != (storage.Dates{}) {
 		rows = append(rows, row(cardDates(c.Task.Dates, c.Task.Done, today, inner)))
 	}

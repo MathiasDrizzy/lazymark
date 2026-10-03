@@ -241,6 +241,15 @@ func TestDatesAreMonochromeGlyphs(t *testing.T) {
 			greenDone++
 		}
 	}
+	var mutedStart int
+	for _, seg := range byGlyph["\uf135"] {
+		if seg.hasFg(theme.ColorOverlay0) {
+			mutedStart++
+		}
+	}
+	if mutedStart != 1 {
+		t.Errorf("la fecha de inicio va atenuada: %d de %d", mutedStart, len(byGlyph["\uf135"]))
+	}
 	if redDue != 1 || mutedDue != 2 || greenDone != 1 {
 		t.Errorf("colores de las fechas: vencida roja=%d (1), atenuadas=%d (2), completada verde=%d (1)", redDue, mutedDue, greenDone)
 	}
