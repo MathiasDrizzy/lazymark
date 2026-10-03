@@ -92,3 +92,19 @@ func Repeat(r string, n int) string {
 	}
 	return strings.Repeat(r, n)
 }
+
+// NoControl cambia por "?" los caracteres de control (también el ESC de una secuencia): lo que viene de nombres de archivo o del texto de las
+// notas no es de fiar y no debe llegar a la terminal como orden.
+func NoControl(s string) string {
+	for _, r := range s {
+		if r < 0x20 || r == 0x7f || (r >= 0x80 && r <= 0x9f) {
+			return strings.Map(func(r rune) rune {
+				if r < 0x20 || r == 0x7f || (r >= 0x80 && r <= 0x9f) {
+					return '?'
+				}
+				return r
+			}, s)
+		}
+	}
+	return s
+}

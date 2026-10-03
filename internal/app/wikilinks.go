@@ -70,9 +70,10 @@ func backlinkLines(back []links.Backlink, width int) ([]string, []previewLink) {
 	var pls []previewLink
 	dim := lipgloss.NewStyle().Foreground(theme.ColorOverlay0)
 	for _, b := range back {
-		pls = append(pls, previewLink{Display: b.Note.Title, Path: b.Note.Path, Line: b.Line, Back: true})
-		ctx := textwidth.Truncate(links.Plain(b.Text), max(8, width-textwidth.Width(b.Note.Title)-12), "…")
-		out = append(out, "  "+string(linkOpen)+b.Note.Title+string(linkClose)+dim.Render(fmt.Sprintf(":%d  %s", b.Line, ctx)))
+		title := textwidth.NoControl(b.Note.Title) // el nombre de la nota y su texto no son de fiar: sin caracteres de control hacia la terminal
+		pls = append(pls, previewLink{Display: title, Path: b.Note.Path, Line: b.Line, Back: true})
+		ctx := textwidth.Truncate(textwidth.NoControl(links.Plain(b.Text)), max(8, width-textwidth.Width(title)-12), "…")
+		out = append(out, "  "+string(linkOpen)+title+string(linkClose)+dim.Render(fmt.Sprintf(":%d  %s", b.Line, ctx)))
 	}
 	return out, pls
 }

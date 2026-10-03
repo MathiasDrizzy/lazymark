@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/MathiasDrizzy/lazymark/internal/storage"
 )
@@ -246,9 +247,49 @@ func TestPlain(t *testing.T) {
 		"ver [[nota|esa]] y [[otra]] y [[a#b]]": "ver esa y otra y a > b",
 		"sin enlaces":                           "sin enlaces",
 		"`[[código]]` [[x]]":                    "`[[código]]` x",
+		"primera línea\nsegunda con [[enlace|ese]] y [[otro]]\n\ntercera [[a#b]]": "primera línea\nsegunda con ese y otro\n\ntercera a > b",
+		"[[uno]]\r\n[[dos|2]]\r\n": "uno\r\n2\r\n",
 	} {
 		if got := Plain(in); got != want {
 			t.Errorf("Plain(%q) = %q, se esperaba %q", in, got, want)
 		}
+	}
+}
+
+// TestBacklinksScale: con miles de notas con enlaces, pedir los backlinks de muchas notas no repite el trabajo (el grafo se calcula una vez
+// por índice) ni resuelve cada enlace recorriendo todas las notas.
+func TestBacklinksScale(t *testing.T) {
+	base := "/n"
+	files := map[string]string{}
+	const n = 3000
+	for i := 0; i < n; i++ {
+		var b strings.Builder
+		b.WriteString("# nota\n")
+		for k := 1; k <= 5; k++ {
+			fmt.Fprintf(&b, "enlace a [[nota-%d]] y [[carpeta-%d/nota-%d|alias]]\n", (i*7+k*13)%n, (i+k)%30, (i*7+k*13)%n)
+		}
+		files[fmt.Sprintf("carpeta-%d/nota-%d.md", i%30, i)] = b.String()
+	}
+	start := time.Now()
+	ix := NewIndex(base, notes(base, files))
+	total := 0
+	for i := 0; i < 300; i++ {
+		total += len(ix.Backlinks(filepath.Join(base, fmt.Sprintf("carpeta-%d", i%30), fmt.Sprintf("nota-%d.md", i))))
+	}
+	if d := time.Since(start); d > 5*time.Second {
+		t.Errorf("3000 notas con 30000 enlaces y 300 consultas de backlinks tardaron %v: algo es cuadrático", d)
+	}
+	if total == 0 {
+		t.Error("el grafo no halló ningún backlink")
+	}
+}
+
+// TestRenameEditsOnCRLFNote: las ediciones de una nota con CRLF conservan el \r (y ReplaceLineIf las aplica contra la misma línea).
+func TestRenameEditsOnCRLFNote(t *testing.T) {
+	base := "/n"
+	ix := NewIndex(base, notes(base, map[string]string{"vieja.md": "x\n", "a.md": "uno\r\nver [[vieja|v]] fin\r\n"}))
+	e := ix.RenameEdits(filepath.Join(base, "vieja.md"), "nueva")
+	if len(e) != 1 || e[0].Before != "ver [[vieja|v]] fin\r" || e[0].After != "ver [[nueva|v]] fin\r" || e[0].Line != 2 {
+		t.Errorf("%+v", e)
 	}
 }

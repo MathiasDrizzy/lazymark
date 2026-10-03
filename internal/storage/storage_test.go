@@ -277,3 +277,20 @@ func TestWikilinkAnchorsAreNotTags(t *testing.T) {
 		t.Errorf("categorías = %v, solo debía salir real", got)
 	}
 }
+
+// TestReplaceLineIf: reemplaza una línea solo si hoy es la que se vio (con CRLF incluido) y deja el resto del archivo igual.
+func TestReplaceLineIf(t *testing.T) {
+	s, p := kanbanNote(t, "# T\r\nver [[a]] fin\r\notra\n")
+	if err := s.ReplaceLineIf(p, 2, "ver [[a]] fin\r", "ver [[b]] fin\r", time.Time{}); err != nil {
+		t.Fatal(err)
+	}
+	if got, _ := os.ReadFile(p); string(got) != "# T\r\nver [[b]] fin\r\notra\n" {
+		t.Errorf("%q", got)
+	}
+	if err := s.ReplaceLineIf(p, 2, "ver [[a]] fin\r", "x", time.Time{}); err != ErrNoteChanged {
+		t.Errorf("una línea que ya no es la que se vio no se pisa: %v", err)
+	}
+	if got, _ := os.ReadFile(p); string(got) != "# T\r\nver [[b]] fin\r\notra\n" {
+		t.Errorf("no debía cambiar: %q", got)
+	}
+}

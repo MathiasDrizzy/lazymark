@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+	"sync"
 
 	"github.com/MathiasDrizzy/lazymark/internal/storage"
 )
@@ -171,20 +172,29 @@ func key(s string) string {
 
 // Index permite resolver enlaces contra las notas de una carpeta.
 type Index struct {
-	base  string
-	notes []storage.Note
-	rel   []string // la ruta relativa de cada nota, normalizada con key
+	base   string
+	notes  []storage.Note
+	rel    []string         // la ruta relativa de cada nota, normalizada con key
+	byName map[string][]int // nombre de archivo y título, normalizados, → notas (para resolver un nombre sin recorrerlas todas)
+
+	graphOnce sync.Once
+	graph     map[string][]Backlink // nota de destino → líneas que enlazan a ella (se calcula la primera vez que se pide)
 }
 
 // NewIndex arma el índice de resolución de las notas (con su carpeta base).
 func NewIndex(base string, notes []storage.Note) *Index {
-	ix := &Index{base: base, notes: notes, rel: make([]string, len(notes))}
+	ix := &Index{base: base, notes: notes, rel: make([]string, len(notes)), byName: make(map[string][]int, 2*len(notes))}
 	for i, n := range notes {
 		r, err := filepath.Rel(base, n.Path)
 		if err != nil {
 			r = n.Path
 		}
 		ix.rel[i] = key(filepath.ToSlash(r))
+		name := ix.rel[i][strings.LastIndex(ix.rel[i], "/")+1:]
+		ix.byName[name] = append(ix.byName[name], i)
+		if t := strings.ToLower(n.Title); t != name {
+			ix.byName[t] = append(ix.byName[t], i)
+		}
 	}
 	return ix
 }
@@ -203,20 +213,14 @@ func (ix *Index) Resolve(l Link, from string) (*storage.Note, bool) {
 	}
 	want := key(l.Target)
 	var cands []int
-	for i := range ix.notes {
-		r := ix.rel[i]
-		switch {
-		case strings.Contains(want, "/"):
-			if r == want || strings.HasSuffix(r, "/"+want) {
-				cands = append(cands, i)
-			}
-		default:
-			base := r[strings.LastIndex(r, "/")+1:]
-			title := strings.ToLower(ix.notes[i].Title)
-			if base == want || title == want {
+	if strings.Contains(want, "/") { // una ruta: se compara con la de cada nota (es lo raro)
+		for i := range ix.notes {
+			if r := ix.rel[i]; r == want || strings.HasSuffix(r, "/"+want) {
 				cands = append(cands, i)
 			}
 		}
+	} else {
+		cands = append(cands, ix.byName[want]...)
 	}
 	if len(cands) == 0 {
 		return nil, false
@@ -243,30 +247,37 @@ type Backlink struct {
 	Text string // la línea, sin sangría
 }
 
-// Backlinks devuelve las líneas de las demás notas que enlazan a la nota to, ordenadas por nota y línea.
+// Backlinks devuelve las líneas de las demás notas que enlazan a la nota to, ordenadas por nota y línea. El grafo de enlaces se calcula una
+// sola vez por índice (una pasada por todas las notas), así pedirlo para cada nota que se mira no repite el trabajo.
 func (ix *Index) Backlinks(to string) []Backlink {
-	var out []Backlink
-	for i := range ix.notes {
-		n := &ix.notes[i]
-		if n.Path == to || !strings.Contains(n.Content, "[[") {
-			continue
-		}
-		lines := strings.Split(n.Content, "\n")
-		last := 0
-		for _, l := range Parse(n.Content) {
-			if dst, ok := ix.Resolve(l, n.Path); ok && dst.Path == to && l.Line != last { // una entrada por línea
-				last = l.Line
-				out = append(out, Backlink{Note: n, Line: l.Line, Text: strings.TrimSpace(strings.TrimSuffix(lines[l.Line-1], "\r"))})
+	ix.graphOnce.Do(func() {
+		ix.graph = map[string][]Backlink{}
+		for i := range ix.notes {
+			n := &ix.notes[i]
+			if !strings.Contains(n.Content, "[[") {
+				continue
+			}
+			lines := strings.Split(n.Content, "\n")
+			last := map[string]int{} // destino → última línea registrada: una entrada por línea
+			for _, l := range Parse(n.Content) {
+				dst, ok := ix.Resolve(l, n.Path)
+				if !ok || dst.Path == n.Path || last[dst.Path] == l.Line {
+					continue
+				}
+				last[dst.Path] = l.Line
+				ix.graph[dst.Path] = append(ix.graph[dst.Path], Backlink{Note: n, Line: l.Line, Text: strings.TrimSpace(strings.TrimSuffix(lines[l.Line-1], "\r"))})
 			}
 		}
-	}
-	sort.SliceStable(out, func(a, b int) bool {
-		if out[a].Note.Path != out[b].Note.Path {
-			return out[a].Note.Path < out[b].Note.Path
+		for _, bl := range ix.graph {
+			sort.SliceStable(bl, func(a, b int) bool {
+				if bl[a].Note.Path != bl[b].Note.Path {
+					return bl[a].Note.Path < bl[b].Note.Path
+				}
+				return bl[a].Line < bl[b].Line
+			})
 		}
-		return out[a].Line < out[b].Line
 	})
-	return out
+	return append([]Backlink(nil), ix.graph[to]...)
 }
 
 // ─── renombrar ─────────────────────────────────────────────────────
@@ -385,11 +396,19 @@ func atoi(s string) int {
 }
 
 // Plain devuelve el texto con cada wikilink cambiado por su texto visible (el alias, o el nombre): `ver [[nota|esa]]` → `ver esa`.
+// Funciona con varias líneas (las posiciones de los enlaces son de cada línea).
 func Plain(text string) string {
-	ls := Parse(text)
-	for i := len(ls) - 1; i >= 0; i-- {
-		l := ls[i]
-		text = text[:l.Start] + l.Display() + text[l.End:]
+	lines := strings.Split(text, "\n")
+	byLine := map[int][]Link{}
+	for _, l := range Parse(text) {
+		byLine[l.Line] = append(byLine[l.Line], l)
 	}
-	return text
+	for n, ls := range byLine {
+		line := lines[n-1]
+		for i := len(ls) - 1; i >= 0; i-- {
+			line = line[:ls[i].Start] + ls[i].Display() + line[ls[i].End:]
+		}
+		lines[n-1] = line
+	}
+	return strings.Join(lines, "\n")
 }

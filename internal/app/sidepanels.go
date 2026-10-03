@@ -11,6 +11,7 @@ import (
 	"charm.land/lipgloss/v2"
 	"github.com/MathiasDrizzy/lazymark/internal/i18n"
 	"github.com/MathiasDrizzy/lazymark/internal/storage"
+	"github.com/MathiasDrizzy/lazymark/internal/ui/textwidth"
 	"github.com/MathiasDrizzy/lazymark/internal/ui/theme"
 	"github.com/MathiasDrizzy/lazymark/internal/ui/views"
 )
@@ -157,7 +158,7 @@ func (p *tasksPanel) view(r Rect, active bool) string {
 		if dates := views.PanelDates(t.Dates, t.Done, storage.Today()); dates != "" {
 			text += " " + dates // las fechas con glifos monocromos, detrás del texto (el tachado ya se cerró)
 		}
-		note := views.ReplaceDateEmoji(strings.TrimSuffix(filepath.Base(t.NotePath), ".md"))
+		note := views.ReplaceDateEmoji(textwidth.NoControl(strings.TrimSuffix(filepath.Base(t.NotePath), ".md")))
 		lines = append(lines, listRow(" "+box+" "+text, note, r.W-2, i == p.list.cursor, active))
 	}
 	title := i18n.T("[2]─Tareas", "[2]─Tasks")

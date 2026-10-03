@@ -450,7 +450,7 @@ func (p *notesPanel) row(e storage.NoteEntry, w int, cursor, active bool) string
 	if p.selected[e.Path] {
 		mark = lipgloss.NewStyle().Foreground(theme.ColorGreen).Bold(true).Render(iconChecked)
 	}
-	left := mark + indent + iconStyle.Render(icon) + " " + lipgloss.NewStyle().Foreground(theme.ColorText).Render(e.Name)
+	left := mark + indent + iconStyle.Render(icon) + " " + lipgloss.NewStyle().Foreground(theme.ColorText).Render(textwidth.NoControl(e.Name)) // un nombre de archivo no es de fiar
 	return listRow(left, right, w, cursor, active)
 }
 

@@ -1,12 +1,16 @@
 package app
 
 import (
+	"fmt"
+	"image/color"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 
 	tea "charm.land/bubbletea/v2"
+	"github.com/MathiasDrizzy/lazymark/internal/ui/theme"
 	"github.com/charmbracelet/x/ansi"
 )
 
@@ -46,8 +50,14 @@ func TestWikilinksAreHighlighted(t *testing.T) {
 		t.Errorf("no deben verse marcadores ni corchetes de enlaces:\n%s", out)
 	}
 	raw := rawView(m)
-	if !strings.Contains(raw, "\x1b[4") && !strings.Contains(raw, ";4;") && !strings.Contains(raw, ";4m") {
-		t.Errorf("los enlaces van subrayados")
+	// el enlace existente va subrayado en azul y el roto en durazno (el color sale del tema)
+	blue := fgSeq(theme.ColorBlue)
+	peach := fgSeq(theme.ColorPeach)
+	if i := strings.Index(raw, "destino"); i < 0 || !strings.Contains(raw[max(0, i-80):i], blue) || !strings.Contains(raw[max(0, i-80):i], "4") {
+		t.Errorf("[[destino]] debe ir subrayado en azul")
+	}
+	if i := strings.Index(raw, "no-existe"); i < 0 || !strings.Contains(raw[max(0, i-80):i], peach) {
+		t.Errorf("[[no-existe]] debe ir en durazno")
 	}
 	if len(m.preview.links) != 4+1 { // 4 enlaces en el texto y 1 backlink (apunta.md)
 		t.Fatalf("enlaces de la vista previa: %d (%+v)", len(m.preview.links), m.preview.links)
@@ -176,6 +186,9 @@ func TestBacklinksSection(t *testing.T) {
 	if n := m.previewNote(); n == nil || n.Path != filepath.Join(dir, "apunta.md") {
 		t.Errorf("seguir el backlink lleva a apunta.md: %+v", m.previewNote())
 	}
+	if !strings.Contains(lastRow(m), "apunta.md:4") {
+		t.Errorf("va a la línea del enlace (4): %q", lastRow(m))
+	}
 }
 
 func fileText(t *testing.T, p string) string {
@@ -302,5 +315,39 @@ func TestCreatingFromAPathLinkStaysInsideNotes(t *testing.T) {
 	}
 	if _, err := os.Stat(filepath.Join(dir, "absoluta.md")); err != nil {
 		t.Errorf("[[/tmp/absoluta]] crea la nota junto al enlace: %v", err)
+	}
+}
+
+func fgSeq(c color.Color) string {
+	r, g, b, _ := c.RGBA()
+	return fmt.Sprintf("38;2;%d;%d;%d", r>>8, g>>8, b>>8)
+}
+
+// TestStaleLinkSelectionIsDropped (C.2): si la nota cambia y ya no tiene ese enlace, no queda un enlace seleccionado que robe el Enter
+// (que debe seguir editando); y el nombre de una nota con caracteres de control no llega a la terminal desde los backlinks.
+func TestStaleLinkSelectionIsDropped(t *testing.T) {
+	m, dir := linksModel(t)
+	press(m, "4", "n")
+	if m.preview.sel != 1 {
+		t.Fatalf("sel = %d", m.preview.sel)
+	}
+	os.WriteFile(filepath.Join(dir, "hub.md"), []byte("# Hub\n\nsin enlaces ya\n"), 0o644)
+	m.c.reload()
+	m.afterChange()
+	_ = plain(m)
+	if m.preview.sel != 0 {
+		t.Errorf("tras perder sus enlaces no debe quedar ninguno seleccionado: %d", m.preview.sel)
+	}
+	// backlinks con un nombre de nota con control
+	if runtime.GOOS != "windows" {
+		os.WriteFile(filepath.Join(dir, "mal\x1b]2;pwned\x07nombre.md"), []byte("ver [[destino]]\n"), 0o644)
+		m.c.reload()
+		m.afterChange()
+		m.notes.selectPath(filepath.Join(dir, "destino.md"))
+		m.afterChange()
+		if raw := rawView(m); strings.Contains(raw, "pwned\x07") || strings.Contains(raw, "\x1b]2;") {
+			i := strings.Index(raw, "pwned")
+			t.Errorf("el nombre de una nota con control no debe llegar a la pantalla (ni a los paneles ni a los backlinks): …%q…", raw[max(0, i-30):min(len(raw), i+30)])
+		}
 	}
 }

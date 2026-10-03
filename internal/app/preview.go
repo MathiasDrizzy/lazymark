@@ -36,6 +36,7 @@ type previewPanel struct {
 	lineOpen []int         // el enlace que sigue abierto al empezar cada fila (-1 ninguno)
 	lineNext []int         // el índice del primer enlace que se abre en cada fila
 	sel      int           // enlace seleccionado, desde 1 (0: ninguno)
+	linksSig string        // huella de la lista de enlaces: si cambia, se suelta la selección
 	hits     []linkHit     // zonas de clic de lo que se ve, relativas al borde del panel (se rehacen en cada view)
 }
 
@@ -68,6 +69,9 @@ func (p *previewPanel) lines(note *storage.Note, width int) []string {
 			raw = append(raw, extra...)
 			p.links = append(p.links, pls...)
 		}
+		if sig := linksSignature(p.links); sig != p.linksSig { // otros enlaces (la nota cambió, o su vecindario): no queda ninguno seleccionado
+			p.sel, p.linksSig = 0, sig
+		}
 		p.cacheRaw = raw
 		p.cachePath = note.Path
 		p.cacheLines = make([]string, len(raw))
@@ -94,6 +98,15 @@ func (p *previewPanel) lines(note *storage.Note, width int) []string {
 }
 
 func (p *previewPanel) noteOfCache() string { return p.cachePath }
+
+// linksSignature identifica una lista de enlaces por lo que tienen de visible y de destino.
+func linksSignature(ls []previewLink) string {
+	var b strings.Builder
+	for _, l := range ls {
+		fmt.Fprintf(&b, "%s|%s|%s|%d;", l.Display, l.Target, l.Path, l.Line)
+	}
+	return b.String()
+}
 
 // scroll mueve el desplazamiento vertical; lo acota el render.
 func (p *previewPanel) scroll(dy, dx int) {
@@ -131,7 +144,7 @@ func (p *previewPanel) view(note *storage.Note, r Rect, active bool) string {
 		pct = p.scrollY * 100 / maxY
 	}
 	indicator := fmt.Sprintf("%d%% %d/%d", pct, p.scrollY+1, len(all))
-	return theme.RenderPanel("[4]─"+note.Title, indicator, visible, r.W, r.H, active)
+	return theme.RenderPanel("[4]─"+textwidth.NoControl(note.Title), indicator, visible, r.W, r.H, active)
 }
 
 // renderMarkdown renderiza la nota con Glamour respetando las líneas en blanco
