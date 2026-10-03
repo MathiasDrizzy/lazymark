@@ -9,6 +9,15 @@ import (
 	"github.com/MathiasDrizzy/lazymark/internal/storage"
 )
 
+// relOf es la ruta relativa a base, con "/" (en Windows las rutas llevan "\\").
+func relOf(base, p string) string {
+	r, err := filepath.Rel(base, p)
+	if err != nil {
+		return p
+	}
+	return filepath.ToSlash(r)
+}
+
 func targets(ls []Link) string {
 	var out []string
 	for _, l := range ls {
@@ -115,7 +124,7 @@ func TestResolve(t *testing.T) {
 		{"profunda", "a/b/profunda.md"},
 	} {
 		n, ok := ix.Resolve(Link{Target: c.target}, from)
-		if !ok || filepath.ToSlash(strings.TrimPrefix(n.Path, base+"/")) != c.want {
+		if !ok || relOf(base, n.Path) != c.want {
 			t.Errorf("%q → %v %v, se esperaba %s", c.target, n, ok, c.want)
 		}
 	}
@@ -145,7 +154,7 @@ func TestBacklinks(t *testing.T) {
 	got := ix.Backlinks(filepath.Join(base, "destino.md"))
 	var lines []string
 	for _, b := range got {
-		lines = append(lines, fmt.Sprintf("%s:%d", filepath.ToSlash(strings.TrimPrefix(b.Note.Path, base+"/")), b.Line))
+		lines = append(lines, fmt.Sprintf("%s:%d", relOf(base, b.Note.Path), b.Line))
 	}
 	// la propia nota no cuenta; el código tampoco; "destino" desde sub/b.md resuelve a sub/destino.md (la de su carpeta)
 	if strings.Join(lines, ",") != "a.md:2,a.md:2" {
@@ -169,7 +178,7 @@ func TestRenameEdits(t *testing.T) {
 	edits := ix.RenameEdits(filepath.Join(base, "vieja.md"), "nueva")
 	got := map[string]string{}
 	for _, e := range edits {
-		got[fmt.Sprintf("%s:%d", filepath.ToSlash(strings.TrimPrefix(e.Path, base+"/")), e.Line)] = e.After
+		got[fmt.Sprintf("%s:%d", relOf(base, e.Path), e.Line)] = e.After
 	}
 	want := map[string]string{
 		"vieja.md:1": "se menciona [[nueva]] aquí",
