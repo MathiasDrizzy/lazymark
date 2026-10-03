@@ -70,10 +70,18 @@ func emojiCount(line string) int {
 	return n
 }
 
-// TestReadmeNoDecorativeEmoji (C2): ningún emoji decorativo (solo ✓ y ✗ en tablas).
+// TestReadmeNoDecorativeEmoji (C2): ningún emoji decorativo (solo ✓ y ✗ en tablas; los bloques de código quedan fuera).
 func TestReadmeNoDecorativeEmoji(t *testing.T) {
 	for _, f := range []string{"README.md", "docs/keybindings.md", "docs/configuration.md"} {
+		inFence := false
 		for i, line := range strings.Split(readRepo(t, f), "\n") {
+			if strings.HasPrefix(strings.TrimSpace(line), "```") {
+				inFence = !inFence
+				continue
+			}
+			if inFence { // un ejemplo de sintaxis (las fechas de las tareas llevan emoji) no es decoración
+				continue
+			}
 			if n := emojiCount(line); n > 0 {
 				t.Errorf("%s:%d tiene %d emoji decorativo(s): %q", f, i+1, n, line)
 			}

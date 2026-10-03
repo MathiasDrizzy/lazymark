@@ -69,7 +69,7 @@ func (m *AppModel) restMessage(kind string) []string {
 		q := key.Render(m.c.keys.Key(actCheatsheet, ctxGlobal))
 		return []string{
 			lipgloss.NewStyle().Foreground(theme.ColorText).Render(i18n.T("Tu carpeta de notas está vacía", "Your notes folder is empty")),
-			dim.Render(i18n.T("Pulsa ", "Press ")) + c + dim.Render(i18n.T(" para crear una nota y ", " to create a note and ")) + q + dim.Render(i18n.T(" para ver los atajos", " for the keys")),
+			fillKeys(i18n.T("Pulsa %s para crear una nota y %s para ver los atajos", "Press %s to create a note and %s for the keys"), dim, c, q),
 		}
 	case restFolder:
 		return []string{dim.Render(i18n.T("Carpeta vacía", "Empty folder"))}
@@ -99,4 +99,20 @@ func (m *AppModel) renderRest(kind string, title, footer string, r Rect, active 
 		}
 	}
 	return theme.RenderPanel(title, footer, lines, r.W, r.H, active)
+}
+
+// fillKeys arma una frase con teclas resaltadas: cada %s del texto (un solo texto traducible, así el orden de las palabras
+// lo decide cada idioma) se reemplaza por una de keys, y el resto va con el estilo dim.
+func fillKeys(text string, dim lipgloss.Style, keys ...string) string {
+	parts := strings.Split(text, "%s")
+	var b strings.Builder
+	for i, part := range parts {
+		if part != "" {
+			b.WriteString(dim.Render(part))
+		}
+		if i < len(parts)-1 && i < len(keys) {
+			b.WriteString(keys[i])
+		}
+	}
+	return b.String()
 }

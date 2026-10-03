@@ -53,9 +53,7 @@ func New(cfg *config.Config) (*AppModel, error) {
 	if _, err := store.ListNotes(); err != nil {
 		return nil, err
 	}
-	if cfg.Language != "" && cfg.Language != "auto" {
-		i18n.SetLanguage(cfg.Language)
-	}
+	i18n.SetLanguage(cfg.Language) // "auto" o vacío: el idioma del sistema
 	if cfg.Theme != "" {
 		theme.ApplyThemeByName(cfg.Theme)
 	}
