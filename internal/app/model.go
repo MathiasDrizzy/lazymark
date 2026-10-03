@@ -55,6 +55,7 @@ func New(cfg *config.Config) (*AppModel, error) {
 		return nil, err
 	}
 	i18n.SetLanguage(cfg.Language) // "auto" o vacío: el idioma del sistema
+	views.DateIcons = cfg.NerdFont
 	if cfg.Theme != "" {
 		theme.ApplyThemeByName(cfg.Theme)
 	}

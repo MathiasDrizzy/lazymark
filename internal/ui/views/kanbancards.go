@@ -79,35 +79,31 @@ func splitWidth(s string, width int) (head, rest string) {
 	return s, ""
 }
 
-// cardDates arma la línea de fechas de una tarjeta ("🛫 2026-05-01 📅 2026-05-10"), con el vencimiento en el color de
+// cardDates arma la línea de fechas de una tarjeta (glifo y fecha: inicio, vencimiento, completada), con el vencimiento en el color de
 // error del tema si está vencida; "" si no tiene fechas. width es el ancho disponible: si no caben todas, se quita
 // primero la de completada y después la de inicio.
-func cardDates(d storage.Dates, done bool, today string, width int, muted lipgloss.Style) string {
+func cardDates(d storage.Dates, done bool, today string, width int) string {
 	overdue := storage.Overdue(done, d.Due, today)
-	part := func(emoji, date string, over bool) string {
+	part := func(f storage.DateField, date string, over bool) string {
 		if date == "" {
 			return ""
 		}
-		style := muted
-		if over {
-			style = lipgloss.NewStyle().Foreground(theme.ColorRed).Bold(true)
-		}
-		return style.Render(emoji + " " + date)
+		return DatePart(f, date, over)
 	}
 	build := func(start, due, completed bool) string {
 		var parts []string
 		if start {
-			if p := part(storage.DateStart.Emoji(), d.Start, false); p != "" {
+			if p := part(storage.DateStart, d.Start, false); p != "" {
 				parts = append(parts, p)
 			}
 		}
 		if due {
-			if p := part(storage.DateDue.Emoji(), d.Due, overdue); p != "" {
+			if p := part(storage.DateDue, d.Due, overdue); p != "" {
 				parts = append(parts, p)
 			}
 		}
 		if completed {
-			if p := part(storage.DateDone.Emoji(), d.Done, false); p != "" {
+			if p := part(storage.DateDone, d.Done, false); p != "" {
 				parts = append(parts, p)
 			}
 		}
@@ -126,7 +122,7 @@ func cardTextWidth(w int) int { return w - 4 - cardIndent }
 
 // cardHeight es el alto de una tarjeta de ancho w: 2 de borde, 1 o 2 líneas de texto, la nota de origen y, si tiene fechas, su línea.
 func cardHeight(c KanbanCard, w int) int {
-	h := 2 + len(wrapLines(c.CleanText, cardTextWidth(w), 2)) + 1
+	h := 2 + len(wrapLines(ReplaceDateEmoji(c.CleanText), cardTextWidth(w), 2)) + 1
 	if c.Task.Dates != (storage.Dates{}) {
 		h++
 	}
@@ -181,7 +177,7 @@ func renderCard(c KanbanCard, w int, doneCol bool, midCol bool, selected, active
 		return border.Render("│") + " " + textwidth.Pad(content, inner) + " " + border.Render("│")
 	}
 	rows := []string{border.Render("╭" + strings.Repeat("─", w-2) + "╮")}
-	for i, l := range wrapLines(c.CleanText, cardTextWidth(w), 2) {
+	for i, l := range wrapLines(ReplaceDateEmoji(c.CleanText), cardTextWidth(w), 2) {
 		prefix := "    "
 		if i == 0 {
 			prefix = border.Render(cursor) + lipgloss.NewStyle().Foreground(markColor).Render(mark) + " "
@@ -190,7 +186,7 @@ func renderCard(c KanbanCard, w int, doneCol bool, midCol bool, selected, active
 	}
 	rows = append(rows, row(muted.Render(textwidth.Truncate("· "+c.NoteTitle, inner, "…"))))
 	if c.Task.Dates != (storage.Dates{}) {
-		rows = append(rows, row(cardDates(c.Task.Dates, c.Task.Done, today, inner, muted)))
+		rows = append(rows, row(cardDates(c.Task.Dates, c.Task.Done, today, inner)))
 	}
 	rows = append(rows, border.Render("╰"+strings.Repeat("─", w-2)+"╯"))
 	return rows

@@ -118,6 +118,8 @@ type Config struct {
 	// PopupBackground: "theme" (por defecto, como la pantalla) pinta el color base del tema; "terminal" deja el
 	// fondo de la terminal en los popups, respetando su transparencia, aunque la pantalla esté pintada con el tema.
 	PopupBackground string `json:"popup_background"`
+	// NerdFont: si las fechas de las tareas se dibujan con glifos de Nerd Font (por defecto) o con símbolos de texto.
+	NerdFont bool `json:"nerd_font"`
 	// KanbanCards: "cards" o "compact". Ver KanbanCardsRects.
 	KanbanCards string `json:"kanban_cards"`
 	// KanbanColumns son las columnas del tablero (por defecto todo, doing y done). La columna de una tarea
@@ -184,6 +186,7 @@ func DefaultConfig(notesDir string) *Config {
 		KanbanCards:        KanbanCardsRects,
 		ScreenBackground:   ScreenBackgroundTheme,
 		Mascot:             true,
+		NerdFont:           true,
 		KanbanColumns:      DefaultKanbanColumns(),
 	}
 }

@@ -148,11 +148,14 @@ func (p *tasksPanel) view(r Rect, active bool) string {
 	for i := from; i < to; i++ {
 		t := p.c.tasks[i]
 		box := lipgloss.NewStyle().Foreground(theme.ColorYellow).Render("☐")
-		text := lipgloss.NewStyle().Foreground(theme.ColorText).Render(storage.CleanTaskText(t.Text))
+		text := lipgloss.NewStyle().Foreground(theme.ColorText).Render(views.ReplaceDateEmoji(storage.CleanTaskText(t.Text)))
 		if t.Done {
 			box = lipgloss.NewStyle().Foreground(theme.ColorGreen).Render("☑")
 			// El tachado se abre y se cierra en la misma línea (H2-5).
-			text = lipgloss.NewStyle().Foreground(theme.ColorOverlay0).Strikethrough(true).Render(storage.CleanTaskText(t.Text))
+			text = lipgloss.NewStyle().Foreground(theme.ColorOverlay0).Strikethrough(true).Render(views.ReplaceDateEmoji(storage.CleanTaskText(t.Text)))
+		}
+		if dates := views.PanelDates(t.Dates, t.Done, storage.Today()); dates != "" {
+			text += " " + dates // las fechas con glifos monocromos, detrás del texto (el tachado ya se cerró)
 		}
 		note := strings.TrimSuffix(filepath.Base(t.NotePath), ".md")
 		lines = append(lines, listRow(" "+box+" "+text, note, r.W-2, i == p.list.cursor, active))

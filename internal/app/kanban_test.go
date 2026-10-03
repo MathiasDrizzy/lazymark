@@ -418,13 +418,13 @@ func TestKanbanCardsWithDates(t *testing.T) {
 	m.c.reload()
 	press(m, "W")
 	out := plain(m)
-	for _, want := range []string{"AAA_PRIMERA", "🛫 2019-12-01 📅 2020-01-02", "📅 2099-01-01", "╭──"} {
+	for _, want := range []string{"AAA_PRIMERA", "\uf135 2019-12-01 \uf073 2020-01-02", "\uf073 2099-01-01", "╭──"} {
 		if !strings.Contains(out, want) {
 			t.Errorf("falta %q:\n%s", want, out)
 		}
 	}
 	// clic en la fila de las fechas de BBB (no en su texto): selecciona esa tarjeta
-	x, y, ok := cellOf(m, "📅 2099-01-01")
+	x, y, ok := cellOf(m, "\uf073 2099-01-01")
 	if !ok {
 		t.Fatalf("no se ve la fecha de BBB:\n%s", out)
 	}
@@ -441,7 +441,7 @@ func TestKanbanCardsWithDates(t *testing.T) {
 	if len(d) != 1 || !strings.Contains(after[d[0]-1], "BBB_SEGUNDA 📅 2099-01-01 ✅ "+storage.Today()) || !strings.Contains(after[d[0]-1], "- [x]") {
 		t.Fatalf("debía cambiar solo la línea de BBB con [x] y ✅ hoy: %v\n%v", d, after)
 	}
-	if !strings.Contains(plain(m), "📅 2099-01-01 ✅ "+storage.Today()) {
+	if !strings.Contains(plain(m), "\uf073 2099-01-01 \uf00c "+storage.Today()) {
 		t.Errorf("la tarjeta debe mostrar la fecha de completada:\n%s", plain(m))
 	}
 	// Espacio otra vez la devuelve a la primera columna y quita el ✅
@@ -479,5 +479,55 @@ func TestKanbanCardsSetting(t *testing.T) {
 	press(m, "left")
 	if m.c.cfg.KanbanCards != config.KanbanCardsRects {
 		t.Errorf("tras ← debía volver a cards")
+	}
+}
+
+// TestNoColorEmojiOnScreen (C.8): con una nota con fechas, la salida de View no lleva ningún emoji a color (U+1F000–U+1FAFF,
+// U+2705, U+FE0F) en el Kanban (tarjetas y compacto), en el panel Tareas ni en la vista previa; el archivo conserva 🛫 📅 ✅.
+func TestNoColorEmojiOnScreen(t *testing.T) {
+	m := newTestModel(t, 140, 40)
+	dir := m.c.store.BaseDir
+	for _, e := range m.c.notes { // solo la nota de prueba, sin los emojis propios de las fixtures
+		os.Remove(e.Path)
+	}
+	p := filepath.Join(dir, "plazos.md")
+	body := "# Plazos\n\n- [ ] vencida 📅 2020-01-02 🛫 2019-12-01\n- [x] hecha ✅ 2026-09-30 📅 2026-09-29\n- [ ] repetida 📅 2026-13-45 y 📅 2030-01-01\n"
+	os.WriteFile(p, []byte(body), 0o644)
+	m.c.reload()
+	m.afterChange()
+	check := func(what string) {
+		t.Helper()
+		out := plain(m)
+		for _, r := range out {
+			if r == 0x1F6EB || r == 0x1F4C5 || r == 0x2705 || r == 0xFE0F || (r >= 0x1F000 && r <= 0x1FAFF) {
+				t.Fatalf("%s: aparece el emoji %U en pantalla:\n%s", what, r, out)
+			}
+		}
+	}
+	m.notes.selectPath(p)
+	check("notas con vista previa")
+	if out := plain(m); !strings.Contains(out, " 2020-01-02") && !strings.Contains(out, "") {
+		t.Errorf("la vista previa debe mostrar los glifos de fecha:\n%s", out)
+	}
+	press(m, "2") // panel Tareas
+	check("panel Tareas")
+	if out := plain(m); !strings.Contains(out, " 2020-01-02") {
+		t.Errorf("el panel Tareas debe mostrar el vencimiento con su glifo:\n%s", out)
+	}
+	press(m, "esc")
+	press(m, "W")
+	check("Kanban con tarjetas")
+	m.c.cfg.KanbanCards = config.KanbanCardsCompact
+	check("Kanban compacto")
+	if b, _ := os.ReadFile(p); string(b) != body {
+		t.Errorf("mirar no debe cambiar la nota:\n%s", b)
+	}
+	// sin Nerd Font: símbolos de texto, tampoco emojis
+	views.DateIcons = false
+	defer func() { views.DateIcons = true }()
+	m.c.cfg.KanbanCards = config.KanbanCardsRects
+	check("Kanban sin Nerd Font")
+	if out := plain(m); !strings.Contains(out, "◷ 2020-01-02") {
+		t.Errorf("sin Nerd Font el vencimiento lleva ◷:\n%s", out)
 	}
 }

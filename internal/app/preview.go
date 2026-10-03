@@ -33,10 +33,11 @@ func (p *previewPanel) reset() { p.scrollY, p.scrollX = 0, 0 }
 
 // lines devuelve el markdown de note renderizado a width columnas.
 func (p *previewPanel) lines(note *storage.Note, width int) []string {
-	key := fmt.Sprintf("%s|%d|%d|%s|%d", note.Path, note.ModTime.UnixNano(), width, theme.CurrentThemeName, p.imgs.Generation())
+	key := fmt.Sprintf("%s|%d|%d|%s|%d|%v", note.Path, note.ModTime.UnixNano(), width, theme.CurrentThemeName, p.imgs.Generation(), views.DateIcons)
 	if key != p.cacheKey {
 		p.cacheKey = key
-		p.cacheLines = strings.Split(renderMarkdown(note, width, p.imgs), "\n")
+		// los emojis de fecha (🛫 📅 ✅) del archivo se dibujan como glifos monocromos, después de que Glamour ajustó las líneas
+		p.cacheLines = strings.Split(views.ReplaceDateEmoji(renderMarkdown(note, width, p.imgs)), "\n")
 	}
 	return p.cacheLines
 }

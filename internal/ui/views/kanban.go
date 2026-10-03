@@ -172,18 +172,18 @@ func RenderKanban(board KanbanBoard, activeCol int, selectedRows []int, width, h
 					if dragged {
 						cursor = "⇢ "
 					}
-					raw := textwidth.Truncate(fmt.Sprintf("%s%s %s (%s)", cursor, mark, card.CleanText, card.NoteTitle), contentWidth, "")
+					raw := textwidth.Truncate(fmt.Sprintf("%s%s %s (%s)", cursor, mark, ReplaceDateEmoji(card.CleanText), card.NoteTitle), contentWidth, "")
 					if lw := textwidth.Width(raw); lw < contentWidth {
 						raw += strings.Repeat(" ", contentWidth-lw)
 					}
 					rowText = style.Render(raw)
 				} else {
-					text := theme.TaskPending.Render(card.CleanText)
+					text := theme.TaskPending.Render(ReplaceDateEmoji(card.CleanText))
 					switch {
 					case c == doneCol:
-						text = theme.TaskDone.Render(card.CleanText)
+						text = theme.TaskDone.Render(ReplaceDateEmoji(card.CleanText))
 					case c != 0:
-						text = theme.TaskPending.Foreground(theme.ColorPeach).Render(card.CleanText)
+						text = theme.TaskPending.Foreground(theme.ColorPeach).Render(ReplaceDateEmoji(card.CleanText))
 					}
 					origin := theme.NormalItem.Foreground(theme.ColorOverlay0).Render(fmt.Sprintf("(%s)", card.NoteTitle))
 					rowText = textwidth.Truncate(fmt.Sprintf("  %s %s %s", theme.NormalItem.Foreground(markColor).Render(mark), text, origin), contentWidth, "")

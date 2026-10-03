@@ -54,7 +54,7 @@ Each task is a card with a rounded border: its text (up to 2 lines), its note an
 - [ ] write the report 🛫 2026-05-01 📅 2026-05-10
 ```
 
-Overdue ones are shown in the theme's error color. `lazymark task due <id> 2026-05-10` sets a date without opening the app, and Settings has "Cards: rectangles | compact" for the one-row view.
+On screen the dates are drawn with the same monochrome Nerd Font glyphs as the folder and note icons, in the theme's colors (overdue in the error color), never as color emoji; the file keeps the emoji. `lazymark task due <id> 2026-05-10` sets a date without opening the app, and Settings has "Cards: rectangles | compact" for the one-row view.
 
 The same tasks as columns: To Do, In Progress and Done by default. Move a card with `H` and `L` or `Shift+←` and `Shift+→`, or drag it with the mouse to another column: the card and the target column are highlighted while you drag, `Esc` cancels. The change is written back to the note, on that line only, and never over a note that changed outside lazymark (it reloads and tells you). `Kanban (W)` opens the board, `Notes (W)` and `← Notes (Esc)` go back, and the bottom bar lists what the selected card can do.
 

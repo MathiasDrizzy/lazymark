@@ -70,7 +70,7 @@ func TestRenderCards(t *testing.T) {
 			t.Errorf("la fila %d mide %d columnas", i, w)
 		}
 	}
-	for _, want := range []string{"╭──", "╰──", "│ ▸ ☐ Vencida", "· Plan", "🛫 2019-12-01 📅 2020-01-02", "📅 2099-01-01", "☐ Sin fechas", "📅 2020-01-02 ✅ 2020-01-01"} {
+	for _, want := range []string{"╭──", "╰──", "│ ▸ ☐ Vencida", "· Plan", "\uf135 2019-12-01 \uf073 2020-01-02", "\uf073 2099-01-01", "☐ Sin fechas", "\uf073 2020-01-02 \uf00c 2020-01-01"} {
 		if !strings.Contains(plain, want) {
 			t.Errorf("falta %q:\n%s", want, plain)
 		}
@@ -179,6 +179,79 @@ func TestCardHeightMatchesRender(t *testing.T) {
 			c := KanbanCard{CleanText: strings.TrimSpace(strings.Repeat("palabra ", n/8+1)[:n]), NoteTitle: "N"}
 			if got, want := len(renderCard(c, w, false, false, false, true, false, "2026-01-01")), cardHeight(c, w); got != want {
 				t.Fatalf("ancho %d, texto de %d caracteres (%q): se dibujan %d filas y cardHeight dice %d", w, n, c.CleanText, got, want)
+			}
+		}
+	}
+}
+
+// isColorEmoji dice si r es un emoji a color de los que la interfaz no dibuja: el bloque de emojis (U+1F000–U+1FAFF), el
+// check verde ✅ (U+2705) y el selector de variación de emoji (U+FE0F).
+func isColorEmoji(r rune) bool {
+	return (r >= 0x1F000 && r <= 0x1FAFF) || r == 0x2705 || r == 0xFE0F
+}
+
+// TestDatesAreMonochromeGlyphs (C.8): en pantalla las fechas se dibujan con glifos monocromos de Nerd Font, con los colores
+// del tema (vencida: error; completada: éxito; el resto: atenuado), y nunca como 🛫 📅 ✅; con nerd_font = false, símbolos de texto.
+func TestDatesAreMonochromeGlyphs(t *testing.T) {
+	defer func() { DateIcons = true }()
+	for _, icons := range []bool{true, false} {
+		DateIcons = icons
+		for _, cards := range []bool{true, false} {
+			out := RenderKanban(dateBoard(), 0, []int{0, 0, 0}, 120, 35, nil, 0, KanbanDrag{}, KanbanOptions{Cards: cards, Today: "2026-10-02"})
+			for _, r := range ansi.Strip(out) {
+				if isColorEmoji(r) {
+					t.Fatalf("icons=%v cards=%v: aparece el emoji %U en pantalla:\n%s", icons, cards, r, ansi.Strip(out))
+				}
+			}
+		}
+		out := RenderKanban(dateBoard(), 0, []int{0, 0, 0}, 120, 35, nil, 0, KanbanDrag{}, KanbanOptions{Cards: true, Today: "2026-10-02"})
+		want := [3]string{"", "", ""}
+		if !icons {
+			want = [3]string{"▸", "◷", "✓"}
+		}
+		plain := ansi.Strip(out)
+		for _, w := range want {
+			if !strings.Contains(plain, w+" 20") {
+				t.Errorf("icons=%v: falta el glifo %q seguido de su fecha:\n%s", icons, w, plain)
+			}
+		}
+	}
+	DateIcons = true
+	out := RenderKanban(dateBoard(), 0, []int{0, 0, 0}, 120, 35, nil, 0, KanbanDrag{}, KanbanOptions{Cards: true, Today: "2026-10-02"})
+	byGlyph := map[string][]segment{}
+	for _, seg := range sgrSegments(out) {
+		for _, g := range []string{"", "", ""} {
+			if strings.Contains(seg.text, g) {
+				byGlyph[g] = append(byGlyph[g], seg)
+			}
+		}
+	}
+	// el calendario de la vencida va en rojo; el de la futura, atenuado; el check, en verde
+	var redDue, mutedDue, greenDone int
+	for _, seg := range byGlyph[""] {
+		switch {
+		case seg.hasFg(theme.ColorRed):
+			redDue++
+		case seg.hasFg(theme.ColorOverlay0):
+			mutedDue++
+		}
+	}
+	for _, seg := range byGlyph[""] {
+		if seg.hasFg(theme.ColorGreen) {
+			greenDone++
+		}
+	}
+	if redDue != 1 || mutedDue != 2 || greenDone != 1 {
+		t.Errorf("colores de las fechas: vencida roja=%d (1), atenuadas=%d (2), completada verde=%d (1)", redDue, mutedDue, greenDone)
+	}
+	// un emoji de fecha que sobrevive en el texto de la tarea (repetido o inválido) también se dibuja como glifo
+	b := dateBoard()
+	b.Cols[0][2].CleanText = "texto con 📅 2026-13-45 inválida y ✅️ suelta"
+	for _, cards := range []bool{true, false} {
+		plain := ansi.Strip(RenderKanban(b, 0, []int{2, 0, 0}, 120, 35, nil, 0, KanbanDrag{}, KanbanOptions{Cards: cards, Today: "2026-10-02"}))
+		for _, r := range plain {
+			if isColorEmoji(r) {
+				t.Errorf("cards=%v: el emoji %U sigue en pantalla", cards, r)
 			}
 		}
 	}
