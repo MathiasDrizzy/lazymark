@@ -112,6 +112,10 @@ type TaskDTO struct {
 	Text      string `json:"text"`   // el texto sin las etiquetas del tablero
 	Column    string `json:"column"` // el id de su columna
 	Done      bool   `json:"done"`
+	Start     string `json:"start"`     // 🛫 AAAA-MM-DD, o ""
+	Due       string `json:"due"`       // 📅 AAAA-MM-DD, o ""
+	Completed string `json:"completed"` // ✅ AAAA-MM-DD, o ""
+	Overdue   bool   `json:"overdue"`   // tiene vencimiento anterior a hoy y no está hecha
 	Line      int    `json:"line"`
 	Note      string `json:"note"` // la ruta de la nota, relativa a la carpeta de notas
 	NoteTitle string `json:"note_title"`
@@ -121,6 +125,7 @@ type TaskDTO struct {
 func (s *Service) taskDTO(n storage.Note, id string, t storage.Task) TaskDTO {
 	return TaskDTO{
 		ID: id, Text: storage.CleanTaskText(t.Text), Column: s.Cols[s.Cols.Of(t)], Done: t.Done,
+		Start: t.Dates.Start, Due: t.Dates.Due, Completed: t.Dates.Done, Overdue: storage.Overdue(t.Done, t.Dates.Due, storage.Today()),
 		Line: t.Line, Note: strings.SplitN(id, "#", 2)[0], NoteTitle: n.Title, Path: n.Path,
 	}
 }
@@ -257,8 +262,13 @@ func (s *Service) ColumnIndex(name string) (int, error) {
 		return i, nil
 	}
 	for i, c := range s.Config { // también por título, en cualquier idioma
-		if strings.EqualFold(c.DisplayTitle("es"), name) || strings.EqualFold(c.DisplayTitle("en"), name) || strings.EqualFold(s.Titles[i], name) {
+		if strings.EqualFold(s.Titles[i], name) {
 			return i, nil
+		}
+		for _, l := range i18n.Languages { // el título en cualquier idioma
+			if strings.EqualFold(c.DisplayTitle(string(l)), name) {
+				return i, nil
+			}
 		}
 	}
 	return 0, usage("la columna %q no existe (hay: %s)", name, strings.Join(s.Cols, ", "))
@@ -295,6 +305,40 @@ func (s *Service) move(id string, target func(storage.Task) int) (TaskDTO, error
 	}
 	n2, t2, err := s.Store.FindTask(id)
 	if err != nil { // el id sigue siendo el mismo tras mover: si no aparece, algo la cambió
+		return TaskDTO{}, err
+	}
+	return s.taskDTO(n2, id, t2), nil
+}
+
+// SetDate pone la fecha de inicio (field "start") o de vencimiento ("due") de la tarea con ese id, o la quita (date ""
+// o "none"). La fecha debe ser AAAA-MM-DD y existir en el calendario; si no, es un error de uso y no se toca nada. La
+// fecha de completada no se pone a mano: la agrega y la quita el movimiento a la columna de hecho. Escribe solo la línea
+// de la tarea y no pisa una nota que cambió en disco (código 4).
+func (s *Service) SetDate(id, field, date string) (TaskDTO, error) {
+	var f storage.DateField
+	switch strings.ToLower(field) {
+	case "start":
+		f = storage.DateStart
+	case "due":
+		f = storage.DateDue
+	default:
+		return TaskDTO{}, usage("el campo de fecha %q no existe (start o due)", field)
+	}
+	if strings.EqualFold(date, "none") {
+		date = ""
+	}
+	if date != "" && !storage.ValidDate(date) {
+		return TaskDTO{}, usage("%q no es una fecha válida: se espera AAAA-MM-DD (o none para quitarla)", date)
+	}
+	n, t, err := s.Store.FindTask(id)
+	if err != nil {
+		return TaskDTO{}, err
+	}
+	if err := s.Store.SetTaskDate(n.Path, t.Line, f, date, n.ModTime); err != nil {
+		return TaskDTO{}, err
+	}
+	n2, t2, err := s.Store.FindTask(id) // el id no depende de las fechas
+	if err != nil {
 		return TaskDTO{}, err
 	}
 	return s.taskDTO(n2, id, t2), nil

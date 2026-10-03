@@ -89,7 +89,7 @@ func TestMCPSession(t *testing.T) {
 		t.Errorf("initialize: %s", init)
 	}
 
-	// tools/list: las 7 herramientas, cada una con descripción y esquema de entrada
+	// tools/list: las 8 herramientas, cada una con descripción y esquema de entrada
 	lst, _ := json.Marshal(r[2].Result)
 	var tl struct {
 		Tools []struct {
@@ -106,7 +106,7 @@ func TestMCPSession(t *testing.T) {
 			t.Errorf("%s: falta la descripción o el esquema", tool.Name)
 		}
 	}
-	if got := strings.Join(names, ","); got != "list_notes,read_note,create_note,list_tasks,move_task,toggle_task,get_kanban" {
+	if got := strings.Join(names, ","); got != "list_notes,read_note,create_note,list_tasks,move_task,set_task_date,toggle_task,get_kanban" {
 		t.Errorf("herramientas: %s", got)
 	}
 
@@ -150,6 +150,11 @@ func TestMCPSession(t *testing.T) {
 		call(8, "create_note", map[string]interface{}{"title": "X", "folder": ".."}),
 		call(9, "move_task", map[string]interface{}{"id": todoID}),
 		call(10, "borrar_todo", nil),
+		call(11, "set_task_date", map[string]interface{}{"id": todoID, "field": "due", "date": "2026-01-02"}),
+		call(12, "set_task_date", map[string]interface{}{"id": todoID, "field": "start", "date": "2026-02-30"}),
+		call(13, "set_task_date", map[string]interface{}{"id": todoID, "field": "done", "date": "2026-01-02"}),
+		call(14, "set_task_date", map[string]interface{}{"id": todoID, "field": "due", "date": "none"}),
+		call(15, "set_task_date", map[string]interface{}{"id": todoID, "field": "due"}),
 	)
 	if txt, isErr := toolText(t, r[1]); isErr || !strings.Contains(txt, `"column": "doing"`) {
 		t.Errorf("move_task: %v %s", isErr, txt)
@@ -171,10 +176,24 @@ func TestMCPSession(t *testing.T) {
 	if _, isErr := toolText(t, r[10]); !isErr {
 		t.Error("una herramienta inexistente debía ser un error")
 	}
+	if txt, isErr := toolText(t, r[11]); isErr || !strings.Contains(txt, `"due": "2026-01-02"`) || !strings.Contains(txt, `"overdue": false`) /* está hecha: no vence */ || !strings.Contains(txt, `"completed": "`) {
+		t.Errorf("set_task_date due: %v %s", isErr, txt)
+	}
+	for id, want := range map[float64]string{12: "código 2", 13: "código 2"} {
+		if txt, isErr := toolText(t, r[id]); !isErr || !strings.Contains(txt, want) {
+			t.Errorf("respuesta %v debía ser un error con %q: %v %s", id, want, isErr, txt)
+		}
+	}
+	if txt, isErr := toolText(t, r[14]); isErr || !strings.Contains(txt, `"due": ""`) {
+		t.Errorf("quitar el vencimiento: %v %s", isErr, txt)
+	}
+	if _, isErr := toolText(t, r[15]); !isErr {
+		t.Error("set_task_date sin date debía ser un error")
+	}
 	if b, _ := os.ReadFile(secreto); string(b) != "clave\n" {
 		t.Errorf("se tocó un archivo de fuera: %q", b)
 	}
-	if b, _ := os.ReadFile(proyecto); !strings.Contains(string(b), "- [x] Tarea Todo\n") || !strings.Contains(string(b), "- [x] Tarea Doing\n") {
+	if b, _ := os.ReadFile(proyecto); !strings.Contains(string(b), "- [x] Tarea Todo ✅ ") || !strings.Contains(string(b), "- [x] Tarea Doing ✅ ") {
 		t.Errorf("proyecto.md tras las llamadas:\n%s", b)
 	}
 }

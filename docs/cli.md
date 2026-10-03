@@ -11,6 +11,8 @@ lazymark note new  <title> [--folder <subfolder>] [--empty] [--json]
 lazymark task list [--json] [--pending] [--column <id>] [--note <path>]
 lazymark task toggle <id> [--json]
 lazymark task move   <id> <column> [--json]
+lazymark task due    <id> <YYYY-MM-DD|none> [--json]
+lazymark task start  <id> <YYYY-MM-DD|none> [--json]
 ```
 
 `note get <path>` and `task toggle --path <note> --line <n>` still work.
@@ -32,6 +34,8 @@ The text output (without `--json`) drops control characters from the notes (esca
 ## Task ids
 
 A task id is `<note path relative to the notes folder>#<8 hex>`, and `.2`, `.3`… for the second and later tasks with the same text in the same note: `projects/plan.md#16de6420`. The hash is of the task text without its Kanban tag, lowercased, so the id survives editing or inserting other lines, moving the task to another column and ticking it. It changes if you edit the task's own text.
+
+`due` and `start` set (or, with `none`, remove) the due and start dates of a task; an invalid date (not `YYYY-MM-DD`, or one that does not exist like `2026-02-30`) exits with 2 and touches nothing. The completion date is not set by hand: moving a task to the done column (or ticking it) adds `✅ today` unless it already had one, and moving it out removes it. In the text output the dates follow the column: `… (todo)  🛫 2026-05-01 📅 2026-05-10 (overdue)`.
 
 `<column>` is a column id (`todo`, `doing`, `done`, or your own) or its visible title.
 
@@ -60,6 +64,10 @@ The fields below are stable: they are only ever added to. See `internal/cli/test
 | `text` | string | without the Kanban tag |
 | `column` | string | column id |
 | `done` | bool | |
+| `start` | string | start date `YYYY-MM-DD`, or `""` |
+| `due` | string | due date, or `""` |
+| `completed` | string | completion date, or `""` |
+| `overdue` | bool | has a due date before today and is not done |
 | `line` | number | 1-based |
 | `note` | string | relative path |
 | `note_title` | string | |
@@ -78,6 +86,7 @@ Notes are sorted by path, tasks by their order in the note.
 | `create_note` | `title`, `folder?`, `empty?` | `note new` |
 | `list_tasks` | `pending_only?`, `column?`, `note_path?` | `task list` |
 | `move_task` | `id`, `column` | `task move` |
+| `set_task_date` | `id`, `field` (`start` or `due`), `date` (`YYYY-MM-DD` or `none`) | `task due` and `task start` |
 | `toggle_task` | `id` (or `path` and `line`) | `task toggle` |
 | `get_kanban` | | the board: columns in order, each with its cards |
 
@@ -90,6 +99,10 @@ claude mcp add --transport stdio lazymark -- lazymark mcp
 ```
 
 Add `--scope user` to have it in all your projects, or `--scope project` to share it through `.mcp.json`. `claude mcp list` shows it and `/mcp` checks it inside Claude Code. The syntax is from the [Claude Code MCP documentation](https://code.claude.com/docs/en/mcp). Use `-- lazymark mcp --dir <folder>` for a notes folder other than the default.
+
+## Dates
+
+A task can carry three dates at the end of its line, in the [Obsidian Tasks](https://publish.obsidian.md/tasks/Reference/Task+Formats/Tasks+Emoji+Format) emoji format (plain markdown, GitHub shows them as text): start `🛫 2026-05-01`, due `📅 2026-05-10` and completed `✅ 2026-05-09`. Only a real calendar date counts; an invalid one stays in the text. If a field repeats, the first valid date is the one that counts. The id of a task does not change when its dates change.
 
 ## Kanban format
 

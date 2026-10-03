@@ -6,7 +6,7 @@ import (
 )
 
 // KanbanColumn es una columna del tablero Kanban. ID es lo que va en el tag (`#kb/<id>`); el título visible
-// puede ser libre (Title) o por idioma (Titles["es"], Titles["en"]).
+// puede ser libre (Title) o por idioma (Titles["en"], Titles["es"], Titles["pt"]…).
 type KanbanColumn struct {
 	ID     string            `json:"id"`
 	Title  string            `json:"title,omitempty"`
@@ -16,9 +16,9 @@ type KanbanColumn struct {
 // DefaultKanbanColumns son las columnas por defecto: todo, doing y done.
 func DefaultKanbanColumns() []KanbanColumn {
 	return []KanbanColumn{
-		{ID: "todo", Titles: map[string]string{"es": "Por hacer", "en": "To do"}},
-		{ID: "doing", Titles: map[string]string{"es": "En progreso", "en": "In progress"}},
-		{ID: "done", Titles: map[string]string{"es": "Completado", "en": "Done"}},
+		{ID: "todo", Titles: map[string]string{"en": "To do", "es": "Por hacer", "pt": "A fazer", "fr": "À faire", "de": "Zu erledigen", "it": "Da fare", "ja": "未着手", "zh": "待办"}},
+		{ID: "doing", Titles: map[string]string{"en": "In progress", "es": "En progreso", "pt": "Em andamento", "fr": "En cours", "de": "In Arbeit", "it": "In corso", "ja": "進行中", "zh": "进行中"}},
+		{ID: "done", Titles: map[string]string{"en": "Done", "es": "Completado", "pt": "Concluído", "fr": "Terminé", "de": "Erledigt", "it": "Completato", "ja": "完了", "zh": "已完成"}},
 	}
 }
 
@@ -45,8 +45,9 @@ func validKanbanColumns(cols []KanbanColumn) bool {
 	return true
 }
 
-// Title es el título visible de la columna en el idioma lang ("es" o "en"): el de ese idioma, si no el título
-// libre, si no el de una columna por defecto con ese id, y si no el propio id.
+// DisplayTitle es el título visible de la columna en el idioma lang (el código de dos letras: en, es, pt, fr, de, it, ja,
+// zh): el de ese idioma, si no el título libre, si no el de una columna por defecto con ese id (en inglés si no tiene
+// ese idioma), y si no el propio id.
 func (c KanbanColumn) DisplayTitle(lang string) string {
 	if t := c.Titles[lang]; t != "" {
 		return t
@@ -59,6 +60,7 @@ func (c KanbanColumn) DisplayTitle(lang string) string {
 			if t := d.Titles[lang]; t != "" {
 				return t
 			}
+			return d.Titles["en"]
 		}
 	}
 	return c.ID

@@ -7,6 +7,8 @@ import (
 	"path/filepath"
 	"runtime/debug"
 	"strings"
+
+	"github.com/MathiasDrizzy/lazymark/internal/i18n"
 )
 
 // Version es la versión del programa. El release la inyecta con -ldflags
@@ -47,6 +49,11 @@ const (
 
 	// Valores de Config.ScreenBackground: "theme" (por defecto) pinta toda la pantalla
 	// con el color base del tema; "terminal" deja el fondo de la terminal (y su transparencia).
+	// Valores de Config.KanbanCards: "cards" (por defecto) dibuja cada tarea como una tarjeta con borde, su nota y sus
+	// fechas; "compact" es la vista de una fila por tarea.
+	KanbanCardsRects   = "cards"
+	KanbanCardsCompact = "compact"
+
 	ScreenBackgroundTheme    = "theme"
 	ScreenBackgroundTerminal = "terminal"
 
@@ -111,6 +118,8 @@ type Config struct {
 	// PopupBackground: "theme" (por defecto, como la pantalla) pinta el color base del tema; "terminal" deja el
 	// fondo de la terminal en los popups, respetando su transparencia, aunque la pantalla esté pintada con el tema.
 	PopupBackground string `json:"popup_background"`
+	// KanbanCards: "cards" o "compact". Ver KanbanCardsRects.
+	KanbanCards string `json:"kanban_cards"`
 	// KanbanColumns son las columnas del tablero (por defecto todo, doing y done). La columna de una tarea
 	// se guarda como un tag al final de su línea: `- [ ] tarea #kb/doing`.
 	KanbanColumns []KanbanColumn `json:"kanban_columns"`
@@ -172,6 +181,7 @@ func DefaultConfig(notesDir string) *Config {
 		KeymapVersion:      KeymapVersion,
 		TaskScope:          "all",
 		PopupBackground:    PopupBackgroundTheme,
+		KanbanCards:        KanbanCardsRects,
 		ScreenBackground:   ScreenBackgroundTheme,
 		Mascot:             true,
 		KanbanColumns:      DefaultKanbanColumns(),
@@ -247,6 +257,10 @@ func load(customDir string, create bool) (*Config, error) {
 			}
 			if disk.ScreenBackground != ScreenBackgroundTerminal {
 				disk.ScreenBackground = ScreenBackgroundTheme // valor ausente o desconocido
+			}
+			disk.Language = normalizeLanguage(disk.Language)
+			if disk.KanbanCards != KanbanCardsCompact {
+				disk.KanbanCards = KanbanCardsRects // ausente o desconocido
 			}
 			switch disk.PopupBackground {
 			case PopupBackgroundTheme, PopupBackgroundTerminal:
@@ -440,4 +454,16 @@ func mergeKeybindings(def, user KeybindingsConfig) KeybindingsConfig {
 		Cheatsheet:  pick(user.Cheatsheet, def.Cheatsheet),
 		Quit:        pick(user.Quit, def.Quit),
 	}
+}
+
+// normalizeLanguage lleva el idioma de la config a "auto" o al código de uno soportado (en, es, pt, fr, de, it, ja, zh):
+// "pt-BR" y "zh_CN" valen como pt y zh; un valor vacío o desconocido, como auto.
+func normalizeLanguage(v string) string {
+	if strings.EqualFold(strings.TrimSpace(v), "auto") {
+		return "auto"
+	}
+	if l, ok := i18n.Parse(v); ok {
+		return string(l)
+	}
+	return "auto"
 }

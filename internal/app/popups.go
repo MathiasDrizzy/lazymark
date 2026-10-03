@@ -29,6 +29,7 @@ const (
 	setScreenBg
 	setPopupBg
 	setMascot
+	setKanbanCards
 	setNotesDir
 	settingCount
 )
@@ -92,6 +93,8 @@ func (p *settingsPopup) label(id settingID) string {
 		return i18n.T("Fondo de popups", "Popup background")
 	case setMascot:
 		return i18n.T("Mascota", "Mascot")
+	case setKanbanCards:
+		return i18n.T("Tarjetas", "Cards")
 	case setNotesDir:
 		return i18n.T("Carpeta de notas", "Notes folder")
 	}
@@ -104,10 +107,10 @@ func (p *settingsPopup) value(id settingID) string {
 	case setTheme:
 		return theme.CurrentThemeName
 	case setLanguage:
-		if i18n.CurrentLanguage() == i18n.LangEN {
-			return "English"
+		if cfg.Language == "" || cfg.Language == "auto" {
+			return i18n.T("auto", "auto") + " · " + i18n.CurrentLanguage().Name()
 		}
-		return "Español"
+		return i18n.CurrentLanguage().Name()
 	case setEditor:
 		return filepath.Base(cfg.Editor)
 	case setKeys:
@@ -132,6 +135,11 @@ func (p *settingsPopup) value(id settingID) string {
 			return i18n.T("sí", "yes")
 		}
 		return "no"
+	case setKanbanCards:
+		if cfg.KanbanCards == config.KanbanCardsCompact {
+			return i18n.T("compactas", "compact")
+		}
+		return i18n.T("rectángulos", "rectangles")
 	case setPopupBg:
 		if cfg.PopupBackground == config.PopupBackgroundTheme {
 			return i18n.T("tema", "theme")
@@ -158,7 +166,13 @@ func (p *settingsPopup) change(id settingID, dir int) {
 			cfg.Theme = theme.PrevTheme()
 		}
 	case setLanguage:
-		cfg.Language = string(i18n.ToggleLanguage())
+		// auto (el idioma del sistema) y después cada idioma soportado, en orden
+		opts := []string{"auto"}
+		for _, l := range i18n.Languages {
+			opts = append(opts, string(l))
+		}
+		cfg.Language = cycle(opts, cfg.Language, dir)
+		i18n.SetLanguage(cfg.Language)
 	case setEditor:
 		cfg.Editor = cycle(config.DetectInstalledEditors(), filepath.Base(cfg.Editor), dir)
 	case setKeys:
@@ -176,6 +190,12 @@ func (p *settingsPopup) change(id settingID, dir int) {
 			cfg.ScreenBackground = config.ScreenBackgroundTheme
 		} else {
 			cfg.ScreenBackground = config.ScreenBackgroundTerminal
+		}
+	case setKanbanCards:
+		if cfg.KanbanCards == config.KanbanCardsCompact {
+			cfg.KanbanCards = config.KanbanCardsRects
+		} else {
+			cfg.KanbanCards = config.KanbanCardsCompact
 		}
 	case setMascot:
 		cfg.Mascot = !cfg.Mascot
@@ -233,7 +253,7 @@ func cycle(opts []string, current string, dir int) string {
 }
 
 func (p *settingsPopup) render(l Layout) string {
-	w := popupWidth(l, 56)
+	w := popupWidth(l, 54)
 	p.top, p.height = 1, p.n
 	labelW := 22
 	var lines []string

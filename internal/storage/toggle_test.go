@@ -42,7 +42,13 @@ func TestToggleTaskRewritesOnlyThatLine(t *testing.T) {
 			t.Errorf("línea %d: done=%v, se esperaba %v", c.line, got, c.done)
 		}
 		after, _ := os.ReadFile(path)
-		want := bytes.Replace(before, []byte(c.old), []byte(c.new), 1)
+		// marcar agrega ✅ <hoy> a esa línea y desmarcar lo quita; fuera de eso, solo cambia la casilla
+		stamp := []byte(" ✅ 2026-10-02")
+		if n := bytes.Count(after, stamp) - bytes.Count(before, stamp); (c.done && n != 1) || (!c.done && n != 0) {
+			t.Fatalf("línea %d: la fecha de completada cambió en %d (done=%v): %q", c.line, n, c.done, after)
+		}
+		after = bytes.ReplaceAll(after, stamp, nil)
+		want := bytes.Replace(bytes.ReplaceAll(before, stamp, nil), []byte(c.old), []byte(c.new), 1)
 		if !bytes.Equal(after, want) {
 			t.Fatalf("línea %d: el archivo cambió más que la casilla:\nantes:   %q\ndespués: %q\nesperado:%q", c.line, before, after, want)
 		}
@@ -96,7 +102,7 @@ func TestToggleTaskRefusesStaleNote(t *testing.T) {
 	if _, err := s.ToggleTaskIfUnchanged(path, 1, fi.ModTime()); err != nil {
 		t.Fatal(err)
 	}
-	if got, _ := os.ReadFile(path); !bytes.Equal(got, []byte("- [x] tarea\nlínea agregada por otro editor\n")) {
+	if got, _ := os.ReadFile(path); !bytes.Equal(got, []byte("- [x] tarea ✅ 2026-10-02\nlínea agregada por otro editor\n")) {
 		t.Fatalf("contenido final: %q", got)
 	}
 }

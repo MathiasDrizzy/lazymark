@@ -93,12 +93,16 @@ func usageText(es, en string) string { return i18n.T(es, en) }
 const taskUsageES = `uso: lazymark task list   [--json] [--pending] [--column <id>] [--note <ruta>] [--dir <carpeta>]
      lazymark task toggle <id> [--json] [--dir <carpeta>]
      lazymark task move   <id> <columna> [--json] [--dir <carpeta>]
+     lazymark task due    <id> <AAAA-MM-DD|none> [--json] [--dir <carpeta>]   (vencimiento 📅)
+     lazymark task start  <id> <AAAA-MM-DD|none> [--json] [--dir <carpeta>]   (inicio 🛫)
 códigos de salida: 0 ok · 1 falló · 2 argumentos inválidos (no se toca nada) · 3 no existe · 4 la nota cambió (no se escribe)
 `
 
 const taskUsageEN = `usage: lazymark task list   [--json] [--pending] [--column <id>] [--note <path>] [--dir <folder>]
        lazymark task toggle <id> [--json] [--dir <folder>]
        lazymark task move   <id> <column> [--json] [--dir <folder>]
+       lazymark task due    <id> <YYYY-MM-DD|none> [--json] [--dir <folder>]   (due date 📅)
+       lazymark task start  <id> <YYYY-MM-DD|none> [--json] [--dir <folder>]   (start date 🛫)
 exit codes: 0 ok · 1 failed · 2 invalid arguments (nothing touched) · 3 not found · 4 the note changed (nothing written)
 `
 
@@ -145,9 +149,9 @@ func RunTaskWithWriter(w io.Writer, args []string, defaultNotesDir string) error
 	case "toggle":
 		p.fs.StringVar(&path, "path", "", "") // forma anterior: --path <nota> --line <n>
 		p.fs.IntVar(&line, "line", 0, "")
-	case "move":
+	case "move", "due", "start":
 	default:
-		return &ops.Error{Code: ExitUsage, Err: fmt.Errorf("subcomando de tarea desconocido: %q (list, toggle, move)", action)}
+		return &ops.Error{Code: ExitUsage, Err: fmt.Errorf("subcomando de tarea desconocido: %q (list, toggle, move, due, start)", action)}
 	}
 	if err := p.parse(args[1:]); err != nil {
 		return err
@@ -178,7 +182,7 @@ func RunTaskWithWriter(w io.Writer, args []string, defaultNotesDir string) error
 			if t.Done {
 				mark = "[x]"
 			}
-			fmt.Fprint(w, plain(fmt.Sprintf("%s %s  %s  (%s)\n", mark, t.ID, t.Text, t.Column)))
+			fmt.Fprint(w, plain(fmt.Sprintf("%s %s  %s  (%s)%s\n", mark, t.ID, t.Text, t.Column, datesSuffix(t))))
 		}
 		return nil
 
@@ -206,6 +210,16 @@ func RunTaskWithWriter(w io.Writer, args []string, defaultNotesDir string) error
 		}
 		return finishMove(w, p, svc, func() (ops.TaskDTO, error) { return svc.ToggleTask(p.posArgs[0]) })
 
+	case "due", "start":
+		if err := p.need(2, "lazymark task "+action+" <id> <AAAA-MM-DD|none>"); err != nil {
+			return err
+		}
+		svc, err := p.service()
+		if err != nil {
+			return err
+		}
+		return finishMove(w, p, svc, func() (ops.TaskDTO, error) { return svc.SetDate(p.posArgs[0], action, p.posArgs[1]) })
+
 	default: // move
 		if err := p.need(2, "lazymark task move <id> <columna>"); err != nil {
 			return err
@@ -226,8 +240,26 @@ func finishMove(w io.Writer, p *parser, _ *ops.Service, do func() (ops.TaskDTO, 
 	if p.json {
 		return printJSON(w, t)
 	}
-	fmt.Fprintf(w, "%s → %s\n", t.ID, t.Column)
+	fmt.Fprint(w, plain(fmt.Sprintf("%s → %s%s\n", t.ID, t.Column, datesSuffix(t))))
 	return nil
+}
+
+// datesSuffix muestra las fechas de una tarea en la salida de texto: "  🛫 2026-05-01 📅 2026-05-10 (vencida)".
+func datesSuffix(t ops.TaskDTO) string {
+	var parts []string
+	for _, d := range [][2]string{{"🛫", t.Start}, {"📅", t.Due}, {"✅", t.Completed}} {
+		if d[1] != "" {
+			parts = append(parts, d[0]+" "+d[1])
+		}
+	}
+	if len(parts) == 0 {
+		return ""
+	}
+	out := "  " + strings.Join(parts, " ")
+	if t.Overdue {
+		out += " (" + i18n.T("vencida", "overdue") + ")"
+	}
+	return out
 }
 
 // RunNote ejecuta `lazymark note …` (list, show, new).

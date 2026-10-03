@@ -12,7 +12,10 @@ import (
 	"testing"
 
 	"github.com/MathiasDrizzy/lazymark/internal/ops"
+	"github.com/MathiasDrizzy/lazymark/internal/storage"
 )
+
+func init() { storage.Today = func() string { return "2026-10-02" } } // las pruebas no dependen del reloj
 
 var update = flag.Bool("update", false, "reescribe los golden JSON de testdata/golden")
 
@@ -197,7 +200,7 @@ func TestPlainOutput(t *testing.T) {
 	}
 	id := taskID(t, dir, "Comprar café", "ideas.md")
 	out, err = run(t, dir, "task", "move", id, "done")
-	if err != nil || out != id+" → done\n" {
+	if err != nil || out != id+" → done  ✅ 2026-10-02\n" {
 		t.Errorf("task move: %q %v", out, err)
 	}
 }
@@ -225,7 +228,7 @@ func TestMoveWritesOnlyThatLine(t *testing.T) {
 		t.Fatal(err)
 	}
 	b, _ := os.ReadFile(filepath.Join(dir, "proyecto.md"))
-	if !strings.Contains(string(b), "- [x] Tarea heredada\n") {
+	if !strings.Contains(string(b), "- [x] Tarea heredada ✅ 2026-10-02\n") {
 		t.Errorf("la etiqueta heredada debía desaparecer al pasar a hecho:\n%s", b)
 	}
 }
@@ -392,5 +395,82 @@ func TestNewNoteRejectsControlCharsInTitle(t *testing.T) {
 	}
 	if after := snapshot(t, dir); len(after) != len(before) {
 		t.Error("no debía crearse nada")
+	}
+}
+
+// TestTaskDueAndStart (C.6): `task due` y `task start` ponen y quitan las fechas (formato de Obsidian Tasks) cambiando solo
+// la línea de la tarea; el JSON lleva start, due, completed y overdue; una fecha inválida sale con 2 sin tocar nada.
+func TestTaskDueAndStart(t *testing.T) {
+	dir := fixture(t)
+	id := taskID(t, dir, "Escribir informe", "proyecto.md")
+	before, _ := os.ReadFile(filepath.Join(dir, "proyecto.md"))
+
+	out, err := run(t, dir, "task", "due", id, "2020-01-02", "--json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var tk ops.TaskDTO
+	if err := json.Unmarshal([]byte(out), &tk); err != nil {
+		t.Fatal(err)
+	}
+	if tk.Due != "2020-01-02" || !tk.Overdue || tk.Start != "" || tk.Completed != "" || tk.ID != id {
+		t.Errorf("tras due: %+v", tk)
+	}
+	if _, err := run(t, dir, "task", "start", id, "2019-12-01"); err != nil {
+		t.Fatal(err)
+	}
+	after, _ := os.ReadFile(filepath.Join(dir, "proyecto.md"))
+	want := strings.Replace(string(before), "- [ ] Escribir informe\n", "- [ ] Escribir informe 📅 2020-01-02 🛫 2019-12-01\n", 1)
+	if string(after) != want {
+		t.Errorf("proyecto.md:\n%s\nse esperaba:\n%s", after, want)
+	}
+	out, _ = run(t, dir, "task", "list", "--note", "proyecto.md")
+	if !strings.Contains(out, "🛫 2019-12-01 📅 2020-01-02 (") || strings.Contains(out, "📅 2020-01-02 🛫") {
+		t.Errorf("la salida de texto muestra las fechas: %s", out)
+	}
+	// quitar con none
+	if _, err := run(t, dir, "task", "due", id, "none"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := run(t, dir, "task", "start", id, "NONE"); err != nil {
+		t.Fatal(err)
+	}
+	if again, _ := os.ReadFile(filepath.Join(dir, "proyecto.md")); string(again) != string(before) {
+		t.Errorf("tras quitar las dos fechas la nota debía quedar idéntica:\n%s", again)
+	}
+	// marcar como hecha agrega ✅ y moverla otra vez a todo lo quita
+	if _, err := run(t, dir, "task", "move", id, "done"); err != nil {
+		t.Fatal(err)
+	}
+	b, _ := os.ReadFile(filepath.Join(dir, "proyecto.md"))
+	if !strings.Contains(string(b), "- [x] Escribir informe ✅ 2026-10-02") {
+		t.Errorf("al pasar a hecho se agrega ✅:\n%s", b)
+	}
+	if _, err := run(t, dir, "task", "move", id, "todo"); err != nil {
+		t.Fatal(err)
+	}
+	if b, _ := os.ReadFile(filepath.Join(dir, "proyecto.md")); string(b) != string(before) {
+		t.Errorf("al volver a todo se quita ✅:\n%s", b)
+	}
+	// argumentos inválidos: exit 2 y la carpeta intacta
+	snap := snapshot(t, dir)
+	for name, args := range map[string][]string{
+		"fecha inexistente": {"task", "due", id, "2026-02-30"},
+		"formato":           {"task", "start", id, "mañana"},
+		"sin fecha":         {"task", "due", id},
+		"sin nada":          {"task", "due"},
+		"de más":            {"task", "start", id, "2026-01-01", "x"},
+	} {
+		if _, err := run(t, dir, args...); ExitCode(err) != ExitUsage {
+			t.Errorf("%s: código %d: %v", name, ExitCode(err), err)
+		}
+	}
+	if _, err := run(t, dir, "task", "due", "proyecto.md#00000000", "2026-01-01"); ExitCode(err) != ExitNotFound {
+		t.Errorf("tarea inexistente: código %d", ExitCode(err))
+	}
+	for k, v := range snap {
+		if now := snapshot(t, dir)[k]; now != v {
+			t.Errorf("%s cambió", k)
+		}
 	}
 }

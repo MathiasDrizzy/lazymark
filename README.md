@@ -48,6 +48,14 @@ Every `#tag` in your notes. `Enter` on a tag shows only the notes that have it.
 
 ### Kanban board
 
+Each task is a card with a rounded border: its text (up to 2 lines), its note and its dates. Put dates at the end of the task line in the Obsidian Tasks format (start and due; the completion date is added when you tick the task):
+
+```markdown
+- [ ] write the report 🛫 2026-05-01 📅 2026-05-10
+```
+
+Overdue ones are shown in the theme's error color. `lazymark task due <id> 2026-05-10` sets a date without opening the app, and Settings has "Cards: rectangles | compact" for the one-row view.
+
 The same tasks as columns: To Do, In Progress and Done by default. Move a card with `H` and `L` or `Shift+←` and `Shift+→`, or drag it with the mouse to another column: the card and the target column are highlighted while you drag, `Esc` cancels. The change is written back to the note, on that line only, and never over a note that changed outside lazymark (it reloads and tells you). `Kanban (W)` opens the board, `Notes (W)` and `← Notes (Esc)` go back, and the bottom bar lists what the selected card can do.
 
 The column is a tag at the end of the task line, so it works in any editor: `- [ ] write report #kb/doing`. Set your own columns (2 to 6) in the config:
@@ -86,7 +94,7 @@ Images in a note show up in the preview, in place, in terminals that support the
 
 ### Settings and themes
 
-Press `,`. Fourteen themes (Catppuccin ×4, Tokyo Night, Gruvbox, Nord, Dracula, One Dark, Rosé Pine, Kanagawa, Everforest, Solarized Dark and Light), changed live, and the whole interface follows them, including the markdown preview. **Screen background** is `theme` by default and paints the whole screen with the theme's base color; `terminal` keeps your terminal's background, so a translucent terminal stays translucent. You can also pick the notes folder here.
+Press `,`. The interface speaks eight languages (English, Spanish, Brazilian Portuguese, French, German, Italian, Japanese and Simplified Chinese) and starts in yours; `docs/i18n.md` says which translations a native speaker has reviewed. Fourteen themes (Catppuccin ×4, Tokyo Night, Gruvbox, Nord, Dracula, One Dark, Rosé Pine, Kanagawa, Everforest, Solarized Dark and Light), changed live, and the whole interface follows them, including the markdown preview. **Screen background** is `theme` by default and paints the whole screen with the theme's base color; `terminal` keeps your terminal's background, so a translucent terminal stays translucent. You can also pick the notes folder here.
 
 <img src="assets/readme/feature-settings.gif" alt="Switching to Solarized Light and Dracula live, then turning the screen background from theme to terminal" width="100%">
 

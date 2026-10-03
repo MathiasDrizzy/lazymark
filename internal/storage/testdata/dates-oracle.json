@@ -1,0 +1,317 @@
+[
+ {
+  "line": "- [ ] 🛫 2026-01-10 📅 2026-01-20 ✅ 2026-01-25 Tarea en orden normal",
+  "start": "2026-01-10",
+  "due": "2026-01-20",
+  "completed": "2026-01-25",
+  "clean": "Tarea en orden normal"
+ },
+ {
+  "line": "- [ ] 📅 2026-02-20 🛫 2026-02-10 ✅ 2026-02-25 Tarea con due primero",
+  "start": "2026-02-10",
+  "due": "2026-02-20",
+  "completed": "2026-02-25",
+  "clean": "Tarea con due primero"
+ },
+ {
+  "line": "- [x] ✅ 2026-03-30 📅 2026-03-25 🛫 2026-03-01 Tarea en orden inverso",
+  "start": "2026-03-01",
+  "due": "2026-03-25",
+  "completed": "2026-03-30",
+  "clean": "Tarea en orden inverso"
+ },
+ {
+  "line": "- [x] ✅ 2026-04-15 🛫 2026-04-01 📅 2026-04-10 Tarea completada inicio vencimiento",
+  "start": "2026-04-01",
+  "due": "2026-04-10",
+  "completed": "2026-04-15",
+  "clean": "Tarea completada inicio vencimiento"
+ },
+ {
+  "line": "- [ ] 📅 2026-05-15 ✅ 2026-05-14 🛫 2026-05-01 Tarea vencimiento completada inicio",
+  "start": "2026-05-01",
+  "due": "2026-05-15",
+  "completed": "2026-05-14",
+  "clean": "Tarea vencimiento completada inicio"
+ },
+ {
+  "line": "- [ ] 🛫 2026-06-01 ✅ 2026-06-10 📅 2026-06-15 Tarea inicio completada vencimiento",
+  "start": "2026-06-01",
+  "due": "2026-06-15",
+  "completed": "2026-06-10",
+  "clean": "Tarea inicio completada vencimiento"
+ },
+ {
+  "line": "- [ ] 🛫2026-07-01📅2026-07-10✅2026-07-15 Tres emojis contiguos pegados",
+  "start": "2026-07-01",
+  "due": "2026-07-10",
+  "completed": "2026-07-15",
+  "clean": "Tres emojis contiguos pegados"
+ },
+ {
+  "line": "- [ ] 🛫2026-08-01 Inicio pegado sin espacio",
+  "start": "2026-08-01",
+  "due": "",
+  "completed": "",
+  "clean": "Inicio pegado sin espacio"
+ },
+ {
+  "line": "- [ ] 📅2026-08-15 Vencimiento pegado sin espacio",
+  "start": "",
+  "due": "2026-08-15",
+  "completed": "",
+  "clean": "Vencimiento pegado sin espacio"
+ },
+ {
+  "line": "- [x] ✅2026-08-20 Completada pegada sin espacio",
+  "start": "",
+  "due": "",
+  "completed": "2026-08-20",
+  "clean": "Completada pegada sin espacio"
+ },
+ {
+  "line": "- [x] 🛫2026-08-01 📅2026-08-15 ✅2026-08-20 Los tres emojis sin espacio antes de fecha",
+  "start": "2026-08-01",
+  "due": "2026-08-15",
+  "completed": "2026-08-20",
+  "clean": "Los tres emojis sin espacio antes de fecha"
+ },
+ {
+  "line": "- [ ] 🛫️ 2026-09-01 Inicio con selector de variacion",
+  "start": "2026-09-01",
+  "due": "",
+  "completed": "",
+  "clean": "Inicio con selector de variacion"
+ },
+ {
+  "line": "- [ ] 📅️ 2026-09-15 Vencimiento con selector de variacion",
+  "start": "",
+  "due": "2026-09-15",
+  "completed": "",
+  "clean": "Vencimiento con selector de variacion"
+ },
+ {
+  "line": "- [x] ✅️ 2026-09-20 Completada con selector de variacion",
+  "start": "",
+  "due": "",
+  "completed": "2026-09-20",
+  "clean": "Completada con selector de variacion"
+ },
+ {
+  "line": "- [ ] 🛫️2026-09-01 📅️2026-09-15 ✅️2026-09-20 Selectores sin espacios antes de fecha",
+  "start": "2026-09-01",
+  "due": "2026-09-15",
+  "completed": "2026-09-20",
+  "clean": "Selectores sin espacios antes de fecha"
+ },
+ {
+  "line": "- [ ] 📅 2026-02-30 Treinta de febrero invalido",
+  "start": "",
+  "due": "",
+  "completed": "",
+  "clean": "📅 2026-02-30 Treinta de febrero invalido"
+ },
+ {
+  "line": "- [ ] 🛫 2026-13-01 Mes trece invalido",
+  "start": "",
+  "due": "",
+  "completed": "",
+  "clean": "🛫 2026-13-01 Mes trece invalido"
+ },
+ {
+  "line": "- [ ] ✅ 2026-05-00 Dia cero invalido",
+  "start": "",
+  "due": "",
+  "completed": "",
+  "clean": "✅ 2026-05-00 Dia cero invalido"
+ },
+ {
+  "line": "- [ ] 📅 2026-00-15 Mes cero invalido",
+  "start": "",
+  "due": "",
+  "completed": "",
+  "clean": "📅 2026-00-15 Mes cero invalido"
+ },
+ {
+  "line": "- [ ] 🛫 2026-04-31 Treinta y uno de abril inexistente",
+  "start": "",
+  "due": "",
+  "completed": "",
+  "clean": "🛫 2026-04-31 Treinta y uno de abril inexistente"
+ },
+ {
+  "line": "- [ ] 📅 2026-02-29 Anio 2026 no es bisiesto",
+  "start": "",
+  "due": "",
+  "completed": "",
+  "clean": "📅 2026-02-29 Anio 2026 no es bisiesto"
+ },
+ {
+  "line": "- [ ] 🛫 1900-02-29 Siglo 1900 no es bisiesto",
+  "start": "",
+  "due": "",
+  "completed": "",
+  "clean": "🛫 1900-02-29 Siglo 1900 no es bisiesto"
+ },
+ {
+  "line": "- [ ] 📅 2024-02-29 Bisiesto valido 2024",
+  "start": "",
+  "due": "2024-02-29",
+  "completed": "",
+  "clean": "Bisiesto valido 2024"
+ },
+ {
+  "line": "- [x] 🛫 2028-02-29 ✅ 2000-02-29 Bisiestos validos 2028 y 2000",
+  "start": "2028-02-29",
+  "due": "",
+  "completed": "2000-02-29",
+  "clean": "Bisiestos validos 2028 y 2000"
+ },
+ {
+  "line": "- [ ] 📅 2026-05-0 Fecha cortada con un digito de dia",
+  "start": "",
+  "due": "",
+  "completed": "",
+  "clean": "📅 2026-05-0 Fecha cortada con un digito de dia"
+ },
+ {
+  "line": "- [ ] 🛫 2026-5-01 Fecha cortada con un digito de mes",
+  "start": "",
+  "due": "",
+  "completed": "",
+  "clean": "🛫 2026-5-01 Fecha cortada con un digito de mes"
+ },
+ {
+  "line": "- [ ] 📅 2026-05-100 Fecha seguida de mas digitos en dia",
+  "start": "",
+  "due": "",
+  "completed": "",
+  "clean": "📅 2026-05-100 Fecha seguida de mas digitos en dia"
+ },
+ {
+  "line": "- [ ] 🛫 20260-05-01 Fecha seguida de mas digitos en anio",
+  "start": "",
+  "due": "",
+  "completed": "",
+  "clean": "🛫 20260-05-01 Fecha seguida de mas digitos en anio"
+ },
+ {
+  "line": "- [ ] 🛫 2026-01-01 Primera valida 🛫 2026-02-02 Segunda valida se ignora pero queda",
+  "start": "2026-01-01",
+  "due": "",
+  "completed": "",
+  "clean": "Primera valida 🛫 2026-02-02 Segunda valida se ignora pero queda"
+ },
+ {
+  "line": "- [ ] 📅 2026-02-30 Invalida primero 📅 2026-03-15 Segunda es la primera valida",
+  "start": "",
+  "due": "2026-03-15",
+  "completed": "",
+  "clean": "📅 2026-02-30 Invalida primero Segunda es la primera valida"
+ },
+ {
+  "line": "- [x] ✅ 2026-04-10 Primera valida ✅ 2026-13-01 Segunda invalida queda en texto",
+  "start": "",
+  "due": "",
+  "completed": "2026-04-10",
+  "clean": "Primera valida ✅ 2026-13-01 Segunda invalida queda en texto"
+ },
+ {
+  "line": "- [ ] 📅 2026-05-00 Invalida 📅 2026-05-10 Valida 📅 2026-05-20 Tercera valida ignorada",
+  "start": "",
+  "due": "2026-05-10",
+  "completed": "",
+  "clean": "📅 2026-05-00 Invalida Valida 📅 2026-05-20 Tercera valida ignorada"
+ },
+ {
+  "line": "- [ ] 📌 Tarea destacada con emoji suelto al final 📅",
+  "start": "",
+  "due": "",
+  "completed": "",
+  "clean": "📌 Tarea destacada con emoji suelto al final 📅"
+ },
+ {
+  "line": "- [ ] 🛫 manana salimos de viaje con el equipo",
+  "start": "",
+  "due": "",
+  "completed": "",
+  "clean": "🛫 manana salimos de viaje con el equipo"
+ },
+ {
+  "line": "- [x] ✅ listo y aprobado por el revisor ⭐",
+  "start": "",
+  "due": "",
+  "completed": "",
+  "clean": "✅ listo y aprobado por el revisor ⭐"
+ },
+ {
+  "line": "- [ ] 🛫 📅 ✅ Solo emojis sin fecha",
+  "start": "",
+  "due": "",
+  "completed": "",
+  "clean": "🛫 📅 ✅ Solo emojis sin fecha"
+ },
+ {
+  "line": "- [ ] 📅 2026-11-01 Reporte mensual #kb/doing #trabajo",
+  "start": "",
+  "due": "2026-11-01",
+  "completed": "",
+  "clean": "Reporte mensual #trabajo"
+ },
+ {
+  "line": "- [ ] #kb/todo Planificacion semanal 🛫 2026-11-02 #proyecto #kb/doing",
+  "start": "2026-11-02",
+  "due": "",
+  "completed": "",
+  "clean": "Planificacion semanal #proyecto"
+ },
+ {
+  "line": "- [ ] 📅 2026-11-15 #kb/doing",
+  "start": "",
+  "due": "2026-11-15",
+  "completed": "",
+  "clean": ""
+ },
+ {
+  "line": "- [ ] 🛫 2026-11-10 #urgente #backend Actualizar dependencias del sistema",
+  "start": "2026-11-10",
+  "due": "",
+  "completed": "",
+  "clean": "#urgente #backend Actualizar dependencias del sistema"
+ },
+ {
+  "line": "* [ ] 📅 2026-12-01 Tarea con vineta de asterisco #recordatorio",
+  "start": "",
+  "due": "2026-12-01",
+  "completed": "",
+  "clean": "Tarea con vineta de asterisco #recordatorio"
+ },
+ {
+  "line": "  - [ ] 🛫 2026-10-01 Tarea con sangria de dos espacios",
+  "start": "2026-10-01",
+  "due": "",
+  "completed": "",
+  "clean": "Tarea con sangria de dos espacios"
+ },
+ {
+  "line": "- [X] 📅 2026-12-10 Tarea completada con equis mayuscula",
+  "start": "",
+  "due": "2026-12-10",
+  "completed": "",
+  "clean": "Tarea completada con equis mayuscula"
+ },
+ {
+  "line": "    * [X] 💡 Submit quarterly financial audit 📅 2026-04-15 ✅ 2026-04-20 #finance #kb/work",
+  "start": "",
+  "due": "2026-04-15",
+  "completed": "2026-04-20",
+  "clean": "💡 Submit quarterly financial audit #finance"
+ },
+ {
+  "line": "  * [ ] 🚀 新しい機能の要件定義書を作成する 🛫 2026-06-01 📅 2026-06-15 🔥 #開発 #kb/todo",
+  "start": "2026-06-01",
+  "due": "2026-06-15",
+  "completed": "",
+  "clean": "🚀 新しい機能の要件定義書を作成する 🔥 #開発"
+ }
+]

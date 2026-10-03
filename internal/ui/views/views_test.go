@@ -128,7 +128,7 @@ func TestCollectKanbanAndRender(t *testing.T) {
 	// Probar renderizado y registro de zonas
 	ht := mouse.NewHitTester()
 	selectedRows := []int{0, 1, 0}
-	rendered := RenderKanban(board, 1, selectedRows, 90, 20, ht, 1, KanbanDrag{})
+	rendered := RenderKanban(board, 1, selectedRows, 90, 20, ht, 1, KanbanDrag{}, KanbanOptions{})
 
 	if !strings.Contains(rendered, "[1] Por Hacer") && !strings.Contains(rendered, "[1] To Do") {
 		t.Errorf("No se encontró cabecera de columna [1]")

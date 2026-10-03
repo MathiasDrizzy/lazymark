@@ -91,7 +91,7 @@ func titleCase(s string) string {
 // RenderKanban genera la vista del tablero: una caja por columna, con sus tarjetas. selectedRows tiene la
 // tarjeta seleccionada de cada columna y drag, el arrastre en curso (la tarjeta que se lleva va resaltada y
 // la columna de destino, marcada).
-func RenderKanban(board KanbanBoard, activeCol int, selectedRows []int, width, height int, ht *mouse.HitTester, offsetY int, drag KanbanDrag) string {
+func RenderKanban(board KanbanBoard, activeCol int, selectedRows []int, width, height int, ht *mouse.HitTester, offsetY int, drag KanbanDrag, opts KanbanOptions) string {
 	n := board.NumCols()
 	if n == 0 {
 		return ""
@@ -139,6 +139,8 @@ func RenderKanban(board KanbanBoard, activeCol int, selectedRows []int, width, h
 		var lines []string
 		if len(cards) == 0 {
 			lines = append(lines, emptyMsg)
+		} else if opts.Cards && cardsFit(w-4, height) {
+			lines = renderCardColumn(cards, c, selIdx, w, usableHeight, c == doneCol, c != 0 && c != doneCol, isActive, drag, opts.Today, ht, colStartX, offsetY+1)
 		} else {
 			startIdx := 0
 			if selIdx >= usableHeight {

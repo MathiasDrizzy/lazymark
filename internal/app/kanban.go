@@ -7,6 +7,7 @@ import (
 	"time"
 
 	tea "charm.land/bubbletea/v2"
+	"github.com/MathiasDrizzy/lazymark/internal/config"
 	"github.com/MathiasDrizzy/lazymark/internal/i18n"
 	"github.com/MathiasDrizzy/lazymark/internal/storage"
 	"github.com/MathiasDrizzy/lazymark/internal/ui/mouse"
@@ -222,5 +223,5 @@ func (k *kanbanSheet) colAt(x, width int) int {
 
 func (k *kanbanSheet) view(r Rect, ht *mouse.HitTester) string {
 	k.clampSelection()
-	return views.RenderKanban(k.c.board, k.col, k.selected, r.W, r.H, ht, r.Y, k.drag)
+	return views.RenderKanban(k.c.board, k.col, k.selected, r.W, r.H, ht, r.Y, k.drag, views.KanbanOptions{Cards: k.c.cfg.KanbanCards != config.KanbanCardsCompact, Today: storage.Today()})
 }

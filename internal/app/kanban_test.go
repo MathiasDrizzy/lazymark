@@ -1,8 +1,10 @@
 package app
 
 import (
+	"github.com/MathiasDrizzy/lazymark/internal/storage"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 	"time"
@@ -402,5 +404,80 @@ func TestHostileTrashJSONDoesNotDeleteOnOpen(t *testing.T) {
 	}
 	if !strings.Contains(m.c.status, "trash.json") {
 		t.Errorf("debía avisar: %q", m.c.status)
+	}
+}
+
+// TestKanbanCardsWithDates (C.6): las tarjetas muestran las fechas de la nota (con la vencida en color de error), un clic
+// en cualquier fila de la tarjeta (no solo en su texto) la selecciona, marcarla como hecha con Espacio agrega ✅ a su línea
+// (solo a esa) y devolverla lo quita; la opción "Tarjetas: compactas" vuelve a la vista de una fila.
+func TestKanbanCardsWithDates(t *testing.T) {
+	m := newTestModel(t, 120, 35)
+	dir := m.c.store.BaseDir
+	p := filepath.Join(dir, "plazos.md")
+	os.WriteFile(p, []byte("# Plazos\n\n- [ ] AAA_PRIMERA 📅 2020-01-02 🛫 2019-12-01\n- [ ] BBB_SEGUNDA 📅 2099-01-01\n"), 0o644)
+	m.c.reload()
+	press(m, "W")
+	out := plain(m)
+	for _, want := range []string{"AAA_PRIMERA", "🛫 2019-12-01 📅 2020-01-02", "📅 2099-01-01", "╭──"} {
+		if !strings.Contains(out, want) {
+			t.Errorf("falta %q:\n%s", want, out)
+		}
+	}
+	// clic en la fila de las fechas de BBB (no en su texto): selecciona esa tarjeta
+	x, y, ok := cellOf(m, "📅 2099-01-01")
+	if !ok {
+		t.Fatalf("no se ve la fecha de BBB:\n%s", out)
+	}
+	m.Update(tea.MouseClickMsg{X: x, Y: y, Button: tea.MouseLeft})
+	m.Update(tea.MouseReleaseMsg{X: x, Y: y, Button: tea.MouseLeft})
+	if cur := m.kanban.current(); cur == nil || !strings.Contains(cur.CleanText, "BBB_SEGUNDA") {
+		t.Fatalf("el clic en la fila de fechas debía seleccionar la tarjeta BBB: %+v", cur)
+	}
+	// Espacio la marca como hecha: ✅ hoy en esa línea y solo en esa
+	before := fileLines(t, p)
+	press(m, "space")
+	after := fileLines(t, p)
+	d := diffLines(before, after)
+	if len(d) != 1 || !strings.Contains(after[d[0]-1], "BBB_SEGUNDA 📅 2099-01-01 ✅ "+storage.Today()) || !strings.Contains(after[d[0]-1], "- [x]") {
+		t.Fatalf("debía cambiar solo la línea de BBB con [x] y ✅ hoy: %v\n%v", d, after)
+	}
+	if !strings.Contains(plain(m), "📅 2099-01-01 ✅ "+storage.Today()) {
+		t.Errorf("la tarjeta debe mostrar la fecha de completada:\n%s", plain(m))
+	}
+	// Espacio otra vez la devuelve a la primera columna y quita el ✅
+	press(m, "space")
+	if got := fileLines(t, p); !reflect.DeepEqual(got, before) {
+		t.Errorf("al desmarcarla la nota debe quedar como estaba:\n%v", got)
+	}
+	// la opción compactas
+	m.c.cfg.KanbanCards = config.KanbanCardsCompact
+	if got := plain(m); strings.Count(got, "╭") > 3 || !strings.Contains(got, "☐ AAA_PRIMERA") {
+		t.Errorf("con compactas debe verse una fila por tarea:\n%s", got)
+	}
+}
+
+// TestKanbanCardsSetting (C.6): "Tarjetas" está en Ajustes (rectángulos | compactas), se cambia con ← y →, se aplica al
+// momento y se guarda; por defecto rectángulos.
+func TestKanbanCardsSetting(t *testing.T) {
+	m := newTestModel(t, 120, 35)
+	if m.c.cfg.KanbanCards != config.KanbanCardsRects {
+		t.Fatalf("por defecto = %q", m.c.cfg.KanbanCards)
+	}
+	press(m, ",")
+	sp := m.c.top().(*settingsPopup)
+	sp.list.set(int(setKanbanCards), sp.n)
+	if got := plain(m); !strings.Contains(got, "Tarjetas") || !strings.Contains(got, "rectángulos") {
+		t.Errorf("el ajuste no aparece con su valor:\n%s", got)
+	}
+	press(m, "right")
+	if m.c.cfg.KanbanCards != config.KanbanCardsCompact || !strings.Contains(plain(m), "compactas") {
+		t.Fatalf("tras → debía ser compact: %q", m.c.cfg.KanbanCards)
+	}
+	if data, err := os.ReadFile(m.c.cfg.Path()); err != nil || !strings.Contains(string(data), `"kanban_cards": "compact"`) {
+		t.Errorf("no se guardó (%v):\n%s", err, data)
+	}
+	press(m, "left")
+	if m.c.cfg.KanbanCards != config.KanbanCardsRects {
+		t.Errorf("tras ← debía volver a cards")
 	}
 }

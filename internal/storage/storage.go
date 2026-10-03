@@ -23,6 +23,7 @@ type Task struct {
 	Line      int
 	Text      string
 	Done      bool
+	Dates     Dates // inicio, vencimiento y completada (🛫 📅 ✅), leídas del texto
 }
 
 // Note representa un documento de Markdown
@@ -309,6 +310,7 @@ func (s *Storage) extractTasks(title, path, content string) []Task {
 				Line:      lineNum,
 				Text:      matches[2],
 				Done:      done,
+				Dates:     ParseDates(matches[2]),
 			})
 		}
 		lineNum++
@@ -471,7 +473,7 @@ func (s *Storage) ToggleTaskIfUnchanged(notePath string, lineNum int, expected t
 		if newDone {
 			mark = "x"
 		}
-		return m[1] + mark + m[3], nil
+		return withCompletion(m[1]+mark+m[3], newDone), nil
 	})
 	return newDone, err
 }

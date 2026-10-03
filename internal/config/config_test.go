@@ -427,3 +427,40 @@ func TestKanbanColumns(t *testing.T) {
 		t.Errorf("tras guardar y recargar: %v", again.KanbanIDs())
 	}
 }
+
+// TestKanbanCardsConfig (C.6): "cards" por defecto; "compact" se conserva; un valor ausente o desconocido vuelve a "cards".
+func TestKanbanCardsConfig(t *testing.T) {
+	isolate(t)
+	cfg, _ := Load(t.TempDir())
+	if cfg.KanbanCards != KanbanCardsRects {
+		t.Fatalf("por defecto = %q", cfg.KanbanCards)
+	}
+	cfg.KanbanCards = KanbanCardsCompact
+	if err := cfg.Save(); err != nil {
+		t.Fatal(err)
+	}
+	if again, _ := Load(cfg.NotesDir); again.KanbanCards != KanbanCardsCompact {
+		t.Errorf("tras recargar = %q", again.KanbanCards)
+	}
+	for _, bad := range []string{`"grande"`, `""`, `3`} {
+		writeDiskConfig(t, `{"keymap_version":2,"kanban_cards":`+bad+`}`)
+		if got, _ := Load(t.TempDir()); got.KanbanCards != KanbanCardsRects {
+			t.Errorf("valor %s -> %q", bad, got.KanbanCards)
+		}
+	}
+}
+
+// TestLanguageConfig (C.5): el idioma de la config es auto o el código de uno soportado; pt-BR y zh_CN valen como pt y zh; un
+// valor desconocido es auto.
+func TestLanguageConfig(t *testing.T) {
+	isolate(t)
+	for in, want := range map[string]string{
+		`"auto"`: "auto", `"AUTO"`: "auto", `"es"`: "es", `"en"`: "en", `"pt-BR"`: "pt", `"fr"`: "fr", `"de"`: "de", `"it"`: "it",
+		`"ja"`: "ja", `"zh_CN"`: "zh", `"zh-CN"`: "zh", `"klingon"`: "auto", `""`: "auto", `3`: "auto",
+	} {
+		writeDiskConfig(t, `{"keymap_version":2,"language":`+in+`}`)
+		if got, _ := Load(t.TempDir()); got.Language != want {
+			t.Errorf("language %s -> %q, se esperaba %q", in, got.Language, want)
+		}
+	}
+}

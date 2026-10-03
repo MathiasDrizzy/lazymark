@@ -66,13 +66,13 @@ func TestRewriteForColumn(t *testing.T) {
 	}{
 		{"todo → doing agrega el tag al final", std, "- [ ] tarea", 1, "- [ ] tarea #kb/doing"},
 		{"doing → todo quita el tag", std, "- [ ] tarea #kb/doing", 0, "- [ ] tarea"},
-		{"doing → done marca [x] y quita el tag", std, "- [ ] tarea #kb/doing", 2, "- [x] tarea"},
+		{"doing → done marca [x] y quita el tag", std, "- [ ] tarea #kb/doing", 2, "- [x] tarea ✅ 2026-10-02"},
 		{"done → doing desmarca y pone el tag", std, "- [x] tarea", 1, "- [ ] tarea #kb/doing"},
 		{"done con tag → todo", std, "- [x] tarea #kb/doing", 0, "- [ ] tarea"},
 		{"done → done no cambia nada", std, "- [x] tarea", 2, "- [x] tarea"},
 		{"mismo lugar no cambia nada", std, "- [ ] tarea #kb/doing", 1, "- [ ] tarea #kb/doing"},
 		{"tag desconocido se reemplaza en su sitio", std, "- [ ] a #kb/revisar b", 1, "- [ ] a #kb/doing b"},
-		{"tag desconocido y a done", std, "- [ ] a #kb/revisar", 2, "- [x] a"},
+		{"tag desconocido y a done", std, "- [ ] a #kb/revisar", 2, "- [x] a ✅ 2026-10-02"},
 		{"formato anterior se migra al mover", std, "- [ ] tarea #doing", 0, "- [ ] tarea"},
 		{"formato anterior a otra columna", custom, "- [ ] tarea #wip", 2, "- [ ] tarea #kb/review"},
 		{"formato anterior a la misma columna", std, "- [ ] tarea #doing", 1, "- [ ] tarea #kb/doing"},
@@ -82,7 +82,7 @@ func TestRewriteForColumn(t *testing.T) {
 		{"CRLF se conserva", std, "- [ ] tarea\r", 1, "- [ ] tarea #kb/doing\r"},
 		{"espacios al final se conservan", std, "- [ ] tarea  ", 1, "- [ ] tarea #kb/doing  "},
 		{"texto con emoji y fechas", std, "- [ ] enviar 📅 2026-10-05", 1, "- [ ] enviar 📅 2026-10-05 #kb/doing"},
-		{"otros tags no se tocan", std, "- [ ] tarea #diseño #kb/doing #urgente", 2, "- [x] tarea #diseño #urgente"},
+		{"otros tags no se tocan", std, "- [ ] tarea #diseño #kb/doing #urgente", 2, "- [x] tarea #diseño #urgente ✅ 2026-10-02"},
 	}
 	for _, c := range cases {
 		got, err := RewriteForColumn(c.line, c.cols, c.target)
@@ -139,7 +139,7 @@ func TestMoveTaskChangesOneLine(t *testing.T) {
 	if err := s.MoveTask(p, 4, std, 2, time.Time{}); err != nil {
 		t.Fatal(err)
 	}
-	if b, _ := os.ReadFile(p); !strings.Contains(string(b), "\n- [x] uno\n") {
+	if b, _ := os.ReadFile(p); !strings.Contains(string(b), "\n- [x] uno ✅ 2026-10-02\n") {
 		t.Errorf("no quedó en done:\n%s", b)
 	}
 }

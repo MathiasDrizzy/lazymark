@@ -213,6 +213,15 @@ func (s *Server) getToolsList() []obj {
 			"inputSchema": schema([]string{"id", "column"}, obj{"id": str(idDesc), "column": str("Id de la columna destino (get_kanban muestra las que hay).")}),
 		},
 		{
+			"name":        "set_task_date",
+			"description": "Pone o quita la fecha de inicio (🛫) o de vencimiento (📅) de una tarea, en el formato de Obsidian Tasks. Reescribe solo la línea de la tarea. La fecha de completada (✅) la maneja sola el movimiento a la columna de hecho.",
+			"inputSchema": schema([]string{"id", "field", "date"}, obj{
+				"id":    str(idDesc),
+				"field": obj{"type": "string", "enum": []string{"start", "due"}, "description": "start (inicio) o due (vencimiento)."},
+				"date":  str("La fecha AAAA-MM-DD (debe existir en el calendario), o \"none\" para quitarla."),
+			}),
+		},
+		{
 			"name":        "toggle_task",
 			"description": "Marca una tarea como hecha (la lleva a la columna de hecho) o, si ya lo estaba, la devuelve a la primera columna.",
 			"inputSchema": schema(nil, obj{
@@ -291,6 +300,16 @@ func (s *Server) callTool(name string, args map[string]interface{}) CallToolResu
 			return missing("'id' y 'column'")
 		}
 		t, err := svc.MoveTask(text("id"), text("column"))
+		if err != nil {
+			return fail(err)
+		}
+		return ok(t)
+
+	case "set_task_date":
+		if text("id") == "" || text("field") == "" || text("date") == "" {
+			return missing("'id', 'field' y 'date'")
+		}
+		t, err := svc.SetDate(text("id"), text("field"), text("date"))
 		if err != nil {
 			return fail(err)
 		}

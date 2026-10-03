@@ -3,6 +3,7 @@ package storage
 import (
 	"fmt"
 	"regexp"
+	"sort"
 	"strings"
 	"time"
 )
@@ -89,13 +90,35 @@ func (c Columns) Of(t Task) int {
 	return 0
 }
 
-// CleanTaskText devuelve el texto de la tarea sin las etiquetas de control del tablero (#kb/<col>, #doing…).
+// CleanTaskText devuelve el texto de la tarea sin lo que es del tablero y de las fechas: las etiquetas #kb/<col> (y las
+// #doing… heredadas) y la primera fecha válida de cada campo (🛫 📅 ✅). Las demás etiquetas y las fechas inválidas o
+// repetidas se quedan.
 func CleanTaskText(text string) string {
-	hits := scanTags(text)
-	for i := len(hits) - 1; i >= 0; i-- {
-		text = removeHit(text, hits[i])
+	type span struct{ start, end int }
+	var spans []span
+	for _, h := range scanTags(text) {
+		spans = append(spans, span{h.start, h.end})
 	}
-	return strings.TrimSpace(text)
+	seen := map[DateField]bool{}
+	for _, h := range scanDates(text) {
+		if !seen[h.field] {
+			seen[h.field] = true
+			spans = append(spans, span{h.start, h.end})
+		}
+	}
+	sort.Slice(spans, func(i, j int) bool { return spans[i].start > spans[j].start })
+	for _, sp := range spans {
+		text = removeSpan(text, sp.start, sp.end)
+	}
+	return strings.Join(strings.Fields(text), " ")
+}
+
+// removeSpan quita text[start:end] con los espacios que lo preceden.
+func removeSpan(text string, start, end int) string {
+	for start > 0 && (text[start-1] == ' ' || text[start-1] == '\t') {
+		start--
+	}
+	return text[:start] + text[end:]
 }
 
 // removeHit quita una etiqueta con los espacios que la preceden.
@@ -107,9 +130,10 @@ func removeHit(text string, h tagHit) string {
 	return text[:start] + text[h.end:]
 }
 
-// RewriteForColumn devuelve la línea de tarea con la casilla y el tag de la columna target: a la de hecho,
-// `[x]` y sin tag; a la primera, `[ ]` y sin tag; a las demás, `[ ]` y `#kb/<id>` (en el lugar del tag que ya
-// había, o al final). Las etiquetas del formato anterior se reemplazan por la nueva. No toca nada más de la línea.
+// RewriteForColumn devuelve la línea de tarea con la casilla y el tag de la columna target: a la de hecho, `[x]` y sin
+// tag (y con `✅ hoy` si no tenía fecha de completada); a la primera, `[ ]` y sin tag; a las demás, `[ ]` y `#kb/<id>`
+// (en el lugar del tag que ya había, o al final). Al salir de la columna de hecho se quita el `✅`. Las etiquetas del
+// formato anterior se reemplazan por la nueva. No toca nada más de la línea.
 func RewriteForColumn(line string, cols Columns, target int) (string, error) {
 	if target < 0 || target >= len(cols) {
 		return "", fmt.Errorf("la columna %d no existe (hay %d)", target, len(cols))
@@ -123,6 +147,7 @@ func RewriteForColumn(line string, cols Columns, target int) (string, error) {
 		cr, m[3] = "\r", strings.TrimSuffix(m[3], "\r")
 	}
 	mark := m[2]
+	wasDone := mark == "x" || mark == "X"
 	switch {
 	case target == cols.DoneIndex():
 		if mark != "x" && mark != "X" {
@@ -160,7 +185,11 @@ func RewriteForColumn(line string, cols Columns, target int) (string, error) {
 		trimmed := strings.TrimRight(rest, " \t")
 		rest = trimmed + " " + tag + rest[len(trimmed):]
 	}
-	return m[1] + mark + "]" + rest + cr, nil
+	out := m[1] + mark + "]" + rest + cr
+	if wasDone && target == cols.DoneIndex() {
+		return out, nil // ya estaba hecha: no se cambia su fecha de completada
+	}
+	return withCompletion(out, target == cols.DoneIndex()), nil
 }
 
 // MoveTask mueve la tarea de la línea line de la nota a la columna target, reescribiendo solo esa línea. Si
@@ -177,4 +206,22 @@ func (s *Storage) MoveTask(notePath string, line int, cols Columns, target int, 
 		}
 		return out, nil
 	})
+}
+
+// withCompletion mantiene la fecha de completada de una tarea según su casilla: al quedar hecha se agrega `✅ hoy` si no
+// tenía una válida (si ya la tenía, por ejemplo de Obsidian, se respeta), y al dejar de estarlo se quita.
+func withCompletion(line string, done bool) string {
+	has := false
+	for _, h := range scanDates(line) {
+		if h.field == DateDone {
+			has = true
+		}
+	}
+	switch {
+	case done && !has:
+		return setDate(line, DateDone, Today())
+	case !done && has:
+		return setDate(line, DateDone, "")
+	}
+	return line
 }
