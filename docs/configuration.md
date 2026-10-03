@@ -39,7 +39,7 @@ if the note was modified by another program since it loaded it.
 What lazymark reads from your notes:
 
 - **Tags**: any `#word`. They fill the Categories panel.
-- **Tasks**: lines that start with `- [ ] something` or `- [x] something` (also with `*`). Checkboxes inside an indented list are not picked up yet.
+- **Tasks**: list items that start with a checkbox, `- [ ] something` or `- [x] something`. The bullet can be `-`, `*`, `+` or a number (`1.`, `1)`), and the item can be nested at any depth (spaces or tabs, also under an item with no checkbox). Moving, ticking or dating a nested task rewrites only its line and keeps its indentation, and its id does not change. Checkboxes inside a code block (fenced with ``` or ~~~, or indented 4 spaces outside a list) and inside a quote (`> - [ ]`) are not tasks.
 - **Kanban column**: a tag at the end of the task line, `- [ ] task #kb/doing`. No tag is the first
   column and `[x]` is always the done column. The old `#doing`, `#wip`, `#progreso` and `#in-progress`
   tags are still read as *doing* and are replaced when you move the card. See [cli.md](cli.md).

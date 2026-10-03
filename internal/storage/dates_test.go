@@ -225,7 +225,8 @@ func TestDatesAgainstOracleFixtures(t *testing.T) {
 		t.Fatalf("solo %d casos", len(cases))
 	}
 	for _, c := range cases {
-		tasks := (&Storage{}).extractTasks("n", "/n.md", c.Line)
+		// la sangría de 4 de una línea suelta sería un bloque de código (C.3); aquí solo se prueban las fechas
+		tasks := (&Storage{}).extractTasks("n", "/n.md", strings.TrimLeft(c.Line, " \t"))
 		if len(tasks) != 1 {
 			t.Errorf("%q: no se leyó como una tarea", c.Line)
 			continue

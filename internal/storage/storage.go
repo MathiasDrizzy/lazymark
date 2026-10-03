@@ -1,7 +1,6 @@
 package storage
 
 import (
-	"bufio"
 	"bytes"
 	"errors"
 	"fmt"
@@ -75,10 +74,12 @@ func New(baseDir string) *Storage {
 var wikilinkRe = regexp.MustCompile(`\[\[[^\[\]\n]*\]\]`)
 
 var (
-	taskRegex   = regexp.MustCompile(`^[-*]\s+\[([ xX])\]\s+(.*)$`)
-	imageRegex  = regexp.MustCompile(`!\[(.*?)\]\((.*?)\)`)
-	tagRegex    = regexp.MustCompile(`#([a-zA-Z0-9_-]+)(/[a-zA-Z0-9_/-]*)?`)
-	unsafeChars = regexp.MustCompile(`[\\/:*?"<>|]`)
+	// una tarea: viñeta (- * +) o número de lista (1. 1)) y casilla; la sangría ya se quitó
+	taskRegex     = regexp.MustCompile(`^(?:[-*+]|\d+[.)])\s+\[([ xX])\]\s+(.*)$`)
+	listItemRegex = regexp.MustCompile(`^(?:[-*+]|\d+[.)])(?:\s|$)`)
+	imageRegex    = regexp.MustCompile(`!\[(.*?)\]\((.*?)\)`)
+	tagRegex      = regexp.MustCompile(`#([a-zA-Z0-9_-]+)(/[a-zA-Z0-9_/-]*)?`)
+	unsafeChars   = regexp.MustCompile(`[\\/:*?"<>|]`)
 )
 
 // CurrentDir devuelve la ruta absoluta del directorio actualmente navegado
@@ -300,24 +301,81 @@ func (s *Storage) extractTags(content string) []string {
 
 func (s *Storage) extractTasks(title, path, content string) []Task {
 	var tasks []Task
-	scanner := bufio.NewScanner(strings.NewReader(content))
-	lineNum := 1
-	for scanner.Scan() {
-		line := strings.TrimSpace(scanner.Text())
-		if matches := taskRegex.FindStringSubmatch(line); len(matches) == 3 {
-			done := matches[1] == "x" || matches[1] == "X"
+	fence := ""     // el vallado de código abierto (``` o ~~~, con su largo), o ""
+	inList := false // estamos dentro de una lista: ahí una sangría de 4 o más es una sublista y no un bloque de código
+	for i, raw := range strings.Split(content, "\n") {
+		line := strings.TrimSuffix(raw, "\r")
+		if f := fenceMarker(line); f != "" {
+			if !strings.HasPrefix(line, " ") && !strings.HasPrefix(line, "\t") {
+				inList = false // un vallado al margen corta la lista
+			}
+			switch {
+			case fence == "":
+				fence = f
+			case f[0] == fence[0] && len(f) >= len(fence) && strings.TrimSpace(line)[len(f):] == "":
+				fence = ""
+			}
+			continue
+		}
+		if fence != "" { // lo que está dentro de un bloque de código no es una tarea
+			continue
+		}
+		body := strings.TrimLeft(line, " \t")
+		if body == "" { // las líneas en blanco no cortan una lista
+			continue
+		}
+		indent := indentWidth(line[:len(line)-len(body)])
+		item := listItemRegex.MatchString(body)
+		switch {
+		case item && indent < 4:
+			inList = true
+		case !item && indent == 0:
+			inList = false // un párrafo pegado al margen termina la lista
+		}
+		if !item || (indent >= 4 && !inList) { // sangría de 4 fuera de una lista: es un bloque de código, no una sublista
+			continue
+		}
+		if m := taskRegex.FindStringSubmatch(body); len(m) == 3 {
 			tasks = append(tasks, Task{
 				NoteTitle: title,
 				NotePath:  path,
-				Line:      lineNum,
-				Text:      matches[2],
-				Done:      done,
-				Dates:     ParseDates(matches[2]),
+				Line:      i + 1,
+				Text:      m[2],
+				Done:      m[1] == "x" || m[1] == "X",
+				Dates:     ParseDates(m[2]),
 			})
 		}
-		lineNum++
 	}
 	return tasks
+}
+
+// indentWidth es el ancho de una sangría: un espacio es 1 y un tabulador llega al siguiente múltiplo de 4.
+func indentWidth(ws string) int {
+	w := 0
+	for _, r := range ws {
+		if r == '\t' {
+			w += 4 - w%4
+		} else {
+			w++
+		}
+	}
+	return w
+}
+
+// fenceMarker devuelve el vallado de código (3 o más ` o ~) con el que empieza la línea, o "".
+func fenceMarker(line string) string {
+	t := strings.TrimLeft(line, " \t")
+	if len(t) < 3 || (t[0] != '`' && t[0] != '~') {
+		return ""
+	}
+	i := 0
+	for i < len(t) && t[i] == t[0] {
+		i++
+	}
+	if i < 3 || (t[0] == '`' && strings.Contains(t[i:], "`")) {
+		return ""
+	}
+	return t[:i]
 }
 
 func (s *Storage) extractImages(content string) []string {
@@ -449,7 +507,7 @@ func (s *Storage) ListFolders() ([]string, error) {
 	return folders, err
 }
 
-var toggleTaskRegex = regexp.MustCompile(`^(\s*[-*]\s+\[)([ xX])(\]\s*.*)$`)
+var toggleTaskRegex = regexp.MustCompile(`^(\s*(?:[-*+]|\d+[.)])\s+\[)([ xX])(\]\s*.*)$`)
 
 // ToggleTask alterna una tarea (- [ ] <-> - [x]) reescribiendo solo esa línea.
 func (s *Storage) ToggleTask(notePath string, lineNum int) (bool, error) {

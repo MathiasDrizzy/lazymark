@@ -2,6 +2,7 @@ package storage
 
 import (
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -284,6 +285,93 @@ func TestResolveFolder(t *testing.T) {
 	for _, bad := range []string{"..", "../x", "sub/../..", filepath.Dir(outside), "nada", "sub/a.md"} {
 		if _, err := s.ResolveFolder(bad); err == nil {
 			t.Errorf("%q debía rechazarse", bad)
+		}
+	}
+}
+
+// TestNestedTasks (C.3): las casillas dentro de listas anidadas (sangría de espacios o tabulador, viñetas - * + y números
+// 1. 1)) son tareas, también bajo una tarea o un ítem sin casilla; no lo son las de un bloque de código (vallado o
+// sangrado de 4 fuera de una lista) ni las citas. Mover, marcar y fechar una tarea anidada cambia solo su línea y
+// conserva su sangría; el id no cambia al marcarla ni al moverla.
+func TestNestedTasks(t *testing.T) {
+	body := "# Plan\n" +
+		"- [ ] raiz\n" +
+		"  - [ ] hija\n" +
+		"    - [x] nieta\n" +
+		"\t- [ ] con tab\n" +
+		"* item sin casilla\n" +
+		"    + [ ] bajo el item\n" +
+		"1. [ ] numerada\n" +
+		"   2) [ ] numerada anidada\n" +
+		"\n" +
+		"Un párrafo.\n" +
+		"\n" +
+		"    - [ ] bloque de código sangrado\n" +
+		"\n" +
+		"```\n- [ ] vallado\n```\n" +
+		"~~~md\n  - [ ] vallado con tilde\n~~~\n" +
+		"> - [ ] en una cita\n" +
+		"- [ ] final"
+	s, p := kanbanNote(t, body)
+	var got []string
+	for _, tk := range s.extractTasks("n", p, body) {
+		got = append(got, fmt.Sprintf("%d:%s", tk.Line, tk.Text))
+	}
+	want := []string{"2:raiz", "3:hija", "4:nieta", "5:con tab", "7:bajo el item", "8:numerada", "9:numerada anidada", "22:final"}
+	if strings.Join(got, "|") != strings.Join(want, "|") {
+		t.Fatalf("tareas leídas:\n got %v\nwant %v", got, want)
+	}
+
+	idsOf := func(content string) map[int]string {
+		n := Note{Path: p, Tasks: s.extractTasks("n", p, content)}
+		out := map[int]string{}
+		for i, id := range s.TaskIDs(n) {
+			out[n.Tasks[i].Line] = id
+		}
+		return out
+	}
+	ids := idsOf(body)
+	if len(ids) != len(want) {
+		t.Fatalf("ids repetidos o faltantes: %v", ids)
+	}
+	// mover la hija a doing, marcar la numerada anidada y fechar la de tab: una línea cada vez, con su sangría
+	if err := s.MoveTask(p, 3, std, 1, time.Time{}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.ToggleTask(p, 9); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.SetTaskDate(p, 5, DateDue, "2026-12-01", time.Time{}); err != nil {
+		t.Fatal(err)
+	}
+	after, _ := os.ReadFile(p)
+	bl, al := strings.Split(body, "\n"), strings.Split(string(after), "\n")
+	if len(bl) != len(al) {
+		t.Fatalf("cambió el número de líneas: %d → %d", len(bl), len(al))
+	}
+	for i := range bl {
+		switch i + 1 {
+		case 3:
+			if al[i] != "  - [ ] hija #kb/doing" {
+				t.Errorf("hija: %q", al[i])
+			}
+		case 5:
+			if al[i] != "\t- [ ] con tab 📅 2026-12-01" {
+				t.Errorf("con tab: %q", al[i])
+			}
+		case 9:
+			if !strings.HasPrefix(al[i], "   2) [x] numerada anidada ✅ ") {
+				t.Errorf("numerada anidada: %q", al[i])
+			}
+		default:
+			if bl[i] != al[i] {
+				t.Errorf("la línea %d no debía cambiar: %q → %q", i+1, bl[i], al[i])
+			}
+		}
+	}
+	for line, id := range idsOf(string(after)) {
+		if ids[line] != id {
+			t.Errorf("el id de la línea %d cambió: %s → %s", line, ids[line], id)
 		}
 	}
 }

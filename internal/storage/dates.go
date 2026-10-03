@@ -101,7 +101,7 @@ func Overdue(done bool, due, today string) bool {
 var Today = func() string { return time.Now().Format("2006-01-02") }
 
 // checkboxOnly reconoce una línea que termina en la casilla ("- [ ]"), sin texto ni espacio detrás.
-var checkboxOnly = regexp.MustCompile(`^\s*[-*]\s+\[[ xX]\]$`)
+var checkboxOnly = regexp.MustCompile(`^\s*(?:[-*+]|\d+[.)])\s+\[[ xX]\]$`)
 
 // setDate devuelve la línea con el campo f puesto en value (AAAA-MM-DD) o quitado (value ""). Con un valor, reemplaza en su
 // sitio el primer marcador del campo (aunque su fecha sea inválida) y quita los demás: nunca quedan dos del mismo emoji; si no

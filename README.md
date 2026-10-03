@@ -198,7 +198,7 @@ See [docs/configuration.md](docs/configuration.md) for every setting, the comman
 
 Limitations:
 
-- Tasks are the lines that start with `- [ ]` or `- [x]`; checkboxes inside an indented list are not listed yet.
+- Tasks are the list items that start with `- [ ]` or `- [x]` (also `*`, `+` and numbered), nested at any depth; code blocks are ignored.
 - The Kanban board has 2 to 6 columns, in the order of your config; cards are not reordered inside a column.
 - Pasting an image from the clipboard (`Ctrl+V`, or `lazymark paste` from an editor) needs `osascript` or `pngpaste` (macOS), `wl-paste` or `xclip` (Linux) or PowerShell (Windows).
 - The editor plugins need micro, vim or GNU nano; nano also needs the note to be opened from lazymark.
