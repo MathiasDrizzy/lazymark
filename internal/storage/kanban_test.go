@@ -484,3 +484,19 @@ func TestEnsureFolder(t *testing.T) {
 		t.Error("se creó fuera de la carpeta de notas")
 	}
 }
+
+// TestSwapTasksRefusesDifferentParents (C.4, segunda opinión): dos subtareas con la misma sangría pero bajo padres distintos no se
+// intercambian (cambiarían de padre); sí las que cuelgan del mismo.
+func TestSwapTasksRefusesDifferentParents(t *testing.T) {
+	body := "- [ ] Padre 1\n  - [ ] Hijo 1\n  - [ ] Hijo 1b\n- [ ] Padre 2\n  - [ ] Hijo 2\n"
+	s, p := kanbanNote(t, body)
+	if _, _, err := s.SwapTasks(p, 2, 5, time.Time{}); !errors.Is(err, ErrNotSiblings) {
+		t.Fatalf("Hijo 1 e Hijo 2 tienen padres distintos: %v", err)
+	}
+	if b, _ := os.ReadFile(p); string(b) != body {
+		t.Errorf("no debía escribir: %q", b)
+	}
+	if _, _, err := s.SwapTasks(p, 2, 3, time.Time{}); err != nil {
+		t.Errorf("Hijo 1 e Hijo 1b comparten padre: %v", err)
+	}
+}

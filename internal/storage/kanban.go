@@ -279,8 +279,13 @@ func (s *Storage) SwapTasks(notePath string, lineA, lineB int, expected time.Tim
 		}
 		_, ea := taskBlock(lines, a)
 		_, eb := taskBlock(lines, b)
-		if ea >= b { // la segunda cuelga de la primera
-			return nil, fmt.Errorf("%w: una cuelga de la otra", ErrNotSiblings)
+		// con la misma sangría, la segunda nunca cuelga de la primera; pero si entre las dos hay una línea con menos sangría (otro padre,
+		// o un párrafo) ya no tienen el mismo padre y cambiarían de sitio en el árbol
+		indent := indentWidth(leadingSpace(lines[a]))
+		for _, l := range lines[ea+1 : b] {
+			if t := strings.TrimSuffix(l, "\r"); strings.TrimSpace(t) != "" && indentWidth(leadingSpace(t)) < indent {
+				return nil, fmt.Errorf("%w: tienen padres distintos", ErrNotSiblings)
+			}
 		}
 		out := make([]string, 0, len(lines))
 		out = append(out, lines[:a]...)
