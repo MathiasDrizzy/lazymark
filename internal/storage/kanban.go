@@ -221,7 +221,18 @@ func withCompletion(line string, done bool) string {
 	case done && !has:
 		return setDate(line, DateDone, Today())
 	case !done && has:
-		return setDate(line, DateDone, "")
+		for { // también las repetidas: si no, quedaría una fecha de completada en una tarea abierta
+			hasMore := false
+			for _, h := range scanDates(line) {
+				if h.field == DateDone {
+					hasMore = true
+				}
+			}
+			if !hasMore {
+				return line
+			}
+			line = setDate(line, DateDone, "")
+		}
 	}
 	return line
 }

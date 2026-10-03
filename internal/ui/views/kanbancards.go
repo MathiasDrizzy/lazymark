@@ -121,9 +121,12 @@ func cardDates(d storage.Dates, done bool, today string, width int, muted lipglo
 	return ""
 }
 
-// cardHeight es el alto de una tarjeta: 2 de borde, 1 o 2 líneas de texto, la nota de origen y, si tiene fechas, su línea.
-func cardHeight(c KanbanCard, inner int) int {
-	h := 2 + len(wrapLines(c.CleanText, inner-cardIndent, 2)) + 1
+// cardTextWidth es el ancho del texto de una tarjeta de ancho w: sin el borde, el espacio de cada lado, el cursor y la casilla.
+func cardTextWidth(w int) int { return w - 4 - cardIndent }
+
+// cardHeight es el alto de una tarjeta de ancho w: 2 de borde, 1 o 2 líneas de texto, la nota de origen y, si tiene fechas, su línea.
+func cardHeight(c KanbanCard, w int) int {
+	h := 2 + len(wrapLines(c.CleanText, cardTextWidth(w), 2)) + 1
 	if c.Task.Dates != (storage.Dates{}) {
 		h++
 	}
@@ -178,7 +181,7 @@ func renderCard(c KanbanCard, w int, doneCol bool, midCol bool, selected, active
 		return border.Render("│") + " " + textwidth.Pad(content, inner) + " " + border.Render("│")
 	}
 	rows := []string{border.Render("╭" + strings.Repeat("─", w-2) + "╮")}
-	for i, l := range wrapLines(c.CleanText, inner-cardIndent, 2) {
+	for i, l := range wrapLines(c.CleanText, cardTextWidth(w), 2) {
 		prefix := "    "
 		if i == 0 {
 			prefix = border.Render(cursor) + lipgloss.NewStyle().Foreground(markColor).Render(mark) + " "
@@ -196,7 +199,7 @@ func renderCard(c KanbanCard, w int, doneCol bool, midCol bool, selected, active
 // renderCardColumn dibuja las tarjetas de una columna en un área de usable filas: arranca de la primera tarjeta que deja
 // la seleccionada a la vista. Registra una zona de clic del alto de cada tarjeta visible.
 func renderCardColumn(cards []KanbanCard, col, sel int, width, usable int, doneCol, midCol, active bool, drag KanbanDrag, today string, ht *mouse.HitTester, x0, y0 int) []string {
-	inner := width - 4 // el ancho que RenderBoxWithTitle deja al contenido
+	inner := width - 4 // el ancho que RenderBoxWithTitle deja al contenido, que es el de cada tarjeta
 	start := 0
 	for start < sel {
 		h := 0
@@ -212,8 +215,13 @@ func renderCardColumn(cards []KanbanCard, col, sel int, width, usable int, doneC
 	for i := start; i < len(cards); i++ {
 		h := cardHeight(cards[i], inner)
 		if len(lines)+h > usable {
-			if len(lines) == 0 { // una tarjeta más alta que el área: se recorta
-				lines = append(lines, renderCard(cards[i], inner, doneCol, midCol, i == sel, active, false, today)...)
+			if len(lines) == 0 { // una tarjeta más alta que el área: se recorta, y sigue siendo clicable
+				card := renderCard(cards[i], inner, doneCol, midCol, i == sel, active, drag.Active && col == drag.Col && i == drag.Idx, today)
+				lines = append(lines, card[:min(len(card), usable)]...)
+				if ht != nil {
+					ht.Register(fmt.Sprintf("kanban-card-%d-%d", col, i), mouse.ZoneKanbanCard, x0+2, y0, x0+width-3, y0+len(lines)-1, i,
+						fmt.Sprintf("%d|%d|%s", col, cards[i].Task.Line, cards[i].NotePath))
+				}
 			}
 			break
 		}

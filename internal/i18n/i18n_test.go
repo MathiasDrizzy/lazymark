@@ -20,9 +20,4 @@ func TestI18n(t *testing.T) {
 	if T("Hola", "Hello") != "Hello" {
 		t.Errorf("traducción en inglés falló")
 	}
-
-	next := ToggleLanguage()
-	if next != LangES {
-		t.Errorf("ToggleLanguage debió cambiar a 'es'")
-	}
 }

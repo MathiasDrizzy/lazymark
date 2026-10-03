@@ -170,3 +170,16 @@ func TestWrapLines(t *testing.T) {
 		t.Errorf("japonés: %q", got)
 	}
 }
+
+// TestCardHeightMatchesRender: el alto con el que se calculan el scroll y las zonas de clic es el de la tarjeta dibujada, para
+// cualquier ancho y largo de texto (un desajuste dejaba filas de la tarjeta sin zona y corría los clics de las siguientes).
+func TestCardHeightMatchesRender(t *testing.T) {
+	for w := 24; w <= 60; w++ {
+		for n := 1; n <= 70; n++ {
+			c := KanbanCard{CleanText: strings.TrimSpace(strings.Repeat("palabra ", n/8+1)[:n]), NoteTitle: "N"}
+			if got, want := len(renderCard(c, w, false, false, false, true, false, "2026-01-01")), cardHeight(c, w); got != want {
+				t.Fatalf("ancho %d, texto de %d caracteres (%q): se dibujan %d filas y cardHeight dice %d", w, n, c.CleanText, got, want)
+			}
+		}
+	}
+}

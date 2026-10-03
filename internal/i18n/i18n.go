@@ -96,7 +96,7 @@ func Parse(s string) (Language, bool) {
 		return LangEN, true
 	case "es", "spanish", "español", "espanol":
 		return LangES, true
-	case "pt", "portuguese", "português", "portugues":
+	case "pt", "portuguese", "português", "portugues", "português (br)":
 		return LangPT, true
 	case "fr", "french", "français", "francais":
 		return LangFR, true
@@ -117,7 +117,7 @@ func Parse(s string) (Language, bool) {
 func Detect(getenv func(string) string) Language {
 	for _, name := range []string{"LC_ALL", "LC_MESSAGES", "LANG"} {
 		v := strings.TrimSpace(getenv(name))
-		if v == "" || v == "C" || v == "POSIX" {
+		if v == "" || v == "POSIX" || v == "C" || strings.HasPrefix(v, "C.") { // la locale "C" (C.UTF-8 en los contenedores) no elige idioma
 			continue
 		}
 		if l, ok := Parse(v); ok {
@@ -146,21 +146,6 @@ func CurrentLanguage() Language {
 	mu.RLock()
 	defer mu.RUnlock()
 	return currentLang
-}
-
-// ToggleLanguage pasa al siguiente idioma de la lista y lo devuelve.
-func ToggleLanguage() Language {
-	cur := CurrentLanguage()
-	next := Languages[0]
-	for i, l := range Languages {
-		if l == cur {
-			next = Languages[(i+1)%len(Languages)]
-		}
-	}
-	mu.Lock()
-	currentLang = next
-	mu.Unlock()
-	return next
 }
 
 // T devuelve el texto en el idioma activo: es y en vienen del código; los demás idiomas, del catálogo (clave: en), y sin

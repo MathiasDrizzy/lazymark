@@ -111,6 +111,7 @@ func TestCompletionDate(t *testing.T) {
 		{"hecho a hecho no cambia", "- [x] a", 2, "- [x] a"},
 		{"hecho a hecho conserva la fecha", "- [x] a ✅ 2026-05-09", 2, "- [x] a ✅ 2026-05-09"},
 		{"doing a todo no agrega nada", "- [ ] a #kb/doing", 0, "- [ ] a"},
+		{"al desmarcar se quitan también las completadas repetidas", "- [x] a ✅ 2026-05-01 ✅ 2026-05-02", 0, "- [ ] a"},
 	}
 	for _, c := range cases {
 		got, err := RewriteForColumn(c.line, std, c.target)

@@ -126,6 +126,8 @@ func TestParseAndDetect(t *testing.T) {
 		"sin variables":           {map[string]string{}, LangEN},
 		"idioma no soportado":     {map[string]string{"LANG": "ru_RU.UTF-8"}, LangEN},
 		"es":                      {map[string]string{"LANG": "es_AR.UTF-8"}, LangES},
+		"C.UTF-8 no elige idioma": {map[string]string{"LC_ALL": "C.UTF-8", "LANG": "es_ES.UTF-8"}, LangES},
+		"POSIX no elige idioma":   {map[string]string{"LC_ALL": "POSIX", "LC_MESSAGES": "fr_FR.UTF-8"}, LangFR},
 	} {
 		if got := Detect(env(c.env)); got != c.want {
 			t.Errorf("%s: %q, se esperaba %q", name, got, c.want)
@@ -157,18 +159,12 @@ func TestTranslatesFromCatalog(t *testing.T) {
 	if CurrentLanguage() != LangPT {
 		t.Error("pt-BR")
 	}
-	// ToggleLanguage recorre todos los idiomas y vuelve al primero
-	SetLanguage("en")
-	seen := []Language{CurrentLanguage()}
-	for i := 0; i < len(Languages); i++ {
-		seen = append(seen, ToggleLanguage())
-	}
-	if seen[len(seen)-1] != LangEN || len(seen) != len(Languages)+1 {
-		t.Errorf("la secuencia %v no da la vuelta completa", seen)
-	}
 	for _, l := range Languages {
 		if l.Name() == "" {
 			t.Errorf("%s sin nombre", l)
+		}
+		if got, ok := Parse(l.Name()); !ok || got != l { // el nombre que muestra Ajustes también se entiende
+			t.Errorf("Parse(%q) = %q, %v; se esperaba %q", l.Name(), got, ok, l)
 		}
 	}
 }

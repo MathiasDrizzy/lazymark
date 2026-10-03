@@ -21,9 +21,6 @@ const (
 
 var dateEmoji = [3]string{"🛫", "📅", "✅"}
 
-// Name es el nombre del campo en la línea de comandos y en el JSON: start, due, done.
-func (f DateField) Name() string { return [3]string{"start", "due", "done"}[f] }
-
 // Emoji es el emoji que abre el campo.
 func (f DateField) Emoji() string { return dateEmoji[f] }
 
@@ -39,9 +36,6 @@ func ValidDate(s string) bool {
 
 // Dates son las fechas de una tarea ("" si no tiene ese campo).
 type Dates struct{ Start, Due, Done string }
-
-// Get devuelve la fecha del campo f.
-func (d Dates) Get(f DateField) string { return [3]string{d.Start, d.Due, d.Done}[f] }
 
 type dateHit struct {
 	field      DateField
