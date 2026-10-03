@@ -375,3 +375,107 @@ func TestNestedTasks(t *testing.T) {
 		}
 	}
 }
+
+// TestSwapTasks (C.4): intercambia dos tareas hermanas de una nota con sus subtareas; el resto del archivo (también lo que hay
+// entre las dos) queda igual, y devuelve dónde quedó cada una. No intercambia tareas de distinta sangría, una que cuelga de la otra,
+// ni líneas que no son tareas; una nota cambiada por fuera no se pisa.
+func TestSwapTasks(t *testing.T) {
+	body := "# Plan\n- [ ] a\n  - [ ] a1\n    continuación de a1\n- [ ] b #kb/doing\ntexto entre medio\n- [ ] c\n  - [x] c1\n\n- [ ] d\n"
+	s, p := kanbanNote(t, body)
+	read := func() string { b, _ := os.ReadFile(p); return string(b) }
+
+	// a (con su subtarea) y c (con la suya): lo de en medio no se mueve
+	na, nc, err := s.SwapTasks(p, 2, 7, time.Time{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := "# Plan\n- [ ] c\n  - [x] c1\n- [ ] b #kb/doing\ntexto entre medio\n- [ ] a\n  - [ ] a1\n    continuación de a1\n\n- [ ] d\n"
+	if got := read(); got != want {
+		t.Fatalf("tras intercambiar a y c:\n%q\nse esperaba\n%q", got, want)
+	}
+	if na != 6 || nc != 2 {
+		t.Errorf("líneas nuevas a=%d c=%d, se esperaba 6 y 2", na, nc)
+	}
+	// al revés (lineA > lineB) devuelve lo mismo por tarea y deja el archivo como estaba
+	na, nc, err = s.SwapTasks(p, 6, 2, time.Time{}) // a (ahora en la 6) y c (en la 2)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := read(); got != body {
+		t.Fatalf("intercambiar dos veces debe dejar el original:\n%q", got)
+	}
+	if na != 2 || nc != 7 {
+		t.Errorf("(6,2): la que estaba en 6 queda en %d y la de 2 en %d, se esperaba 2 y 7", na, nc)
+	}
+
+	// rechazos: el archivo no cambia
+	for name, c := range map[string][2]int{
+		"sangrías distintas": {2, 3},  // a y a1
+		"una cuelga de otra": {3, 3},  // la misma
+		"no es tarea":        {2, 6},  // texto entre medio
+		"fuera de rango":     {2, 99}, // más allá del final
+	} {
+		if _, _, err := s.SwapTasks(p, c[0], c[1], time.Time{}); err == nil {
+			t.Errorf("%s: debía rechazarse", name)
+		} else if name != "fuera de rango" && !errors.Is(err, ErrNotSiblings) {
+			t.Errorf("%s: %v", name, err)
+		}
+	}
+	// a cuelga... b es hermana de a pero a1 no es hermana de b
+	if _, _, err := s.SwapTasks(p, 3, 5, time.Time{}); !errors.Is(err, ErrNotSiblings) {
+		t.Errorf("a1 (anidada) y b (raíz): %v", err)
+	}
+	if got := read(); got != body {
+		t.Errorf("los rechazos no deben escribir:\n%q", got)
+	}
+
+	// CRLF: se conserva
+	crlf := "- [ ] x\r\n- [ ] y\r\n"
+	s2, p2 := kanbanNote(t, crlf)
+	if _, _, err := s2.SwapTasks(p2, 1, 2, time.Time{}); err != nil {
+		t.Fatal(err)
+	}
+	if b, _ := os.ReadFile(p2); string(b) != "- [ ] y\r\n- [ ] x\r\n" {
+		t.Errorf("CRLF: %q", b)
+	}
+
+	// una nota cambiada por fuera no se pisa
+	st, _ := os.Stat(p)
+	os.WriteFile(p, []byte(body+"otro\n"), 0o644)
+	os.Chtimes(p, time.Now().Add(time.Hour), time.Now().Add(time.Hour))
+	if _, _, err := s.SwapTasks(p, 2, 7, st.ModTime()); !errors.Is(err, ErrNoteChanged) {
+		t.Errorf("con el mtime viejo debe dar ErrNoteChanged: %v", err)
+	}
+}
+
+// TestEnsureFolder (C.2): crea las carpetas que faltan dentro de la de notas y nunca fuera (.., rutas absolutas, enlaces simbólicos).
+func TestEnsureFolder(t *testing.T) {
+	s, _ := kanbanNote(t, "x\n")
+	got, err := s.EnsureFolder("a/b/c")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if fi, err := os.Stat(filepath.Join(s.BaseDir, "a", "b", "c")); err != nil || !fi.IsDir() || filepath.Base(got) != "c" {
+		t.Errorf("no creó a/b/c: %v %q", err, got)
+	}
+	if _, err := s.EnsureFolder("a/b/c"); err != nil {
+		t.Errorf("una carpeta que existe no es error: %v", err)
+	}
+	outside := t.TempDir()
+	if err := os.Symlink(outside, filepath.Join(s.BaseDir, "salida")); err == nil {
+		if _, err := s.EnsureFolder("salida/dentro"); err == nil {
+			t.Error("no debe crear a través de un enlace simbólico hacia fuera")
+		}
+		if es, _ := os.ReadDir(outside); len(es) != 0 {
+			t.Errorf("se escribió fuera: %v", es)
+		}
+	}
+	for _, bad := range []string{"../x", "a/../../x", "/tmp/x", "a//b", "a/\x01b", "a\\b"} {
+		if _, err := s.EnsureFolder(bad); err == nil {
+			t.Errorf("%q debía rechazarse", bad)
+		}
+	}
+	if _, err := os.Stat(filepath.Join(filepath.Dir(s.BaseDir), "x")); err == nil {
+		t.Error("se creó fuera de la carpeta de notas")
+	}
+}

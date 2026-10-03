@@ -100,6 +100,8 @@ Opened with `W`. Cards are the tasks of your notes.
 | `→` `l` | Next column |
 | `H` `shift+←` | Move left |
 | `L` `shift+→` | Move right |
+| `K` `shift+up` | Move up |
+| `J` `shift+down` | Move down |
 | `Space` | Toggle task |
 | `Enter` `e` | Edit |
 | `Esc` `W` | Back to notes |

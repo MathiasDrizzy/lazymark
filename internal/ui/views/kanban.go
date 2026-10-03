@@ -70,11 +70,14 @@ func CollectKanban(notes []storage.Note, cols storage.Columns, titles []string) 
 	return board
 }
 
-// KanbanDrag describe un arrastre en curso: la tarjeta (Col, Idx) que se lleva y la columna de destino bajo el puntero.
+// KanbanDrag describe un arrastre en curso: la tarjeta (Col, Idx) que se lleva y la columna de destino bajo el puntero (y, si es
+// la misma columna, la tarjeta sobre la que se suelta).
 type KanbanDrag struct {
 	Active   bool
 	Col, Idx int
 	Target   int
+	// TargetIdx es la tarjeta de la misma columna sobre la que está el puntero (reordenar con un arrastre vertical), o -1.
+	TargetIdx int
 }
 
 // titleCase pone en mayúscula la primera letra de cada palabra ("En progreso" → "En Progreso").

@@ -1,6 +1,7 @@
 package storage
 
 import (
+	"errors"
 	"fmt"
 	"regexp"
 	"sort"
@@ -226,4 +227,77 @@ func withCompletion(line string, done bool) string {
 		return setDate(line, DateDone, "") // quita todos los ✅
 	}
 	return line
+}
+
+// ErrNotSiblings es el error de SwapTasks cuando las dos tareas no se pueden intercambiar: no son hermanas (otra sangría), una cuelga
+// de la otra o alguna de las líneas ya no es una tarea.
+var ErrNotSiblings = errors.New("las tareas no son hermanas")
+
+// taskBlock devuelve el rango [start, end] (índices de lines) de la tarea de la línea idx: ella y las líneas siguientes con más
+// sangría que la suya (sus subtareas y su texto de continuación). Una línea en blanco termina el bloque.
+func taskBlock(lines []string, idx int) (int, int) {
+	indent := indentWidth(leadingSpace(lines[idx]))
+	end := idx
+	for end+1 < len(lines) {
+		next := strings.TrimSuffix(lines[end+1], "\r")
+		if strings.TrimSpace(next) == "" || indentWidth(leadingSpace(next)) <= indent {
+			break
+		}
+		end++
+	}
+	return idx, end
+}
+
+func leadingSpace(l string) string { return l[:len(l)-len(strings.TrimLeft(l, " \t"))] }
+
+// SwapTasks intercambia de lugar las tareas de las líneas lineA y lineB (desde 1) de la misma nota, cada una con sus subtareas: el
+// resto del archivo, lo que haya entre las dos incluido, queda donde estaba. Solo las hermanas se intercambian (la misma sangría, sin
+// que una cuelgue de la otra) y las dos líneas deben ser tareas. Si expected no es cero y la nota cambió en disco, no escribe y
+// devuelve ErrNoteChanged. Devuelve la línea nueva de cada una (la tarea de lineA queda en newA y la de lineB en newB).
+func (s *Storage) SwapTasks(notePath string, lineA, lineB int, expected time.Time) (newA, newB int, err error) {
+	notePath, err = s.ResolveNote(notePath)
+	if err != nil {
+		return 0, 0, err
+	}
+	swapped := lineA > lineB
+	first, second := lineA, lineB
+	if swapped {
+		first, second = lineB, lineA
+	}
+	err = rewriteLines(notePath, expected, func(lines []string) ([]string, error) {
+		a, b := first-1, second-1
+		if first == second || a < 0 || b >= len(lines) {
+			return nil, fmt.Errorf("%w: líneas %d y %d", ErrNotSiblings, lineA, lineB)
+		}
+		for _, i := range []int{a, b} {
+			if !taskRegex.MatchString(strings.TrimSuffix(strings.TrimLeft(lines[i], " \t"), "\r")) {
+				return nil, fmt.Errorf("%w: la línea %d no es una tarea", ErrNotSiblings, i+1)
+			}
+		}
+		if indentWidth(leadingSpace(lines[a])) != indentWidth(leadingSpace(lines[b])) {
+			return nil, fmt.Errorf("%w: sangrías distintas", ErrNotSiblings)
+		}
+		_, ea := taskBlock(lines, a)
+		_, eb := taskBlock(lines, b)
+		if ea >= b { // la segunda cuelga de la primera
+			return nil, fmt.Errorf("%w: una cuelga de la otra", ErrNotSiblings)
+		}
+		out := make([]string, 0, len(lines))
+		out = append(out, lines[:a]...)
+		out = append(out, lines[b:eb+1]...)
+		out = append(out, lines[ea+1:b]...)
+		out = append(out, lines[a:ea+1]...)
+		out = append(out, lines[eb+1:]...)
+		newFirst, newSecond := first+(eb-ea), first // la primera baja detrás de la segunda; la segunda sube al lugar de la primera
+		if swapped {
+			newA, newB = newSecond, newFirst
+		} else {
+			newA, newB = newFirst, newSecond
+		}
+		return out, nil
+	})
+	if err != nil {
+		return 0, 0, err
+	}
+	return newA, newB, nil
 }

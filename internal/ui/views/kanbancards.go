@@ -227,7 +227,7 @@ func renderCardColumn(cards []KanbanCard, col, sel int, width, usable int, doneC
 			ht.Register(fmt.Sprintf("kanban-card-%d-%d", col, i), mouse.ZoneKanbanCard, x0+2, y, x0+width-3, y+h-1, i,
 				fmt.Sprintf("%d|%d|%s", col, cards[i].Task.Line, cards[i].NotePath))
 		}
-		lines = append(lines, renderCard(cards[i], inner, doneCol, midCol, i == sel, active, dragged, today)...)
+		lines = append(lines, renderCard(cards[i], inner, doneCol, midCol, i == sel || (drag.Active && col == drag.Col && drag.Target == col && i == drag.TargetIdx && i != drag.Idx), active, dragged, today)...)
 	}
 	return lines
 }

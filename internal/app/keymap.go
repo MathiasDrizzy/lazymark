@@ -53,6 +53,8 @@ const (
 	actTaskFilter
 	actMoveCardLeft
 	actMoveCardRight
+	actMoveCardUp
+	actMoveCardDown
 	actRestore
 	actEmptyTrash
 	actConfirm
@@ -176,6 +178,8 @@ func defaultBindings() []Binding {
 		{actRight, ctxKanban, []string{"right", "l"}, "Columna siguiente", "Next column", false},
 		{actMoveCardLeft, ctxKanban, []string{"H", "shift+left"}, "Mover a la izquierda", "Move left", true},
 		{actMoveCardRight, ctxKanban, []string{"L", "shift+right"}, "Mover a la derecha", "Move right", true},
+		{actMoveCardUp, ctxKanban, []string{"K", "shift+up"}, "Subir en la columna", "Move up", true},
+		{actMoveCardDown, ctxKanban, []string{"J", "shift+down"}, "Bajar en la columna", "Move down", true},
 		{actToggleTask, ctxKanban, []string{"space"}, "Alternar tarea", "Toggle task", true},
 		{actEdit, ctxKanban, []string{"enter", "e"}, "Editar", "Edit", true},
 		{actKanban, ctxKanban, []string{"esc", "W"}, "Volver a notas", "Back to notes", false},

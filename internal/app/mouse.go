@@ -89,7 +89,7 @@ func rowZone(prefix string, i int) string {
 // handleMotion arrastra el divisor entre columnas (SPEC §4).
 func (m *AppModel) handleMotion(msg tea.MouseMotionMsg) {
 	if m.kanbanOn && m.kanban.press != nil { // arrastre de una tarjeta del Kanban
-		m.kanban.motion(msg.X, m.layout.Kanban.W)
+		m.kanban.motion(msg.X, msg.Y, m.layout.Kanban.W, m.ht)
 		return
 	}
 	if !m.dragging || m.w == 0 {

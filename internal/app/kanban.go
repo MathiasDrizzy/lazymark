@@ -82,6 +82,10 @@ func (k *kanbanSheet) key(a Action) tea.Cmd {
 		return k.moveTo(k.col - 1)
 	case actMoveCardRight:
 		return k.moveTo(k.col + 1)
+	case actMoveCardUp:
+		k.reorder(-1)
+	case actMoveCardDown:
+		k.reorder(1)
 	case actToggleTask:
 		if card := k.current(); card != nil {
 			target := k.c.cols().DoneIndex()
@@ -103,6 +107,47 @@ func (k *kanbanSheet) moveTo(target int) tea.Cmd {
 		return k.setColumn(card, target)
 	}
 	return nil
+}
+
+// reorder sube (dir -1) o baja (dir 1) un lugar la tarjeta seleccionada dentro de su columna, intercambiando su tarea con la de la
+// tarjeta vecina (cada una con sus subtareas). Solo se reordena dentro de una nota y entre tareas hermanas: entre notas distintas
+// el orden de las tarjetas es el de las notas (docs/kanban). Devuelve si se movió.
+func (k *kanbanSheet) reorder(dir int) bool {
+	cards := k.cards()
+	i := clamp(k.selection(k.col), 0, max(0, len(cards)-1))
+	j := i + dir
+	if len(cards) == 0 || j < 0 || j >= len(cards) {
+		return false
+	}
+	a, b := cards[i], cards[j]
+	if a.NotePath != b.NotePath {
+		k.c.setStatus("%s", i18n.T("Entre notas: sigue su orden", "Across notes: note order"))
+		return false
+	}
+	newA, _, err := k.c.store.SwapTasks(a.NotePath, a.Task.Line, b.Task.Line, k.noteTime(a.NotePath))
+	switch {
+	case errors.Is(err, storage.ErrNoteChanged):
+		k.c.reload()
+		k.clampSelection()
+		k.c.setStatus("%s", i18n.T("Cambió por fuera: recargada", "Changed outside: reloaded"))
+		return false
+	case errors.Is(err, storage.ErrNotSiblings):
+		k.c.setStatus("%s", i18n.T("Solo entre tareas hermanas", "Only between sibling tasks"))
+		return false
+	case err != nil:
+		k.c.errStatus("No se pudo reordenar la tarjeta", "Could not reorder card", err)
+		return false
+	}
+	k.c.reload()
+	k.clampSelection()
+	// el cursor sigue a la tarjeta movida (la misma nota, en su línea nueva)
+	for n, c := range k.c.board.ColumnCards(k.col) {
+		if c.NotePath == a.NotePath && c.Task.Line == newA {
+			k.selected[k.col] = n
+			break
+		}
+	}
+	return true
 }
 
 // noteTime es el mtime con el que se cargó la nota (la comprobación de X10 al escribir).
@@ -177,28 +222,48 @@ func (k *kanbanSheet) click(z *mouse.Zone, double bool) tea.Cmd {
 }
 
 // motion sigue al puntero con el botón apretado: al salir de la columna de la tarjeta empieza el arrastre, y la
-// columna bajo el puntero es el destino.
-func (k *kanbanSheet) motion(x, width int) {
+// columna bajo el puntero es el destino. Dentro de la misma columna, pasar sobre otra tarjeta es reordenar: esa tarjeta es el destino.
+func (k *kanbanSheet) motion(x, y, width int, ht *mouse.HitTester) {
 	if k.press == nil {
 		return
 	}
 	target := k.colAt(x, width)
-	if !k.drag.Active && target == k.press.col {
+	idx := -1
+	if target == k.press.col && ht != nil {
+		if z, ok := ht.Check(x, y); ok && z.Type == mouse.ZoneKanbanCard && strings.HasPrefix(z.Payload, fmt.Sprintf("%d|", target)) {
+			idx = z.Index
+		}
+	}
+	if !k.drag.Active && target == k.press.col && (idx < 0 || idx == k.press.idx) {
 		return
 	}
-	k.drag = views.KanbanDrag{Active: true, Col: k.press.col, Idx: k.press.idx, Target: target}
+	k.drag = views.KanbanDrag{Active: true, Col: k.press.col, Idx: k.press.idx, Target: target, TargetIdx: idx}
 }
 
-// release termina el arrastre: si hay una tarjeta llevada a otra columna, la mueve; si se soltó donde empezó o fuera
-// del tablero, no hace nada.
+// release termina el arrastre: si hay una tarjeta llevada a otra columna, la mueve; si se soltó sobre otra tarjeta de su columna,
+// la reordena (un lugar a la vez, hasta donde se pueda); si se soltó donde empezó o fuera del tablero, no hace nada.
 func (k *kanbanSheet) release() tea.Cmd {
 	drag, press := k.drag, k.press
 	k.drag, k.press = views.KanbanDrag{}, nil
-	if press == nil || !drag.Active || drag.Target == drag.Col {
+	if press == nil || !drag.Active {
 		return nil
 	}
 	cards := k.c.board.ColumnCards(drag.Col)
 	if drag.Idx < 0 || drag.Idx >= len(cards) {
+		return nil
+	}
+	if drag.Target == drag.Col {
+		if drag.TargetIdx < 0 || drag.TargetIdx == drag.Idx {
+			return nil
+		}
+		k.col = drag.Col
+		k.selected[k.col] = drag.Idx
+		dir := 1
+		if drag.TargetIdx < drag.Idx {
+			dir = -1
+		}
+		for n := abs(drag.TargetIdx - drag.Idx); n > 0 && k.reorder(dir); n-- {
+		}
 		return nil
 	}
 	card := cards[drag.Idx]
@@ -224,4 +289,11 @@ func (k *kanbanSheet) colAt(x, width int) int {
 func (k *kanbanSheet) view(r Rect, ht *mouse.HitTester) string {
 	k.clampSelection()
 	return views.RenderKanban(k.c.board, k.col, k.selected, r.W, r.H, ht, r.Y, k.drag, views.KanbanOptions{Cards: k.c.cfg.KanbanCards != config.KanbanCardsCompact, Today: storage.Today()})
+}
+
+func abs(n int) int {
+	if n < 0 {
+		return -n
+	}
+	return n
 }
