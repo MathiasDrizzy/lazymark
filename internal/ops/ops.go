@@ -55,7 +55,7 @@ func Code(err error) int {
 		return ExitUsage
 	case errors.Is(err, storage.ErrNoteChanged):
 		return ExitConflict
-	case errors.Is(err, storage.ErrTaskNotFound), errors.Is(err, os.ErrNotExist):
+	case errors.Is(err, storage.ErrTaskNotFound), errors.Is(err, storage.ErrTemplateNotFound), errors.Is(err, os.ErrNotExist):
 		return ExitNotFound
 	}
 	return ExitFailure
@@ -183,6 +183,12 @@ func same(a, b string) bool {
 // NewNote crea una nota con ese título en una subcarpeta (relativa a la carpeta de notas; "" es la raíz). Con empty
 // solo lleva su título, sin la plantilla con fecha y primera tarea.
 func (s *Service) NewNote(title, folder string, empty bool) (NoteDTO, error) {
+	return s.NewNoteFromTemplate(title, folder, "", empty)
+}
+
+// NewNoteFromTemplate crea una nota con el contenido de la plantilla templates/<template>.md ({{date}}, {{time}} y {{title}} se
+// reemplazan); con template vacío es NewNote. Una plantilla que no existe es "no existe" (código 3), sin crear nada.
+func (s *Service) NewNoteFromTemplate(title, folder, template string, empty bool) (NoteDTO, error) {
 	if strings.TrimSpace(title) == "" {
 		return NoteDTO{}, usage("falta el título de la nota")
 	}
@@ -200,7 +206,12 @@ func (s *Service) NewNote(title, folder string, empty bool) (NoteDTO, error) {
 	if empty {
 		body = "# " + title + "\n"
 	}
-	n, err := s.Store.CreateNoteInDirWithBody(dir, title, body)
+	var n *storage.Note
+	if template != "" {
+		n, err = s.Store.CreateNoteFromTemplate(dir, title, template, time.Now())
+	} else {
+		n, err = s.Store.CreateNoteInDirWithBody(dir, title, body)
+	}
 	if err != nil {
 		if errors.Is(err, storage.ErrNoteExists) || strings.Contains(err.Error(), "vacío") {
 			return NoteDTO{}, usage("%v", err)
@@ -467,3 +478,22 @@ func (s *Service) ColumnIDs() []string { return append([]string(nil), s.Cols...)
 
 // resolve devuelve la ruta canónica de un archivo existente (con los symlinks resueltos).
 func resolve(p string) (string, error) { return filepath.EvalSymlinks(p) }
+
+// DailyDTO es el resultado de `lazymark daily`: la nota del día y si se acaba de crear.
+type DailyDTO struct {
+	NoteDTO
+	Created bool `json:"created"`
+}
+
+// Daily devuelve la nota diaria de hoy (journal/AAAA-MM-DD.md), creándola con la plantilla templates/daily.md si no existe.
+func (s *Service) Daily() (DailyDTO, error) {
+	n, created, err := s.Store.DailyNote(time.Now())
+	if err != nil {
+		return DailyDTO{}, err
+	}
+	full, err := s.ShowNote(n.Path)
+	if err != nil {
+		return DailyDTO{}, err
+	}
+	return DailyDTO{NoteDTO: full.NoteDTO, Created: created}, nil
+}

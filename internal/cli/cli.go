@@ -108,13 +108,13 @@ exit codes: 0 ok · 1 failed · 2 invalid arguments (nothing touched) · 3 not f
 
 const noteUsageES = `uso: lazymark note list [--json] [--dir <carpeta>]
      lazymark note show <ruta> [--json] [--dir <carpeta>]
-     lazymark note new  <título> [--folder <subcarpeta>] [--empty] [--json] [--dir <carpeta>]
+     lazymark note new  <título> [--folder <subcarpeta>] [--empty] [--template <nombre>] [--json] [--dir <carpeta>]
 códigos de salida: 0 ok · 1 falló · 2 argumentos inválidos o ruta fuera de la carpeta de notas · 3 no existe
 `
 
 const noteUsageEN = `usage: lazymark note list [--json] [--dir <folder>]
        lazymark note show <path> [--json] [--dir <folder>]
-       lazymark note new  <title> [--folder <subfolder>] [--empty] [--json] [--dir <folder>]
+       lazymark note new  <title> [--folder <subfolder>] [--empty] [--template <name>] [--json] [--dir <folder>]
 exit codes: 0 ok · 1 failed · 2 invalid arguments or a path outside the notes folder · 3 not found
 `
 
@@ -284,14 +284,16 @@ func RunNoteWithWriter(w io.Writer, args []string, defaultNotesDir string) error
 	}
 	p := newParser("note "+action, defaultNotesDir)
 	var (
-		folder string
-		empty  bool
+		folder   string
+		template string
+		empty    bool
 	)
 	switch action {
 	case "list", "show":
 	case "new":
 		p.fs.StringVar(&folder, "folder", "", "")
 		p.fs.BoolVar(&empty, "empty", false, "")
+		p.fs.StringVar(&template, "template", "", "")
 	default:
 		return &ops.Error{Code: ExitUsage, Err: fmt.Errorf("subcomando de nota desconocido: %q (list, show, new)", action)}
 	}
@@ -344,13 +346,13 @@ func RunNoteWithWriter(w io.Writer, args []string, defaultNotesDir string) error
 
 	default: // new
 		if len(p.posArgs) == 0 {
-			return &ops.Error{Code: ExitUsage, Err: errors.New("uso: lazymark note new <título> [--folder <subcarpeta>] [--empty]")}
+			return &ops.Error{Code: ExitUsage, Err: errors.New("uso: lazymark note new <título> [--folder <subcarpeta>] [--empty] [--template <nombre>]")}
 		}
 		svc, err := p.service()
 		if err != nil {
 			return err
 		}
-		n, err := svc.NewNote(strings.Join(p.posArgs, " "), folder, empty)
+		n, err := svc.NewNoteFromTemplate(strings.Join(p.posArgs, " "), folder, template, empty)
 		if err != nil {
 			return err
 		}
@@ -414,5 +416,51 @@ func RunSearchWithWriter(w io.Writer, args []string, defaultNotesDir string) err
 	for _, m := range res.Matches {
 		fmt.Fprint(w, plain(fmt.Sprintf("%s:%d: %s\n", m.Note, m.Line, m.Text)))
 	}
+	return nil
+}
+
+const dailyUsageES = `uso: lazymark daily [--json] [--dir <carpeta>]
+Crea (o abre, si ya existe) la nota de hoy, journal/AAAA-MM-DD.md, con la plantilla templates/daily.md ({{date}}, {{time}} y {{title}}
+se reemplazan); sin plantilla, con el título de la fecha. Imprime la ruta de la nota; no la modifica si ya existía.
+códigos de salida: 0 ok · 1 falló · 2 argumentos inválidos o una carpeta fuera de la carpeta de notas
+`
+
+const dailyUsageEN = `usage: lazymark daily [--json] [--dir <folder>]
+Creates (or opens, if it already exists) today's note, journal/YYYY-MM-DD.md, from the template templates/daily.md ({{date}}, {{time}}
+and {{title}} are replaced); without a template, with the date as its title. Prints the note's path; it does not modify an existing one.
+exit codes: 0 ok · 1 failed · 2 invalid arguments or a folder outside the notes folder
+`
+
+// RunDaily ejecuta `lazymark daily`.
+func RunDaily(args []string, defaultNotesDir string) error {
+	return RunDailyWithWriter(os.Stdout, args, defaultNotesDir)
+}
+
+// RunDailyWithWriter ejecuta `lazymark daily` escribiendo la salida en w.
+func RunDailyWithWriter(w io.Writer, args []string, defaultNotesDir string) error {
+	help := usageText(dailyUsageES, dailyUsageEN)
+	p := newParser("daily", defaultNotesDir)
+	if err := p.parse(args); err != nil {
+		return err
+	}
+	if p.help {
+		fmt.Fprint(w, help)
+		return nil
+	}
+	if err := p.need(0, "lazymark daily [--json]"); err != nil {
+		return err
+	}
+	svc, err := p.service()
+	if err != nil {
+		return err
+	}
+	d, err := svc.Daily()
+	if err != nil {
+		return err
+	}
+	if p.json {
+		return printJSON(w, d)
+	}
+	fmt.Fprintf(w, "%s\n", d.Path)
 	return nil
 }

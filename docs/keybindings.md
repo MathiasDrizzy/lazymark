@@ -18,6 +18,7 @@ Work everywhere.
 | `,` | Settings |
 | `x` | Trash |
 | `/` | Search |
+| `T` | Daily note |
 | `1` | Notes panel |
 | `2` | Tasks panel |
 | `3` | Categories panel |
@@ -54,6 +55,7 @@ Panel `[1]`: the tree of folders and notes.
 | `Enter` | Open |
 | `e` | Edit |
 | `c` | New note |
+| `C` | New note from template |
 | `F` | New folder |
 | `r` | Rename |
 | `m` | Move |

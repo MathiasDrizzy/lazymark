@@ -7,7 +7,8 @@ All commands take `--dir <folder>` (default: the notes folder of your config) an
 ```
 lazymark note list [--json]
 lazymark note show <path> [--json]
-lazymark note new  <title> [--folder <subfolder>] [--empty] [--json]
+lazymark note new  <title> [--folder <subfolder>] [--empty] [--template <name>] [--json]
+lazymark daily [--json]
 lazymark search <text> [--regex] [--case] [--limit <n>] [--json]
 lazymark task list [--json] [--pending] [--column <id>] [--note <path>]
 lazymark task toggle <id> [--json]
@@ -15,6 +16,8 @@ lazymark task move   <id> <column> [--json]
 lazymark task due    <id> <YYYY-MM-DD|none> [--json]
 lazymark task start  <id> <YYYY-MM-DD|none> [--json]
 ```
+
+`note new --template <name>` fills the note from `templates/<name>.md` (see [templates.md](templates.md)); a template that does not exist exits with 3 and creates nothing. `daily` creates today's note `journal/YYYY-MM-DD.md` from `templates/daily.md`, or opens it if it exists, and prints its path (`--json`: the note plus `"created": true|false`); it never modifies an existing one.
 
 `note get <path>` and `task toggle --path <note> --line <n>` still work.
 

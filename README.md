@@ -30,7 +30,7 @@ Plain markdown files. Keyboard and mouse. Inline images.
 
 ### Notes and folders
 
-One tree for folders and notes. Create, rename, move and delete with a single key; the cursor lands on what you just created.
+One tree for folders and notes. Create, rename, move and delete with a single key; the cursor lands on what you just created. Put notes in a `templates/` folder to start new ones from them (`C`), and press `T` for today's note, `journal/YYYY-MM-DD.md`, made from `templates/daily.md`; `lazymark daily` does the same from the shell. See [docs/templates.md](docs/templates.md).
 
 <img src="assets/readme/feature-notes.gif" alt="Creating a folder, a note inside it and renaming the note" width="100%">
 

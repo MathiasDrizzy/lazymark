@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"path/filepath"
 	"strings"
+	"time"
 
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
@@ -155,6 +156,8 @@ func (p *notesPanel) key(a Action) tea.Cmd {
 		}
 	case actNewNote:
 		return p.promptCreate(false)
+	case actNewFromTemplate:
+		return p.promptFromTemplate()
 	case actNewFolder:
 		return p.promptCreate(true)
 	case actRename:
@@ -491,4 +494,48 @@ func contains(list []string, s string) bool {
 		}
 	}
 	return false
+}
+
+// promptFromTemplate elige una plantilla de templates/ y pide el nombre de la nota nueva, que se crea con su contenido.
+func (p *notesPanel) promptFromTemplate() tea.Cmd {
+	names := p.c.store.Templates()
+	if len(names) == 0 {
+		p.c.setStatus("%s", i18n.T("No hay plantillas: crea notas en templates/", "No templates: create notes in templates/"))
+		return nil
+	}
+	dir := p.targetDir()
+	p.c.push(newTemplatePopup(names, func(tpl string) tea.Cmd {
+		suggest := fmt.Sprintf("%s %d", i18n.T("Nueva nota", "New note"), len(p.c.notes)+1)
+		p.c.push(newInputPopup(i18n.T("Nueva nota", "New note")+" · "+tpl, suggest, func(name string) tea.Cmd {
+			note, err := p.c.store.CreateNoteFromTemplate(dir, name, tpl, time.Now())
+			if err != nil {
+				p.c.errStatus("No se pudo crear la nota", "Could not create note", err)
+				return nil
+			}
+			p.c.reload()
+			p.reload()
+			p.selectPath(note.Path)
+			p.c.setStatus(i18n.T("Nota creada: %s", "Note created: %s"), note.ID)
+			return nil
+		}))
+		return nil
+	}))
+	return nil
+}
+
+// openDaily abre la nota de hoy (journal/AAAA-MM-DD.md), creándola con la plantilla daily si no existe.
+func (m *AppModel) openDaily() tea.Cmd {
+	note, created, err := m.c.store.DailyNote(time.Now())
+	if err != nil {
+		m.c.errStatus("No se pudo abrir la nota diaria", "Could not open the daily note", err)
+		return nil
+	}
+	m.c.reload()
+	m.jumpToPath(note.Path, 1)
+	if created {
+		m.c.setStatus(i18n.T("Nota diaria creada: %s", "Daily note created: %s"), note.ID)
+	} else {
+		m.c.setStatus(i18n.T("Nota diaria: %s", "Daily note: %s"), note.ID)
+	}
+	return nil
 }

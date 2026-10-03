@@ -260,6 +260,47 @@ func (p *movePopup) render(l Layout) string {
 	return theme.RenderPopup(i18n.T("Mover", "Move"), "[Enter] OK · "+escHint, lines, w)
 }
 
+// ─── Elegir plantilla ──────────────────────────────────────────────
+
+type templatePopup struct {
+	popupList
+	names  []string
+	onPick func(string) tea.Cmd
+}
+
+func newTemplatePopup(names []string, onPick func(string) tea.Cmd) *templatePopup {
+	p := &templatePopup{names: names, onPick: onPick}
+	p.n = len(names)
+	return p
+}
+
+func (p *templatePopup) contexts() []Context { return []Context{ctxPopup, ctxNav} }
+func (p *templatePopup) bottomRight() bool   { return false }
+
+func (p *templatePopup) handle(a Action, _ tea.KeyPressMsg) (tea.Cmd, bool) {
+	if p.nav(a) {
+		return nil, false
+	}
+	if a == actConfirm && p.list.cursor < p.n {
+		return p.onPick(p.names[p.list.cursor]), true
+	}
+	return nil, false
+}
+
+func (p *templatePopup) click(_, y int) (tea.Cmd, bool) {
+	p.clickRow(y)
+	return nil, false
+}
+
+func (p *templatePopup) render(l Layout) string {
+	w := popupWidth(l, 44)
+	p.top = 3
+	p.height = clamp(p.n, 1, max(1, l.H-10))
+	lines := []string{dim(i18n.T("Plantilla (templates/):", "Template (templates/):")), ""}
+	lines = append(lines, p.rows(w-3, func(i int) string { return iconNote + " " + textwidth.NoControl(p.names[i]) })...)
+	return theme.RenderPopup(i18n.T("Nueva nota desde plantilla", "New note from template"), "[Enter] OK · "+escHint, lines, w)
+}
+
 // ─── Cheatsheet ────────────────────────────────────────────────────
 
 // cheatsheetPopup lista los atajos del contexto actual tal como están en el

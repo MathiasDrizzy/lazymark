@@ -174,8 +174,10 @@ func (s *Storage) ListTreeEntries(expanded map[string]bool) ([]NoteEntry, error)
 					ModTime: info.ModTime(),
 					Size:    info.Size(),
 				}
-				note.Tags = s.extractTags(content)
-				note.Tasks = s.extractTasks(note.Title, fullPath, content)
+				if !s.inTemplates(fullPath) { // una plantilla es un molde: sus etiquetas y casillas no cuentan
+					note.Tags = s.extractTags(content)
+					note.Tasks = s.extractTasks(note.Title, fullPath, content)
+				}
 				note.Images = s.extractImages(content)
 
 				noteEntries = append(noteEntries, NoteEntry{
@@ -261,8 +263,10 @@ func (s *Storage) ListNotes() ([]Note, error) {
 			ModTime: info.ModTime(),
 			Size:    info.Size(),
 		}
-		note.Tags = s.extractTags(content)
-		note.Tasks = s.extractTasks(note.Title, path, content)
+		if !s.inTemplates(path) { // una plantilla es un molde, no una nota: sus etiquetas y casillas no cuentan
+			note.Tags = s.extractTags(content)
+			note.Tasks = s.extractTasks(note.Title, path, content)
+		}
 		note.Images = s.extractImages(content)
 
 		notes = append(notes, note)

@@ -130,5 +130,6 @@ func (s *Storage) EnsureFolder(rel string) (string, error) {
 			return "", err
 		}
 	}
-	return s.ResolveFolder(filepath.FromSlash(cur))
+	// la ruta se devuelve bajo la carpeta de notas tal como la ven las demás (no la real: en macOS /var es /private/var)
+	return filepath.Join(s.BaseDir, filepath.FromSlash(cur)), nil
 }

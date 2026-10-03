@@ -295,6 +295,8 @@ func (m *AppModel) do(a Action) tea.Cmd {
 	case actSearch:
 		m.c.push(newSearchPopup(m.c))
 		return nil
+	case actDaily:
+		return m.openDaily()
 	case actKanban:
 		m.kanbanOn = !m.kanbanOn
 		m.relayout()

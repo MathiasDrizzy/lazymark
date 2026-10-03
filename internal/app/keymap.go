@@ -17,6 +17,8 @@ const (
 	actSettings
 	actTrash
 	actSearch
+	actDaily
+	actNewFromTemplate
 	actNextLink
 	actPrevLink
 	actPanelNotes
@@ -132,6 +134,7 @@ func defaultBindings() []Binding {
 		{actSettings, ctxGlobal, []string{","}, "Ajustes", "Settings", false},
 		{actTrash, ctxGlobal, []string{"x"}, "Papelera", "Trash", false},
 		{actSearch, ctxGlobal, []string{"/"}, "Buscar", "Search", false},
+		{actDaily, ctxGlobal, []string{"T"}, "Nota diaria", "Daily note", false},
 		{actPanelNotes, ctxGlobal, []string{"1"}, "Panel Notas", "Notes panel", false},
 		{actPanelTasks, ctxGlobal, []string{"2"}, "Panel Tareas", "Tasks panel", false},
 		{actPanelTags, ctxGlobal, []string{"3"}, "Panel Categorías", "Categories panel", false},
@@ -156,6 +159,7 @@ func defaultBindings() []Binding {
 		{actEnter, ctxNotes, []string{"enter"}, "Abrir", "Open", false},
 		{actEdit, ctxNotes, []string{"e"}, "Editar", "Edit", true},
 		{actNewNote, ctxNotes, []string{"c"}, "Nueva nota", "New note", true},
+		{actNewFromTemplate, ctxNotes, []string{"C"}, "Nueva nota desde plantilla", "New note from template", true},
 		{actNewFolder, ctxNotes, []string{"F"}, "Nueva carpeta", "New folder", true},
 		{actRename, ctxNotes, []string{"r"}, "Renombrar", "Rename", true},
 		{actMove, ctxNotes, []string{"m"}, "Mover", "Move", true},

@@ -36,7 +36,8 @@ func usageHeader() string {
 		i18n.T("Subcomandos (sin interfaz, para scripts y agentes):\n", "Commands (headless, for scripts and agents):\n") +
 		"  note list [--json] [--dir <dir>]\n" +
 		"  note show <path> [--json] [--dir <dir>]\n" +
-		"  note new <title> [--folder <sub>] [--empty] [--json] [--dir <dir>]\n" +
+		"  note new <title> [--folder <sub>] [--empty] [--template <name>] [--json] [--dir <dir>]\n" +
+		"  daily [--json] [--dir <dir>]\n" +
 		"  search <text> [--regex] [--case] [--limit <n>] [--json] [--dir <dir>]\n" +
 		"  task list [--json] [--pending] [--column <id>] [--note <path>] [--dir <dir>]\n" +
 		"  task toggle <id> [--json] [--dir <dir>]\n" +
@@ -69,6 +70,14 @@ func main() {
 		if arg == "note" {
 			dir := extractDirArg(os.Args[1:])
 			if err := cli.RunNote(os.Args[idx+2:], dir); err != nil {
+				fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+				os.Exit(cli.ExitCode(err))
+			}
+			return
+		}
+		if arg == "daily" {
+			dir := extractDirArg(os.Args[1:])
+			if err := cli.RunDaily(os.Args[idx+2:], dir); err != nil {
 				fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 				os.Exit(cli.ExitCode(err))
 			}

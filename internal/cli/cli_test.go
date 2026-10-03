@@ -7,9 +7,11 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"reflect"
 	"regexp"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/MathiasDrizzy/lazymark/internal/ops"
 	"github.com/MathiasDrizzy/lazymark/internal/storage"
@@ -94,6 +96,8 @@ func run(t *testing.T, dir string, args ...string) (string, error) {
 		err = RunNoteWithWriter(&buf, args[1:], dir)
 	case "task":
 		err = RunTaskWithWriter(&buf, args[1:], dir)
+	case "daily":
+		err = RunDailyWithWriter(&buf, args[1:], dir)
 	default:
 		t.Fatalf("comando %q", args[0])
 	}
@@ -637,5 +641,62 @@ func TestSearchCLI(t *testing.T) {
 		if snapshot(t, dir)[k] != v {
 			t.Errorf("%s cambió", k)
 		}
+	}
+}
+
+// TestNoteNewFromTemplate (C.5): `note new --template` rellena {{date}}, {{time}} y {{title}}; una plantilla que no existe sale con 3 sin crear nada;
+// un nombre con ruta no vale (2/3) y no lee fuera de templates/.
+func TestNoteNewFromTemplate(t *testing.T) {
+	dir := fixture(t)
+	os.MkdirAll(filepath.Join(dir, "templates"), 0o755)
+	os.WriteFile(filepath.Join(dir, "templates", "reunion.md"), []byte("# {{title}}\n\n{{date}} {{time}}\n"), 0o644)
+	os.WriteFile(filepath.Join(filepath.Dir(dir), "secreto.md"), []byte("fuera"), 0o644)
+	out, err := run(t, dir, "note", "new", "Equipo", "--template", "reunion")
+	if err != nil {
+		t.Fatal(err)
+	}
+	b, _ := os.ReadFile(strings.TrimSpace(out))
+	if ok, _ := regexp.MatchString(`^# Equipo\n\n\d{4}-\d\d-\d\d \d\d:\d\d\n$`, string(b)); !ok {
+		t.Errorf("contenido: %q", b)
+	}
+	before := snapshot(t, dir)
+	for _, bad := range []string{"nada", "../secreto", "../../secreto"} {
+		if _, err := run(t, dir, "note", "new", "Otra", "--template", bad); err == nil || ExitCode(err) != 3 {
+			t.Errorf("--template %q: %v (código %d), se esperaba 3", bad, err, ExitCode(err))
+		}
+	}
+	if after := snapshot(t, dir); !reflect.DeepEqual(before, after) {
+		t.Error("una plantilla inválida no debe crear nada")
+	}
+}
+
+// TestDailyCLI (C.5): `lazymark daily` crea journal/AAAA-MM-DD.md con la plantilla y la segunda vez la abre sin tocarla; con --json dice si la creó.
+func TestDailyCLI(t *testing.T) {
+	dir := fixture(t)
+	os.MkdirAll(filepath.Join(dir, "templates"), 0o755)
+	os.WriteFile(filepath.Join(dir, "templates", "daily.md"), []byte("# Diario {{date}}\n\n- [ ] revisar\n"), 0o644)
+	today := time.Now().Format("2006-01-02")
+	want := filepath.Join(dir, "journal", today+".md")
+	out, err := run(t, dir, "daily")
+	if err != nil || strings.TrimSpace(out) != want {
+		t.Fatalf("daily: %q %v", out, err)
+	}
+	if b, _ := os.ReadFile(want); string(b) != "# Diario "+today+"\n\n- [ ] revisar\n" {
+		t.Errorf("contenido: %q", b)
+	}
+	os.WriteFile(want, []byte("# editada\n"), 0o644)
+	out, err = run(t, dir, "daily", "--json")
+	var d struct {
+		Path    string `json:"path"`
+		Created bool   `json:"created"`
+	}
+	if err != nil || json.Unmarshal([]byte(out), &d) != nil || d.Path != want || d.Created {
+		t.Fatalf("daily --json: %q %v %+v", out, err, d)
+	}
+	if b, _ := os.ReadFile(want); string(b) != "# editada\n" {
+		t.Errorf("la segunda vez no debe tocarla: %q", b)
+	}
+	if _, err := run(t, dir, "daily", "sobra"); err == nil || ExitCode(err) != 2 {
+		t.Errorf("un argumento de más es de uso: %v", err)
 	}
 }
