@@ -601,7 +601,7 @@ func TestSearchCLI(t *testing.T) {
 			}
 		}
 		if args[len(args)-1] == "--json" && args[1] == "informe" {
-			golden(t, "search.json", normalize(strings.ReplaceAll(o, `"ctrl.md"`, `"ctrl.md"`), dir))
+			golden(t, "search.json", normalize(o, dir))
 		}
 	}
 	if o, err := run(t, dir, "search", "ESCRIBIR", "--case"); err != nil || o != "" {

@@ -108,11 +108,14 @@ func Run(ctx context.Context, store *storage.Storage, query string, opts Options
 		go func() {
 			defer wg.Done()
 			for p := range jobs {
-				matches, skipped := searchFile(cctx, p, base, re, maxBytes)
+				matches, skipped, capped := searchFile(cctx, p, base, re, !opts.Regex, maxBytes)
 				mu.Lock()
 				res.Files++
 				if skipped {
 					res.Skipped++
+				}
+				if capped {
+					res.Truncated = true
 				}
 				res.Matches = append(res.Matches, matches...)
 				if len(res.Matches) >= maxResults+1 {
@@ -147,31 +150,33 @@ feed:
 }
 
 // searchFile busca en un archivo; skipped indica que no se leyó por su tamaño.
-func searchFile(ctx context.Context, path, base string, re *regexp.Regexp, maxBytes int64) (matches []Match, skipped bool) {
+func searchFile(ctx context.Context, path, base string, re *regexp.Regexp, prefilter bool, maxBytes int64) (matches []Match, skipped, capped bool) {
 	if ctx.Err() != nil {
-		return nil, false
+		return nil, false, false
 	}
 	fi, err := os.Stat(path)
 	if err != nil || !fi.Mode().IsRegular() {
-		return nil, false
+		return nil, false, false
 	}
 	if fi.Size() > maxBytes {
-		return nil, true
+		return nil, true, false
 	}
 	data, err := os.ReadFile(path)
 	if err != nil {
-		return nil, false
+		return nil, false, false
 	}
-	if !re.Match(data) { // sin ninguna coincidencia en el archivo: no hace falta recorrer las líneas
-		return nil, false
+	// sin ninguna coincidencia en el archivo no hace falta recorrer las líneas; solo con texto literal: una expresión con ^, $ o \A
+	// se evalúa línea por línea y mirar el archivo entero la descartaría mal
+	if prefilter && !re.Match(data) {
+		return nil, false, false
 	}
 	rel, err := filepath.Rel(base, path)
 	if err != nil {
 		rel = path
 	}
-	rel = filepath.ToSlash(rel)
+	rel = noControl(filepath.ToSlash(rel)) // el nombre del archivo también es contenido no confiable
 	title := strings.TrimSuffix(filepath.Base(path), filepath.Ext(path))
-	title = strings.NewReplacer("-", " ", "_", " ").Replace(title)
+	title = noControl(strings.NewReplacer("-", " ", "_", " ").Replace(title))
 
 	line := 0
 	for len(data) > 0 {
@@ -183,7 +188,7 @@ func searchFile(ctx context.Context, path, base string, re *regexp.Regexp, maxBy
 			l, data = data, nil
 		}
 		if line%2000 == 0 && ctx.Err() != nil {
-			return matches, false
+			return matches, false, false
 		}
 		l = bytes.TrimSuffix(l, []byte("\r"))
 		loc := re.FindIndex(l)
@@ -193,49 +198,77 @@ func searchFile(ctx context.Context, path, base string, re *regexp.Regexp, maxBy
 		text, s, e := window(string(l), loc[0], loc[1], ContextWidth)
 		matches = append(matches, Match{Path: path, Rel: rel, Title: title, Line: line, Text: text, Start: s, End: e})
 		if len(matches) >= maxPerFile {
+			capped = len(data) > 0 // quedaban líneas por mirar: hay coincidencias de más que no se devuelven
 			break
 		}
 	}
-	return matches, false
+	return matches, false, capped
 }
 
 // window recorta la línea a como mucho width caracteres alrededor de la coincidencia [s,e): le quita la sangría, y si sobra por
-// los lados la corta con …. Devuelve el texto y dónde queda la coincidencia dentro de él (en bytes).
+// los lados la corta con …. Devuelve el texto y dónde queda la coincidencia dentro de él (en bytes). No convierte la línea entera a
+// runas: una línea de megabytes cuesta lo mismo que una corta.
 func window(line string, s, e, width int) (string, int, int) {
 	trim := len(line) - len(strings.TrimLeft(line, " \t"))
 	line, s, e = line[trim:], max(0, s-trim), max(0, e-trim)
 	line = strings.TrimRight(line, " \t")
-	if e > len(line) {
-		e = len(line)
-	}
-	if utf8.RuneCountInString(line) <= width {
+	e = min(e, len(line))
+	s = min(s, e) // una coincidencia que cayó en los espacios finales recortados queda vacía al final de la línea
+	if runesUpTo(line, width+1) <= width {
 		return sanitize(line, &s, &e)
 	}
 	// pasa de width: se deja la coincidencia con algo de contexto a cada lado, alineado a runas
-	runes := []rune(line)
-	rs := utf8.RuneCountInString(line[:s])
-	re := utf8.RuneCountInString(line[:e])
-	matchLen := re - rs
+	matchLen := min(runesUpTo(line[s:e], width), width)
 	room := max(0, width-matchLen)
-	from := max(0, rs-room/3)
-	to := min(len(runes), from+width)
-	if to-from < width {
-		from = max(0, to-width)
+	from := s
+	for back := room / 3; back > 0 && from > 0; back-- {
+		_, size := utf8.DecodeLastRuneInString(line[:from])
+		from -= size
 	}
-	if re > to { // una coincidencia más larga que el ancho: se muestra su comienzo
-		re = to
+	to := from
+	for n := 0; n < width && to < len(line); n++ {
+		_, size := utf8.DecodeRuneInString(line[to:])
+		to += size
+	}
+	if to-from < len(line)-from && runesUpTo(line[from:], width+1) <= width { // sobró sitio por la derecha: se retrocede para llenar el ancho
+		to = len(line)
+	}
+	if to < e { // una coincidencia más larga que el ancho: se muestra su comienzo
+		e = to
 	}
 	prefix, suffix := "", ""
 	if from > 0 {
 		prefix = "…"
 	}
-	if to < len(runes) {
+	if to < len(line) {
 		suffix = "…"
 	}
-	out := prefix + string(runes[from:to]) + suffix
-	ns := len(prefix) + len(string(runes[from:rs]))
-	ne := len(prefix) + len(string(runes[from:re]))
-	return sanitize(out, &ns, &ne)
+	out := prefix + line[from:to] + suffix
+	return sanitize(out, ptr(len(prefix)+s-from), ptr(len(prefix)+e-from))
+}
+
+func ptr(n int) *int { return &n }
+
+// runesUpTo cuenta los caracteres de s, sin pasar de limit (para no recorrer una línea enorme entera).
+func runesUpTo(s string, limit int) int {
+	n := 0
+	for range s {
+		n++
+		if n >= limit {
+			break
+		}
+	}
+	return n
+}
+
+// noControl cambia los caracteres de control de un nombre por "?".
+func noControl(s string) string {
+	return strings.Map(func(r rune) rune {
+		if r < 0x20 || r == 0x7f || (r >= 0x80 && r <= 0x9f) {
+			return '?'
+		}
+		return r
+	}, s)
 }
 
 // sanitize quita de la línea los caracteres de control (una nota no es confiable y esto va a la terminal) ajustando las posiciones.

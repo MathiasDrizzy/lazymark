@@ -207,3 +207,86 @@ func BenchmarkSearchCorpus(b *testing.B) {
 		}
 	}
 }
+
+// TestRegexAnchorsAndTrailingSpaces (hallazgos de la segunda opinión): `^` y `$` valen por línea (el prefiltro de archivo solo se usa con
+// texto literal), y una coincidencia en los espacios finales de una línea no hace entrar en pánico a window().
+func TestRegexAnchorsAndTrailingSpaces(t *testing.T) {
+	root := filepath.Join(t.TempDir(), "n")
+	write(t, root, "a.md", "# Título\nObjetivo del día\nfin\n")
+	write(t, root, "b.md", strings.Repeat("a", 150)+"   \ncorta   \n")
+	s := storage.New(root)
+	res, err := Run(context.Background(), s, `^Objetivo`, Options{Regex: true})
+	if err != nil || len(res.Matches) != 1 || res.Matches[0].Line != 2 {
+		t.Errorf("`^Objetivo` debía hallar la línea 2: %v %v", rels(res), err)
+	}
+	res, _ = Run(context.Background(), s, `día$`, Options{Regex: true})
+	if len(res.Matches) != 1 {
+		t.Errorf("`día$`: %v", rels(res))
+	}
+	// `\s+$` coincide en los espacios del final, que window() recorta: no debe haber pánico ni rangos al revés
+	res, err = Run(context.Background(), s, `\s+$`, Options{Regex: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, m := range res.Matches {
+		if m.Start > m.End || m.End > len(m.Text) {
+			t.Errorf("%s:%d: rango inválido %d:%d en %q", m.Rel, m.Line, m.Start, m.End, m.Text)
+		}
+	}
+	for _, l := range []struct {
+		line string
+		s, e int
+	}{{strings.Repeat("a", 150) + "   ", 150, 153}, {"corta   ", 5, 8}, {"", 0, 0}, {"   ", 0, 3}} {
+		text, a, b := window(l.line, l.s, l.e, 140) // no debe entrar en pánico
+		if a > b || b > len(text) {
+			t.Errorf("window(%q): %q %d:%d", l.line, text, a, b)
+		}
+	}
+}
+
+// TestPerFileCapIsReported: si una nota tiene más coincidencias que el tope por archivo, Truncated lo dice.
+func TestPerFileCapIsReported(t *testing.T) {
+	root := filepath.Join(t.TempDir(), "n")
+	write(t, root, "mucho.md", strings.Repeat("alerta aquí\n", 70))
+	write(t, root, "justo.md", strings.Repeat("alerta aquí\n", maxPerFile))
+	s := storage.New(root)
+	res, _ := Run(context.Background(), s, "alerta", Options{MaxResults: 1000})
+	if len(res.Matches) != 2*maxPerFile || !res.Truncated {
+		t.Errorf("%d coincidencias, truncado=%v: una nota con 70 debía marcar el recorte", len(res.Matches), res.Truncated)
+	}
+	only := filepath.Join(t.TempDir(), "m")
+	write(t, only, "justo.md", strings.Repeat("alerta aquí\n", maxPerFile))
+	if res, _ := Run(context.Background(), storage.New(only), "alerta", Options{}); len(res.Matches) != maxPerFile || res.Truncated {
+		t.Errorf("una nota con exactamente %d coincidencias no es un recorte: %d %v", maxPerFile, len(res.Matches), res.Truncated)
+	}
+}
+
+// TestNamesAreSanitized: el nombre de la nota (contenido no confiable) no lleva caracteres de control a la terminal.
+func TestNamesAreSanitized(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("Windows no admite esos nombres de archivo")
+	}
+	root := filepath.Join(t.TempDir(), "n")
+	write(t, root, "mala\x1b[31mnota.md", "hallado aquí\n")
+	res, _ := Run(context.Background(), storage.New(root), "hallado", Options{})
+	if len(res.Matches) != 1 || strings.ContainsAny(res.Matches[0].Rel+res.Matches[0].Title, "\x1b") {
+		t.Errorf("%+v", res.Matches)
+	}
+}
+
+// TestWindowOnHugeLine: una línea de megabytes se recorta sin convertirla entera a runas (poca memoria) y sin perder la coincidencia.
+func TestWindowOnHugeLine(t *testing.T) {
+	line := strings.Repeat("日本語 ", 400_000) + "AGUJA" + strings.Repeat("語 ", 400_000)
+	s := strings.Index(line, "AGUJA")
+	var before, after runtime.MemStats
+	runtime.GC()
+	runtime.ReadMemStats(&before)
+	text, a, b := window(line, s, s+5, 140)
+	runtime.ReadMemStats(&after)
+	if text[a:b] != "AGUJA" {
+		t.Errorf("la coincidencia debe quedar marcada: %q", text[a:b])
+	}
+	if grown := after.TotalAlloc - before.TotalAlloc; grown > 1<<20 {
+		t.Errorf("recortar una línea enorme reservó %d KB", grown>>10)
+	}
+}

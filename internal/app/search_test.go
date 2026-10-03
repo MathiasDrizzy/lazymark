@@ -30,12 +30,13 @@ func drive(m *AppModel, cmd tea.Cmd) {
 
 // typeSearch escribe texto en el popup de búsqueda y deja correr lo que se lanza (la pausa y la búsqueda).
 func typeSearch(m *AppModel, text string) {
+	var last tea.Cmd
 	for _, r := range text {
-		_, cmd := m.Update(keyMsg(string(r)))
-		if cmd != nil {
-			defer drive(m, cmd) // solo la búsqueda de la última tecla importa: las anteriores se cancelan
+		if _, cmd := m.Update(keyMsg(string(r))); cmd != nil {
+			last = cmd // solo la búsqueda de la última tecla importa: la pausa de las anteriores ya no es la vigente
 		}
 	}
+	drive(m, last)
 }
 
 // searchModel arma una carpeta con notas conocidas, dentro de carpetas, y abre la búsqueda.
@@ -107,6 +108,22 @@ func TestSearchIgnoresStaleResultsAndCancels(t *testing.T) {
 	if sp.n != 2 {
 		t.Errorf("un resultado de una generación anterior no debe pisar el actual: n=%d", sp.n)
 	}
+	// dos popups seguidos no comparten generación: lo que llega de la búsqueda del primero no pisa al segundo
+	oldGen := sp.gen
+	press(m, "esc")
+	press(m, "/")
+	sp2 := m.c.top().(*searchPopup)
+	typeSearch(m, "canción")
+	if sp2 == sp || sp2.gen == oldGen {
+		t.Fatalf("el segundo popup debía tener otra generación: %d y %d", sp2.gen, oldGen)
+	}
+	m.Update(searchDoneMsg{gen: oldGen, query: "zorzalino", res: search.Result{Matches: []search.Match{{Rel: "viejo.md", Line: 1, Text: "viejo"}}}})
+	if out := plain(m); strings.Contains(out, "viejo.md") || !strings.Contains(out, "dos.md:3") {
+		t.Errorf("lo del popup anterior no debe aparecer:\n%s", out)
+	}
+	m, _ = searchModel(t)
+	sp = m.c.top().(*searchPopup)
+	typeSearch(m, "zorzalino")
 	// un tick viejo no lanza nada
 	if cmd := sp.run(sp.gen - 1); cmd != nil {
 		t.Error("un tick de una generación anterior no debe buscar")
@@ -135,16 +152,23 @@ func TestSearchDoesNotBlockNavigation(t *testing.T) {
 		os.WriteFile(filepath.Join(dir, "relleno-"+strings.Repeat("a", i%5)+string(rune('a'+i%26))+string(rune('a'+i/26%26))+string(rune('a'+i/676))+".md"), []byte(strings.Repeat("texto de relleno con zorzalino\n", 200)), 0o644)
 	}
 	start := time.Now()
+	var last tea.Cmd
 	for _, r := range "zorzalino" {
-		if _, cmd := m.Update(keyMsg(string(r))); cmd == nil {
-			continue
+		if _, cmd := m.Update(keyMsg(string(r))); cmd != nil {
+			last = cmd
 		}
 	}
 	if d := time.Since(start); d > 150*time.Millisecond {
 		t.Errorf("escribir 9 teclas tardó %v: la búsqueda no debe correr dentro de Update", d)
 	}
-	if sp := m.c.top().(*searchPopup); sp.n != 0 {
-		t.Error("los resultados no pueden estar antes de que corra el comando")
+	sp := m.c.top().(*searchPopup)
+	if sp.n != 0 || sp.state != searchWorking {
+		t.Errorf("los resultados no pueden estar antes de que corra el comando: n=%d estado=%v", sp.n, sp.state)
+	}
+	// al dejar correr la búsqueda llegan los resultados (2000 notas con 200 líneas cada una: se topan en 500)
+	drive(m, last)
+	if sp.state != searchDone || sp.n != search.DefaultMaxResults || !sp.res.Truncated {
+		t.Errorf("tras correr: estado=%v n=%d truncado=%v", sp.state, sp.n, sp.res.Truncated)
 	}
 }
 

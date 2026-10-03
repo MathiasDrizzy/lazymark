@@ -4,7 +4,9 @@ import (
 	"context"
 	"fmt"
 	"path/filepath"
+	"regexp"
 	"strings"
+	"sync/atomic"
 	"time"
 
 	"charm.land/bubbles/v2/textinput"
@@ -57,6 +59,12 @@ const (
 	searchDone
 )
 
+// searchGen es el contador de generaciones, de todo el proceso: dos popups de búsqueda distintos (cerrar y volver a abrir) nunca comparten
+// una generación, así lo que llega de una búsqueda del popup anterior no se confunde con la del actual.
+var searchGen atomic.Int64
+
+func nextSearchGen() int { return int(searchGen.Add(1)) }
+
 func newSearchPopup(c *core) *searchPopup {
 	ti := textinput.New()
 	ti.SetStyles(themedInputStyles())
@@ -71,7 +79,7 @@ func (p *searchPopup) bottomRight() bool   { return false }
 
 // close cancela la búsqueda en curso (el popup se cerró).
 func (p *searchPopup) close() {
-	p.gen++
+	p.gen = nextSearchGen()
 	if p.cancel != nil {
 		p.cancel()
 		p.cancel = nil
@@ -270,13 +278,15 @@ func (m *AppModel) jumpTo(hit search.Match) {
 	m.c.setStatus("%s:%d", hit.Rel, hit.Line)
 }
 
+// lineStart reconoce lo que el markdown renderizado no muestra tal cual al principio de una línea: el título (#), la cita (>), la viñeta, el
+// número de lista y la casilla de una tarea.
+var lineStart = regexp.MustCompile(`^\s*(?:#{1,6}\s+|>\s*|(?:[-*+]|\d+[.)])\s+(?:\[[ xX]\]\s+)?)*`)
+
 // lineKey es la huella de una línea de la nota para buscarla en el markdown renderizado: sus primeras palabras sin marcas.
 func lineKey(raw string) string {
-	clean := strings.NewReplacer("*", "", "_", "", "`", "", "[", "", "]", "", "#", "", ">", "").Replace(raw)
+	raw = lineStart.ReplaceAllString(raw, "")
+	clean := strings.NewReplacer("*", "", "_", "", "`", "", "[", "", "]", "").Replace(raw)
 	words := strings.Fields(clean)
-	if len(words) > 0 && (words[0] == "-" || words[0] == "x" || words[0] == "X") {
-		words = words[1:]
-	}
 	return strings.Join(words[:min(3, len(words))], " ")
 }
 
