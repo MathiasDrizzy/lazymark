@@ -260,3 +260,47 @@ func TestRenameOffersToUpdateLinks(t *testing.T) {
 	}
 	_ = ansi.Strip
 }
+
+// TestCreatingFromAPathLinkStaysInsideNotes (C.2, seguridad): crear la nota de un enlace [[../../fuera/x]] no escribe fuera de la
+// carpeta de notas: la nota queda junto a la que contiene el enlace; [[sub/nueva]] sí va a una carpeta que existe dentro.
+func TestCreatingFromAPathLinkStaysInsideNotes(t *testing.T) {
+	m, dir := linksModel(t)
+	outside := filepath.Join(filepath.Dir(dir), "fuera")
+	os.MkdirAll(outside, 0o755)
+	os.WriteFile(filepath.Join(dir, "malo.md"), []byte("# Malo\n\nver [[../fuera/escapada]] y [[sub/nueva]] y [[/tmp/absoluta]]\n"), 0o644)
+	m.c.reload()
+	m.afterChange()
+	m.notes.selectPath(filepath.Join(dir, "malo.md"))
+	create := func(display string) {
+		_ = plain(m) // dibuja la vista previa: así se leen sus enlaces
+		for i, l := range m.preview.links {
+			if l.Display == display {
+				m.preview.sel = i + 1
+				press(m, "4", "enter", "y")
+				m.notes.selectPath(filepath.Join(dir, "malo.md"))
+				m.afterChange()
+				return
+			}
+		}
+		t.Fatalf("no hay el enlace %q: %+v", display, m.preview.links)
+	}
+	create("../fuera/escapada")
+	create("sub/nueva")
+	create("/tmp/absoluta")
+	if entries, _ := os.ReadDir(outside); len(entries) != 0 {
+		t.Errorf("se escribió fuera de la carpeta de notas: %v", entries)
+	}
+	if _, err := os.Stat("/tmp/absoluta.md"); err == nil {
+		os.Remove("/tmp/absoluta.md")
+		t.Error("se escribió en /tmp")
+	}
+	if _, err := os.Stat(filepath.Join(dir, "escapada.md")); err != nil {
+		t.Errorf("[[../fuera/escapada]] crea la nota junto al enlace: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(dir, "sub", "nueva.md")); err != nil {
+		t.Errorf("[[sub/nueva]] va a la carpeta que existe: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(dir, "absoluta.md")); err != nil {
+		t.Errorf("[[/tmp/absoluta]] crea la nota junto al enlace: %v", err)
+	}
+}

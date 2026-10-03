@@ -198,12 +198,13 @@ func (m *AppModel) followLink(k int) tea.Cmd {
 		fmt.Sprintf(i18n.T("La nota «%s» no existe.\n¿Quieres crearla?", "The note \"%s\" does not exist.\nDo you want to create it?"), name),
 		func() tea.Cmd {
 			dir := l.Dir
-			if rel := filepath.ToSlash(filepath.Dir(filepath.FromSlash(name))); rel != "." && strings.Contains(name, "/") {
-				// un enlace de ruta ([[carpeta/nota]]) crea la nota en esa carpeta si existe; si no, junto a la nota que lo contiene
-				if cand := filepath.Join(m.c.store.BaseDir, filepath.FromSlash(rel)); isDir(cand) {
-					dir = cand
+			if strings.Contains(name, "/") {
+				// un enlace de ruta ([[carpeta/nota]]) crea la nota en esa carpeta solo si existe y está dentro de la carpeta de notas
+				// (ResolveFolder confina ".." y los enlaces simbólicos: `[[../../x]]` no escribe fuera); si no, junto a la nota que lo contiene
+				if real, err := m.c.store.ResolveFolder(filepath.ToSlash(filepath.Dir(filepath.FromSlash(name)))); err == nil {
+					dir = real
 				}
-				name = filepath.Base(name)
+				name = filepath.Base(filepath.FromSlash(name))
 			}
 			n, err := m.c.store.CreateNoteInDir(dir, name)
 			if err != nil {
