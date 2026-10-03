@@ -72,6 +72,7 @@ func New(cfg *config.Config) (*AppModel, error) {
 	}
 	m := &AppModel{c: c, ratio: cfg.SidebarRatio, ht: mouse.NewHitTester(), emit: tea.Raw}
 	m.preview.imgs = c.kitty
+	m.preview.c = c
 	m.notes = newNotesPanel(c)
 	m.tasks = tasksPanel{c: c}
 	m.tags = tagsPanel{c: c}
@@ -230,6 +231,15 @@ func (m *AppModel) handleKey(msg tea.KeyPressMsg) tea.Cmd {
 		m.relayout()
 		return cmd
 	}
+	if m.focus == panelPreview && !m.kanbanOn && m.preview.sel > 0 {
+		switch key { // con un enlace seleccionado, Enter lo sigue (e sigue editando) y Esc lo suelta
+		case "enter":
+			return m.followLink(m.preview.sel - 1)
+		case "esc":
+			m.preview.sel = 0
+			return nil
+		}
+	}
 	return m.do(m.c.keys.Lookup(key, m.contexts()...))
 }
 
@@ -370,6 +380,10 @@ func (m *AppModel) panelAction(a Action) tea.Cmd {
 			m.preview.scrollY = 0
 		case actBottom:
 			m.preview.scroll(1<<20, 0)
+		case actNextLink:
+			m.moveLink(1)
+		case actPrevLink:
+			m.moveLink(-1)
 		case actEdit:
 			if m.lastLeft == panelTasks {
 				if t := m.tasks.current(); t != nil {

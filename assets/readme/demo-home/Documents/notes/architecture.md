@@ -13,3 +13,5 @@ Workers drain the queue and apply the changes to Postgres in order.
 - [ ] Add a dead-letter queue for poisoned messages
 
 Tags: #engineering
+
+Related: [[projects/mobile-app]] and [[welcome]].

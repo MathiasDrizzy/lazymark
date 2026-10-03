@@ -252,8 +252,10 @@ func (ix *Index) Backlinks(to string) []Backlink {
 			continue
 		}
 		lines := strings.Split(n.Content, "\n")
+		last := 0
 		for _, l := range Parse(n.Content) {
-			if dst, ok := ix.Resolve(l, n.Path); ok && dst.Path == to {
+			if dst, ok := ix.Resolve(l, n.Path); ok && dst.Path == to && l.Line != last { // una entrada por línea
+				last = l.Line
 				out = append(out, Backlink{Note: n, Line: l.Line, Text: strings.TrimSpace(strings.TrimSuffix(lines[l.Line-1], "\r"))})
 			}
 		}
@@ -380,4 +382,14 @@ func atoi(s string) int {
 		n = n*10 + int(c-'0')
 	}
 	return n
+}
+
+// Plain devuelve el texto con cada wikilink cambiado por su texto visible (el alias, o el nombre): `ver [[nota|esa]]` → `ver esa`.
+func Plain(text string) string {
+	ls := Parse(text)
+	for i := len(ls) - 1; i >= 0; i-- {
+		l := ls[i]
+		text = text[:l.Start] + l.Display() + text[l.End:]
+	}
+	return text
 }

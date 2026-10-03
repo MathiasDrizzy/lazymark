@@ -87,6 +87,8 @@ Panel `[4]`: the rendered note.
 | Keys | Action |
 |---|---|
 | `Enter` `e` | Edit |
+| `n` | Next link |
+| `N` | Previous link |
 
 ## Kanban board
 

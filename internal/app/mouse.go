@@ -72,6 +72,12 @@ func (m *AppModel) handleClick(msg tea.MouseClickMsg) tea.Cmd {
 		m.relayout()
 	case l.Preview.Contains(x, y):
 		m.setFocus(panelPreview)
+		for _, h := range m.preview.hits { // un clic en un enlace lo sigue
+			if h.y == y-l.Preview.Y && x-l.Preview.X >= h.x0 && x-l.Preview.X < h.x1 {
+				m.preview.sel = h.k + 1
+				return m.followLink(h.k)
+			}
+		}
 	}
 	return nil
 }

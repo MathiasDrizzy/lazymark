@@ -23,27 +23,77 @@ var mdImage = regexp.MustCompile(`!\[(.*?)\]\((.*?)\)`)
 // horizontal. El render se cachea por nota, fecha, ancho y tema.
 type previewPanel struct {
 	imgs             *image.Client
+	c                *core
 	scrollY, scrollX int
 
 	cacheKey   string
-	cacheLines []string
+	cachePath  string
+	cacheRaw   []string // las líneas con los marcadores de los enlaces
+	cacheLines []string // las mismas, sin marcadores (lo que leen las demás funciones)
+
+	links    []previewLink // los enlaces de la nota mostrada, en orden (primero los del texto y después los backlinks)
+	linkLine []int         // la fila donde empieza cada uno
+	lineOpen []int         // el enlace que sigue abierto al empezar cada fila (-1 ninguno)
+	lineNext []int         // el índice del primer enlace que se abre en cada fila
+	sel      int           // enlace seleccionado, desde 1 (0: ninguno)
+	hits     []linkHit     // zonas de clic de lo que se ve, relativas al borde del panel (se rehacen en cada view)
 }
 
-func (p *previewPanel) reset() { p.scrollY, p.scrollX = 0, 0 }
+func (p *previewPanel) reset() { p.scrollY, p.scrollX, p.sel = 0, 0, 0 }
 
 // lines devuelve el markdown de note renderizado a width columnas.
 func (p *previewPanel) lines(note *storage.Note, width int) []string {
-	key := fmt.Sprintf("%s|%d|%d|%s|%d|%v", note.Path, note.ModTime.UnixNano(), width, theme.CurrentThemeName, p.imgs.Generation(), views.DateIcons)
+	gen := 0
+	if p.c != nil {
+		gen = p.c.gen
+	}
+	key := fmt.Sprintf("%s|%d|%d|%s|%d|%v|%d", note.Path, note.ModTime.UnixNano(), width, theme.CurrentThemeName, p.imgs.Generation(), views.DateIcons, gen)
 	if key != p.cacheKey {
+		if note.Path != p.noteOfCache() {
+			p.sel = 0 // otra nota: no queda ningún enlace seleccionado
+		}
 		p.cacheKey = key
 		// los emojis de fecha (🛫 📅 ✅) del archivo se dibujan como glifos monocromos: se cambian en el texto ANTES de
-		// pasárselo a Glamour, que mide y ajusta las líneas (y las tablas) con el ancho real de lo que se dibuja
+		// pasárselo a Glamour, que mide y ajusta las líneas (y las tablas) con el ancho real de lo que se dibuja; los
+		// wikilinks, igual: por su texto visible entre marcadores
 		shown := *note
 		shown.Content = views.ReplaceDateEmoji(note.Content)
-		p.cacheLines = strings.Split(renderMarkdown(&shown, width, p.imgs), "\n")
+		p.links = nil
+		if p.c != nil && p.c.links != nil {
+			shown.Content, p.links = markLinks(shown.Content, p.c.links, note.Path)
+		}
+		raw := strings.Split(renderMarkdown(&shown, width, p.imgs), "\n")
+		if p.c != nil && p.c.links != nil {
+			extra, pls := backlinkLines(p.c.links.Backlinks(note.Path), width)
+			raw = append(raw, extra...)
+			p.links = append(p.links, pls...)
+		}
+		p.cacheRaw = raw
+		p.cachePath = note.Path
+		p.cacheLines = make([]string, len(raw))
+		p.linkLine, p.lineOpen, p.lineNext = make([]int, len(p.links)), make([]int, len(raw)), make([]int, len(raw))
+		open, next := -1, 0
+		for i, l := range raw {
+			p.lineOpen[i], p.lineNext[i] = open, next
+			for _, r := range l {
+				switch r {
+				case linkOpen:
+					if next < len(p.linkLine) {
+						p.linkLine[next] = i
+					}
+					open = next
+					next++
+				case linkClose:
+					open = -1
+				}
+			}
+			p.cacheLines[i] = stripLinkMarks(l)
+		}
 	}
 	return p.cacheLines
 }
+
+func (p *previewPanel) noteOfCache() string { return p.cachePath }
 
 // scroll mueve el desplazamiento vertical; lo acota el render.
 func (p *previewPanel) scroll(dy, dx int) {
@@ -61,8 +111,20 @@ func (p *previewPanel) view(note *storage.Note, r Rect, active bool) string {
 	maxY := max(0, len(all)-h)
 	p.scrollY = min(p.scrollY, maxY)
 	visible := make([]string, 0, h)
+	p.hits = p.hits[:0]
 	for i := p.scrollY; i < min(len(all), p.scrollY+h); i++ {
-		visible = append(visible, " "+textwidth.Cut(all[i], p.scrollX, p.scrollX+inner-1))
+		line := p.cacheRaw[i]
+		if len(p.links) > 0 || strings.ContainsAny(line, string(linkOpen)+string(linkClose)) {
+			var hs []linkHit
+			line = p.decorateLink(line, p.lineOpen[i], p.lineNext[i], i-p.scrollY+1, &hs)
+			for _, hit := range hs { // a coordenadas del panel (borde 1 + margen 1) y con el scroll horizontal
+				x0, x1 := hit.x0-p.scrollX+2, hit.x1-p.scrollX+2
+				if x1 > 2 && x0 < inner+1 {
+					p.hits = append(p.hits, linkHit{y: hit.y, x0: max(2, x0), x1: min(inner+1, x1), k: hit.k})
+				}
+			}
+		}
+		visible = append(visible, " "+textwidth.Cut(line, p.scrollX, p.scrollX+inner-1))
 	}
 	pct := 100
 	if maxY > 0 {

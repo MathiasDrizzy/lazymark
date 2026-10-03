@@ -1,7 +1,9 @@
 package links
 
 import (
+	"encoding/json"
 	"fmt"
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -157,7 +159,7 @@ func TestBacklinks(t *testing.T) {
 		lines = append(lines, fmt.Sprintf("%s:%d", relOf(base, b.Note.Path), b.Line))
 	}
 	// la propia nota no cuenta; el código tampoco; "destino" desde sub/b.md resuelve a sub/destino.md (la de su carpeta)
-	if strings.Join(lines, ",") != "a.md:2,a.md:2" {
+	if strings.Join(lines, ",") != "a.md:2" { // dos enlaces en la misma línea son una sola entrada
 		t.Errorf("backlinks %v", lines)
 	}
 	got = ix.Backlinks(filepath.Join(base, "sub", "destino.md"))
@@ -200,5 +202,53 @@ func TestRenameEdits(t *testing.T) {
 	}
 	if e := ix.RenameEdits(filepath.Join(base, "c.md"), "z"); len(e) != 0 {
 		t.Errorf("sin enlaces a c.md no hay ediciones: %+v", e)
+	}
+}
+
+// TestAgainstObsidianOracle: casos de borde escritos por un segundo modelo (agente de apoyo) SOLO a partir de la documentación oficial de
+// Obsidian (https://obsidian.md/help/links), con los enlaces que debe reconocer cada línea; el lector de lazymark debe coincidir en cada uno.
+func TestAgainstObsidianOracle(t *testing.T) {
+	data, err := os.ReadFile("testdata/obsidian-oracle.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var cases []struct {
+		Line  string `json:"line"`
+		Doc   string `json:"doc"`
+		Links []struct {
+			Target, Alias, Anchor string
+		} `json:"links"`
+	}
+	if err := json.Unmarshal(data, &cases); err != nil {
+		t.Fatal(err)
+	}
+	if len(cases) < 30 {
+		t.Fatalf("solo %d casos", len(cases))
+	}
+	for _, c := range cases {
+		text := c.Line
+		if c.Doc != "" {
+			text = c.Doc
+		}
+		var want []string
+		for _, l := range c.Links {
+			// la doc dice que `[[nota]]` y `[[nota.md]]` son equivalentes (https://obsidian.md/help/links): lazymark guarda el nombre sin .md
+			want = append(want, fmt.Sprintf("%s|%s|%s", strings.TrimSuffix(l.Target, ".md"), l.Alias, l.Anchor))
+		}
+		if got := targets(Parse(text)); got != strings.Join(want, " ; ") {
+			t.Errorf("%q: lazymark lee %q, el oráculo dice %q", text, got, strings.Join(want, " ; "))
+		}
+	}
+}
+
+func TestPlain(t *testing.T) {
+	for in, want := range map[string]string{
+		"ver [[nota|esa]] y [[otra]] y [[a#b]]": "ver esa y otra y a > b",
+		"sin enlaces":                           "sin enlaces",
+		"`[[código]]` [[x]]":                    "`[[código]]` x",
+	} {
+		if got := Plain(in); got != want {
+			t.Errorf("Plain(%q) = %q, se esperaba %q", in, got, want)
+		}
 	}
 }

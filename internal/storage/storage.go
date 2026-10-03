@@ -72,6 +72,8 @@ func New(baseDir string) *Storage {
 	return &Storage{BaseDir: baseDir, CurrentSubDir: ""}
 }
 
+var wikilinkRe = regexp.MustCompile(`\[\[[^\[\]\n]*\]\]`)
+
 var (
 	taskRegex   = regexp.MustCompile(`^[-*]\s+\[([ xX])\]\s+(.*)$`)
 	imageRegex  = regexp.MustCompile(`!\[(.*?)\]\((.*?)\)`)
@@ -278,7 +280,7 @@ func (s *Storage) ListNotes() ([]Note, error) {
 }
 
 func (s *Storage) extractTags(content string) []string {
-	matches := tagRegex.FindAllStringSubmatch(content, -1)
+	matches := tagRegex.FindAllStringSubmatch(wikilinkRe.ReplaceAllString(content, ""), -1) // el # de [[nota#Título]] no es una etiqueta
 	tagMap := make(map[string]bool)
 	for _, m := range matches {
 		if len(m) > 1 {
@@ -536,6 +538,9 @@ func rewriteLine(notePath string, lineNum int, expected time.Time, fn func(line 
 	return nil
 }
 
+// Slug es el nombre de archivo (sin .md) que resulta de un nombre visible: el mismo que usan crear y renombrar.
+func Slug(name string) string { return slug(name) }
+
 // slug convierte un nombre visible en un nombre de archivo seguro.
 func slug(name string) string {
 	clean := strings.ToLower(strings.TrimSpace(name))
@@ -630,5 +635,20 @@ func (s *Storage) InsertAfterLine(notePath string, lineNum int, text string, exp
 			line = strings.TrimSuffix(line, "\r")
 		}
 		return line + nl + nl + text + strings.TrimSuffix(nl, "\n"), nil
+	})
+}
+
+// ReplaceLineIf reemplaza la línea line (desde 1) de la nota por after solo si hoy es exactamente before (y, si expected no es cero, la
+// nota conserva su mtime): así una edición calculada con una lectura vieja nunca pisa un cambio hecho por fuera. Escribe solo esa línea.
+func (s *Storage) ReplaceLineIf(notePath string, line int, before, after string, expected time.Time) error {
+	notePath, err := s.ResolveNote(notePath)
+	if err != nil {
+		return err
+	}
+	return rewriteLine(notePath, line, expected, func(cur string) (string, error) {
+		if cur != before {
+			return "", ErrNoteChanged
+		}
+		return after, nil
 	})
 }

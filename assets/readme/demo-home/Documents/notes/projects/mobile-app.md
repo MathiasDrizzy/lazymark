@@ -9,3 +9,5 @@ Everything left before the public beta.
 - [ ] Ask QA to retest the onboarding flow
 
 Tags: #work #engineering
+
+The sync design is in [[architecture]].

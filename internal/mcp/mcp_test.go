@@ -179,8 +179,8 @@ func TestMCPSession(t *testing.T) {
 	if _, isErr := toolText(t, r[9]); !isErr {
 		t.Error("move_task sin column debía ser un error")
 	}
-	if _, isErr := toolText(t, r[10]); !isErr {
-		t.Error("una herramienta inexistente debía ser un error")
+	if e := r[10].Error; e == nil || e.Code != -32602 || !strings.Contains(e.Message, "Unknown tool: borrar_todo") {
+		t.Errorf("una herramienta inexistente es un error JSON-RPC -32602, no un resultado con isError: %+v %+v", e, r[10].Result)
 	}
 	if txt, isErr := toolText(t, r[11]); isErr || !strings.Contains(txt, `"due": "2026-01-02"`) || !strings.Contains(txt, `"overdue": false`) /* está hecha: no vence */ || !strings.Contains(txt, `"completed": "`) {
 		t.Errorf("set_task_date due: %v %s", isErr, txt)
@@ -297,8 +297,8 @@ func TestMCPModernEra(t *testing.T) {
 	if e := r[5].Error; e == nil || e.Code != -32602 {
 		t.Errorf("sin clientCapabilities: %+v", e)
 	}
-	if txt, isErr := toolText(t, r[6]); !isErr || !strings.Contains(txt, "no encontrada") {
-		t.Errorf("herramienta inexistente: %v %s", isErr, txt)
+	if e := r[6].Error; e == nil || e.Code != -32602 || !strings.Contains(e.Message, "Unknown tool: nada") {
+		t.Errorf("herramienta inexistente (spec: error JSON-RPC -32602): %+v", e)
 	}
 	if e := r[7].Error; e == nil || e.Code != -32601 {
 		t.Errorf("ping ya no existe en 2026-07-28: %+v", r[7].Error)

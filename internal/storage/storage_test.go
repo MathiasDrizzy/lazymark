@@ -268,3 +268,12 @@ func TestMoveTaskRoundTrip(t *testing.T) {
 		}
 	}
 }
+
+// TestWikilinkAnchorsAreNotTags: el # de [[nota#Título]] o [[nota#^bloque]] no crea una categoría; un #tag fuera del enlace sí.
+func TestWikilinkAnchorsAreNotTags(t *testing.T) {
+	s := &Storage{}
+	got := s.extractTags("ver [[nota#Título]] y [[otra#^abc|alias]] y #real\n[[#Encabezado]]\n")
+	if len(got) != 1 || got[0] != "real" {
+		t.Errorf("categorías = %v, solo debía salir real", got)
+	}
+}

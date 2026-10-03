@@ -17,6 +17,8 @@ const (
 	actSettings
 	actTrash
 	actSearch
+	actNextLink
+	actPrevLink
 	actPanelNotes
 	actPanelTasks
 	actPanelTags
@@ -167,6 +169,8 @@ func defaultBindings() []Binding {
 		{actEnter, ctxTags, []string{"enter"}, "Filtrar notas", "Filter notes", true},
 
 		{actEdit, ctxPreview, []string{"enter", "e"}, "Editar", "Edit", true},
+		{actNextLink, ctxPreview, []string{"n"}, "Siguiente enlace", "Next link", false},
+		{actPrevLink, ctxPreview, []string{"N"}, "Enlace anterior", "Previous link", false},
 
 		{actLeft, ctxKanban, []string{"left", "h"}, "Columna anterior", "Previous column", false},
 		{actRight, ctxKanban, []string{"right", "l"}, "Columna siguiente", "Next column", false},

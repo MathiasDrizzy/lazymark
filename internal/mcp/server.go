@@ -237,6 +237,11 @@ func (s *Server) handleRequest(req *JSONRPCRequest) *JSONRPCResponse {
 		if err := json.Unmarshal(req.Params, &callParams); err != nil {
 			return rpcError(req.ID, errInvalidParam, "Invalid params: "+err.Error(), nil)
 		}
+		// una herramienta que no existe es un error de protocolo (-32602), no un resultado con isError (spec 2026-07-28, server/tools,
+		// "Error Handling": "Unknown tool" … "returned as standard JSON-RPC errors")
+		if !s.hasTool(callParams.Name) {
+			return rpcError(req.ID, errInvalidParam, "Unknown tool: "+callParams.Name, nil)
+		}
 		res := s.callTool(callParams.Name, callParams.Arguments)
 		content := make([]obj, len(res.Content))
 		for i, c := range res.Content {
@@ -251,6 +256,16 @@ func (s *Server) handleRequest(req *JSONRPCRequest) *JSONRPCResponse {
 	default:
 		return rpcError(req.ID, -32601, fmt.Sprintf("Method '%s' not found", req.Method), nil)
 	}
+}
+
+// hasTool indica si name es una de las herramientas del servidor.
+func (s *Server) hasTool(name string) bool {
+	for _, t := range s.getToolsList() {
+		if t["name"] == name {
+			return true
+		}
+	}
+	return false
 }
 
 func contains(list []string, v string) bool {

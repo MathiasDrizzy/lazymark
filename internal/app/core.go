@@ -13,6 +13,7 @@ import (
 	"github.com/MathiasDrizzy/lazymark/internal/config"
 	"github.com/MathiasDrizzy/lazymark/internal/i18n"
 	"github.com/MathiasDrizzy/lazymark/internal/image"
+	"github.com/MathiasDrizzy/lazymark/internal/links"
 	"github.com/MathiasDrizzy/lazymark/internal/storage"
 	"github.com/MathiasDrizzy/lazymark/internal/ui/views"
 )
@@ -34,6 +35,8 @@ type core struct {
 	keys  Keymap
 
 	notes       []storage.Note
+	links       *links.Index // para resolver wikilinks y calcular backlinks (se rehace en cada reload)
+	gen         int          // cambia en cada reload: invalida lo que dependa del conjunto de notas
 	tags        []views.TagInfo
 	tasks       []views.FlatTask
 	taskFilter  views.TaskFilter
@@ -57,6 +60,8 @@ func (c *core) reload() {
 	if notes, err := c.store.ListNotes(); err == nil {
 		c.notes = notes
 	}
+	c.links = links.NewIndex(c.store.BaseDir, c.notes)
+	c.gen++
 	c.tags = views.CollectTags(c.notes)
 	c.tasks = views.CollectTasks(c.scopedNotes(), c.taskFilter)
 	c.board = views.CollectKanban(c.notes, c.cols(), c.columnTitles())

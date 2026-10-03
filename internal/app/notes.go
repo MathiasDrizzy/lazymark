@@ -8,6 +8,7 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
 	"github.com/MathiasDrizzy/lazymark/internal/i18n"
+	"github.com/MathiasDrizzy/lazymark/internal/links"
 	"github.com/MathiasDrizzy/lazymark/internal/storage"
 	"github.com/MathiasDrizzy/lazymark/internal/ui/textwidth"
 	"github.com/MathiasDrizzy/lazymark/internal/ui/theme"
@@ -262,19 +263,46 @@ func (p *notesPanel) promptRename() tea.Cmd {
 	}
 	old := strings.TrimSuffix(e.Name, ".md")
 	path := e.Path
+	isNote := e.Type == storage.EntryNote
 	p.c.push(newInputPopup(i18n.T("Renombrar", "Rename"), old, func(name string) tea.Cmd {
-		newPath, err := p.c.store.Rename(path, name)
-		if err != nil {
-			p.c.errStatus("No se pudo renombrar", "Could not rename", err)
-			return nil
+		rename := func(edits []links.Edit) {
+			newPath, err := p.c.store.Rename(path, name)
+			if err != nil {
+				p.c.errStatus("No se pudo renombrar", "Could not rename", err)
+				return
+			}
+			if p.expanded[path] {
+				p.expanded[newPath] = true
+			}
+			delete(p.selected, path)
+			status := fmt.Sprintf(i18n.T("Renombrado a %s", "Renamed to %s"), filepath.Base(newPath))
+			if len(edits) > 0 {
+				done, failed := p.c.applyLinkEdits(edits, path, newPath)
+				status += fmt.Sprintf(" · "+i18n.T("%d línea(s) con enlaces actualizada(s)", "%d line(s) with links updated"), done)
+				if failed > 0 {
+					status += fmt.Sprintf(" · "+i18n.T("%d no se pudo(ieron)", "%d could not be updated"), failed)
+				}
+			}
+			p.c.reload()
+			p.reload()
+			p.selectPath(newPath)
+			p.c.setStatus("%s", status)
 		}
-		if p.expanded[path] {
-			p.expanded[newPath] = true
+		// si otras notas enlazan a esta con [[wikilinks]], se ofrece actualizarlos (con el detalle de lo que cambia)
+		if isNote && p.c.links != nil {
+			if edits := p.c.links.RenameEdits(path, storage.Slug(name)); len(edits) > 0 && storage.Slug(name) != strings.ToLower(old) {
+				p.c.push(newRenameLinksPopup(p.c.store.BaseDir, edits, func(update bool) tea.Cmd {
+					if update {
+						rename(edits)
+					} else {
+						rename(nil)
+					}
+					return nil
+				}))
+				return nil
+			}
 		}
-		delete(p.selected, path)
-		p.reload()
-		p.selectPath(newPath)
-		p.c.setStatus(i18n.T("Renombrado a %s", "Renamed to %s"), filepath.Base(newPath))
+		rename(nil)
 		return nil
 	}))
 	return nil

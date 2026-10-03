@@ -8,4 +8,6 @@ Press `?` at any time to see the keys for the panel you are in.
 - [ ] Create your first note with `c`
 - [ ] Try the Kanban board with `W`
 
+Notes can link to each other: see [[architecture]] or [[meeting-notes|the last meeting]].
+
 Tags: #getting-started

@@ -1,0 +1,398 @@
+[
+ {
+  "line": "Nota simple [[nota]] en el texto.",
+  "links": [
+   {
+    "target": "nota",
+    "alias": "",
+    "anchor": ""
+   }
+  ]
+ },
+ {
+  "line": "Enlace con carpeta [[carpeta/nota]] en la ruta.",
+  "links": [
+   {
+    "target": "carpeta/nota",
+    "alias": "",
+    "anchor": ""
+   }
+  ]
+ },
+ {
+  "line": "Enlace anidado [[carpeta/sub/nota]] profundo.",
+  "links": [
+   {
+    "target": "carpeta/sub/nota",
+    "alias": "",
+    "anchor": ""
+   }
+  ]
+ },
+ {
+  "line": "Enlace con extensión explícita [[nota.md]] en el texto.",
+  "links": [
+   {
+    "target": "nota.md",
+    "alias": "",
+    "anchor": ""
+   }
+  ]
+ },
+ {
+  "line": "Ruta y extensión completa [[carpeta/sub/nota.md]] aquí.",
+  "links": [
+   {
+    "target": "carpeta/sub/nota.md",
+    "alias": "",
+    "anchor": ""
+   }
+  ]
+ },
+ {
+  "line": "Enlace a encabezado externo [[nota#Encabezado]] definido.",
+  "links": [
+   {
+    "target": "nota",
+    "alias": "",
+    "anchor": "Encabezado"
+   }
+  ]
+ },
+ {
+  "line": "Enlace a encabezado local [[#Encabezado local]] del mismo archivo.",
+  "links": [
+   {
+    "target": "",
+    "alias": "",
+    "anchor": "Encabezado local"
+   }
+  ]
+ },
+ {
+  "line": "Enlace a bloque con ID alfanumérico [[nota#^37066d]] referenciado.",
+  "links": [
+   {
+    "target": "nota",
+    "alias": "",
+    "anchor": "^37066d"
+   }
+  ]
+ },
+ {
+  "line": "Enlace a bloque legible [[nota#^mi-bloque]] referenciado.",
+  "links": [
+   {
+    "target": "nota",
+    "alias": "",
+    "anchor": "^mi-bloque"
+   }
+  ]
+ },
+ {
+  "line": "Enlace a bloque en el mismo documento [[#^local-block]] sin destino.",
+  "links": [
+   {
+    "target": "",
+    "alias": "",
+    "anchor": "^local-block"
+   }
+  ]
+ },
+ {
+  "line": "Enlace con alias simple [[nota|alias]].",
+  "links": [
+   {
+    "target": "nota",
+    "alias": "alias",
+    "anchor": ""
+   }
+  ]
+ },
+ {
+  "line": "Enlace con alias con espacios [[nota|mi alias con espacios]].",
+  "links": [
+   {
+    "target": "nota",
+    "alias": "mi alias con espacios",
+    "anchor": ""
+   }
+  ]
+ },
+ {
+  "line": "Enlace con encabezado y alias [[a#b|c]] completo.",
+  "links": [
+   {
+    "target": "a",
+    "alias": "c",
+    "anchor": "b"
+   }
+  ]
+ },
+ {
+  "line": "Encabezado local con alias [[#Introducción|Inicio]].",
+  "links": [
+   {
+    "target": "",
+    "alias": "Inicio",
+    "anchor": "Introducción"
+   }
+  ]
+ },
+ {
+  "line": "Enlace a bloque con alias [[nota#^bloque|Texto visible]].",
+  "links": [
+   {
+    "target": "nota",
+    "alias": "Texto visible",
+    "anchor": "^bloque"
+   }
+  ]
+ },
+ {
+  "line": "Ruta con subcarpeta, encabezado y alias [[carpeta/sub/nota#Sección|Vista]].",
+  "links": [
+   {
+    "target": "carpeta/sub/nota",
+    "alias": "Vista",
+    "anchor": "Sección"
+   }
+  ]
+ },
+ {
+  "line": "Extensión .md con encabezado y alias [[nota.md#Detalles|Ver más]].",
+  "links": [
+   {
+    "target": "nota.md",
+    "alias": "Ver más",
+    "anchor": "Detalles"
+   }
+  ]
+ },
+ {
+  "line": "Varios enlaces [[primera]] y luego [[segunda]] en la misma línea.",
+  "links": [
+   {
+    "target": "primera",
+    "alias": "",
+    "anchor": ""
+   },
+   {
+    "target": "segunda",
+    "alias": "",
+    "anchor": ""
+   }
+  ]
+ },
+ {
+  "line": "Dos enlaces pegados sin espacio [[nota1]][[nota2]] seguidos.",
+  "links": [
+   {
+    "target": "nota1",
+    "alias": "",
+    "anchor": ""
+   },
+   {
+    "target": "nota2",
+    "alias": "",
+    "anchor": ""
+   }
+  ]
+ },
+ {
+  "line": "Enlaces con alias pegados [[nota1|alias1]][[nota2|alias2]] juntos.",
+  "links": [
+   {
+    "target": "nota1",
+    "alias": "alias1",
+    "anchor": ""
+   },
+   {
+    "target": "nota2",
+    "alias": "alias2",
+    "anchor": ""
+   }
+  ]
+ },
+ {
+  "line": "Nota con acentos en el nombre [[canción]] en español.",
+  "links": [
+   {
+    "target": "canción",
+    "alias": "",
+    "anchor": ""
+   }
+  ]
+ },
+ {
+  "line": "Acentos en todo el enlace [[París#Introducción|visión general]].",
+  "links": [
+   {
+    "target": "París",
+    "alias": "visión general",
+    "anchor": "Introducción"
+   }
+  ]
+ },
+ {
+  "line": "Caracteres CJK simples [[中文]] en el título.",
+  "links": [
+   {
+    "target": "中文",
+    "alias": "",
+    "anchor": ""
+   }
+  ]
+ },
+ {
+  "line": "Caracteres japoneses con ruta, ancla y alias [[日本語/ノート#セクション|別名]].",
+  "links": [
+   {
+    "target": "日本語/ノート",
+    "alias": "別名",
+    "anchor": "セクション"
+   }
+  ]
+ },
+ {
+  "line": "Caracteres coreanos con encabezado [[한국어#개요]] en el enlace.",
+  "links": [
+   {
+    "target": "한국어",
+    "alias": "",
+    "anchor": "개요"
+   }
+  ]
+ },
+ {
+  "line": "Nota con emoji en el destino [[🚀 Cohete]] espacial.",
+  "links": [
+   {
+    "target": "🚀 Cohete",
+    "alias": "",
+    "anchor": ""
+   }
+  ]
+ },
+ {
+  "line": "Enlace con emoji en el alias [[nota|🎉 fiesta]].",
+  "links": [
+   {
+    "target": "nota",
+    "alias": "🎉 fiesta",
+    "anchor": ""
+   }
+  ]
+ },
+ {
+  "line": "Emojis en nota, ancla y alias [[💡 Idea#✨ Detalle|🌟 Resumen]].",
+  "links": [
+   {
+    "target": "💡 Idea",
+    "alias": "🌟 Resumen",
+    "anchor": "✨ Detalle"
+   }
+  ]
+ },
+ {
+  "line": "Corchete extra al cierre [[nota]]] en el texto.",
+  "links": [
+   {
+    "target": "nota",
+    "alias": "",
+    "anchor": ""
+   }
+  ]
+ },
+ {
+  "line": "Corchete extra al inicio y final [[[nota]]].",
+  "links": [
+   {
+    "target": "nota",
+    "alias": "",
+    "anchor": ""
+   }
+  ]
+ },
+ {
+  "line": "Primer corchete escapado \\[[nota]] no forma wikilink.",
+  "links": []
+ },
+ {
+  "line": "Texto con enlace normal [web](https://example.com) y luego [[nota]].",
+  "links": [
+   {
+    "target": "nota",
+    "alias": "",
+    "anchor": ""
+   }
+  ]
+ },
+ {
+  "line": "[documento](doc.md) precede a [[nota|alias]] y sigue [guía](https://help.md).",
+  "links": [
+   {
+    "target": "nota",
+    "alias": "alias",
+    "anchor": ""
+   }
+  ]
+ },
+ {
+  "line": "\t[[nota1]]\t\t[[nota2|alias con tab]]\t",
+  "links": [
+   {
+    "target": "nota1",
+    "alias": "",
+    "anchor": ""
+   },
+   {
+    "target": "nota2",
+    "alias": "alias con tab",
+    "anchor": ""
+   }
+  ]
+ },
+ {
+  "line": "Línea con texto muy largo y descriptivo al inicio del párrafo antes de llegar al punto donde se incluye el enlace central [[nota_larga#seccion_especifica|Alias descriptivo extenso]] y continúa con más texto complementario para validar líneas extensas.",
+  "links": [
+   {
+    "target": "nota_larga",
+    "alias": "Alias descriptivo extenso",
+    "anchor": "seccion_especifica"
+   }
+  ]
+ },
+ {
+  "line": "Un embed ![[nota_incrustada]] no debe reconocerse como enlace normal.",
+  "links": []
+ },
+ {
+  "line": "Embed ![[imagen.png|100x100]] junto a enlace normal [[nota_valida]].",
+  "links": [
+   {
+    "target": "nota_valida",
+    "alias": "",
+    "anchor": ""
+   }
+  ]
+ },
+ {
+  "line": "Texto con `[[nota_en_codigo]]` en código en línea ignorado.",
+  "links": []
+ },
+ {
+  "line": "Código `` `[[en_doble_backtick]]` `` y fuera [[nota_reconocida]].",
+  "links": [
+   {
+    "target": "nota_reconocida",
+    "alias": "",
+    "anchor": ""
+   }
+  ]
+ },
+ {
+  "line": "Enlace vacío [[]] en medio del párrafo.",
+  "links": []
+ }
+]

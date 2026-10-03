@@ -86,6 +86,18 @@ $ claude mcp add --transport stdio lazymark -- lazymark mcp
 
 See [docs/cli.md](docs/cli.md) for the commands, the JSON schema, the exit codes and the MCP tools.
 
+### Links between notes
+
+`[[note]]` and `[[note|alias]]` link notes the way Obsidian does. In the preview they are underlined, `n` and `N` move between them, `Enter` or a click follows one (a link to a note that does not exist offers to create it), and the end of the preview lists the notes that link to this one. Renaming a note offers to update the links that point to it, showing the lines that change. See [docs/links.md](docs/links.md).
+
+<img src="assets/readme/feature-links.gif" alt="Following a wikilink from a note to another and reading the list of notes that link to it" width="100%">
+
+### Search
+
+`/` searches all the notes as you type and jumps to the match; `lazymark search` and the MCP tool `search_notes` do the same without the interface (see [docs/cli.md](docs/cli.md)).
+
+<img src="assets/readme/feature-search.gif" alt="Searching all the notes while typing and jumping to a match" width="100%">
+
 ### Inline images
 
 Images in a note show up in the preview, in place, in terminals that support the Kitty graphics protocol. `Ctrl+V` pastes the image on your clipboard into the note, and pasting a copied image file imports it.
