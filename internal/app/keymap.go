@@ -159,7 +159,7 @@ func defaultBindings() []Binding {
 		{actEnter, ctxNotes, []string{"enter"}, "Abrir", "Open", false},
 		{actEdit, ctxNotes, []string{"e"}, "Editar", "Edit", true},
 		{actNewNote, ctxNotes, []string{"c"}, "Nueva nota", "New note", true},
-		{actNewFromTemplate, ctxNotes, []string{"C"}, "Nueva nota desde plantilla", "New note from template", true},
+		{actNewFromTemplate, ctxNotes, []string{"C"}, "Nueva nota desde plantilla", "New note from template", false},
 		{actNewFolder, ctxNotes, []string{"F"}, "Nueva carpeta", "New folder", true},
 		{actRename, ctxNotes, []string{"r"}, "Renombrar", "Rename", true},
 		{actMove, ctxNotes, []string{"m"}, "Mover", "Move", true},
