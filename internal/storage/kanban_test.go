@@ -381,7 +381,7 @@ func TestNestedTasks(t *testing.T) {
 // entre las dos) queda igual, y devuelve dónde quedó cada una. No intercambia tareas de distinta sangría, una que cuelga de la otra,
 // ni líneas que no son tareas; una nota cambiada por fuera no se pisa.
 func TestSwapTasks(t *testing.T) {
-	body := "# Plan\n- [ ] a\n  - [ ] a1\n    continuación de a1\n- [ ] b #kb/doing\ntexto entre medio\n- [ ] c\n  - [x] c1\n\n- [ ] d\n"
+	body := "# Plan\n- [ ] a\n  - [ ] a1\n    continuación de a1\n- [ ] b #kb/doing\n- [ ] x #kb/doing\n- [ ] c\n  - [x] c1\n\n- [ ] d\n"
 	s, p := kanbanNote(t, body)
 	read := func() string { b, _ := os.ReadFile(p); return string(b) }
 
@@ -390,7 +390,7 @@ func TestSwapTasks(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	want := "# Plan\n- [ ] c\n  - [x] c1\n- [ ] b #kb/doing\ntexto entre medio\n- [ ] a\n  - [ ] a1\n    continuación de a1\n\n- [ ] d\n"
+	want := "# Plan\n- [ ] c\n  - [x] c1\n- [ ] b #kb/doing\n- [ ] x #kb/doing\n- [ ] a\n  - [ ] a1\n    continuación de a1\n\n- [ ] d\n"
 	if got := read(); got != want {
 		t.Fatalf("tras intercambiar a y c:\n%q\nse esperaba\n%q", got, want)
 	}
@@ -413,7 +413,7 @@ func TestSwapTasks(t *testing.T) {
 	for name, c := range map[string][2]int{
 		"sangrías distintas": {2, 3},  // a y a1
 		"una cuelga de otra": {3, 3},  // la misma
-		"no es tarea":        {2, 6},  // texto entre medio
+		"no es tarea":        {2, 1},  // el encabezado
 		"fuera de rango":     {2, 99}, // más allá del final
 	} {
 		if _, _, err := s.SwapTasks(p, c[0], c[1], time.Time{}); err == nil {

@@ -111,10 +111,11 @@ func TestSwapTasksSecondOpinionItems(t *testing.T) {
 		return string(got), err
 	}
 	t.Run("los casos de la auditoría", func(t *testing.T) {
-		// un vallado al margen no es parte de A (CommonMark): se queda donde estaba, entre las dos
-		got, err := swap(t, "- [ ] Tarea A\n```go\nx := 1\n\ny := 2\n```\n- [ ] Tarea B\n", 1, 7)
-		if err != nil || got != "- [ ] Tarea B\n```go\nx := 1\n\ny := 2\n```\n- [ ] Tarea A\n" {
-			t.Errorf("vallado al margen: %v\n%q", err, got)
+		// un vallado al margen separa las dos tareas en listas distintas (CommonMark): no son hermanas, no se tocan
+		doc := "- [ ] Tarea A\n```go\nx := 1\n\ny := 2\n```\n- [ ] Tarea B\n"
+		got, err := swap(t, doc, 1, 7)
+		if !errors.Is(err, ErrNotSiblings) || got != doc {
+			t.Errorf("vallado al margen entre las dos: %v\n%q", err, got)
 		}
 		got, err = swap(t, "- [ ] Tarea A\n  ```go\n  x := 1\n\n  y := 2\n  ```\n- [ ] Tarea B\n", 1, 7)
 		if err != nil || got != "- [ ] Tarea B\n- [ ] Tarea A\n  ```go\n  x := 1\n\n  y := 2\n  ```\n" {
@@ -144,6 +145,32 @@ func TestSwapTasksSecondOpinionItems(t *testing.T) {
 		doc = "## Lunes\n- [ ] a\n- [ ] x\n\n- [ ] b\n"
 		if got, err := swap(t, doc, 2, 5); err != nil || got != "## Lunes\n- [ ] b\n- [ ] x\n\n- [ ] a\n" {
 			t.Errorf("misma sección: %v\n%q", err, got)
+		}
+	})
+	t.Run("un párrafo al margen separa las listas", func(t *testing.T) {
+		doc := "- [ ] Tarea 1\n\nPárrafo intermedio no sangrado.\n\n- [ ] Tarea 2\n"
+		if got, err := swap(t, doc, 1, 5); !errors.Is(err, ErrNotSiblings) || got != doc {
+			t.Errorf("%v\n%q", err, got)
+		}
+	})
+	t.Run("numeradas con 9 y 10: el contenido se corre con el número", func(t *testing.T) {
+		got, err := swap(t, "9. [ ] Nueve\n   - [ ] sub\n10. [ ] Diez\n    - [ ] sub10\n", 1, 3)
+		if err != nil || got != "9. [ ] Diez\n   - [ ] sub10\n10. [ ] Nueve\n    - [ ] sub\n" {
+			t.Errorf("%v\n%q", err, got)
+		}
+		doc := "9. [ ] Nueve\n   - [ ] sub\n10. [ ] Diez\n    - [ ] sub10\n"
+		s, p := kanbanNote(t, doc)
+		s.SwapTasks(p, 1, 3, time.Time{})
+		b, _ := os.ReadFile(p)
+		if got, want := itemsHTML(t, string(b)), itemsHTML(t, doc); len(got) != len(want) {
+			t.Errorf("la cantidad de ítems cambió: %d → %d\n%q", len(want), len(got), b)
+		}
+	})
+	t.Run("tab tras la viñeta", func(t *testing.T) {
+		// "-\t[ ] a": el contenido empieza en la columna 4; una continuación con 4 espacios es suya
+		got, err := swap(t, "-\t[ ] a\n    cont\n- [ ] b\n", 1, 3)
+		if err != nil || got != "- [ ] b\n-\t[ ] a\n    cont\n" {
+			t.Errorf("%v\n%q", err, got)
 		}
 	})
 	t.Run("CRLF sin salto final", func(t *testing.T) {

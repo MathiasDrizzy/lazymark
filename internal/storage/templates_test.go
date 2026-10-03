@@ -136,3 +136,16 @@ func TestDailyNote(t *testing.T) {
 		}
 	}
 }
+
+// TestTemplateUppercaseExtension (C.5, segunda opinión): una plantilla "diario.MD" se lista y se usa igual que "diario.md".
+func TestTemplateUppercaseExtension(t *testing.T) {
+	s := tplStore(t, map[string]string{"templates/diario.MD": "# {{title}}\n"})
+	if names := s.Templates(); !reflect.DeepEqual(names, []string{"diario"}) {
+		t.Fatalf("plantillas = %v", names)
+	}
+	for _, name := range []string{"diario", "diario.MD", "diario.md"} {
+		if got, err := s.RenderTemplate(name, "T", tplNow); err != nil || got != "# T\n" {
+			t.Errorf("%q: %q %v", name, got, err)
+		}
+	}
+}

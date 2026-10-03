@@ -22,11 +22,14 @@ const maxTemplateBytes = 256 << 10
 
 // templatePath devuelve la ruta (ya confinada a la carpeta de notas) de la plantilla name, con o sin ".md".
 func (s *Storage) templatePath(name string) (string, error) {
-	name = strings.TrimSuffix(strings.TrimSpace(name), ".md")
+	name = strings.TrimSpace(name)
+	if strings.HasSuffix(strings.ToLower(name), ".md") {
+		name = name[:len(name)-3]
+	}
 	if name == "" || name == "." || name == ".." || strings.ContainsAny(name, `/\:`) || strings.IndexFunc(name, func(r rune) bool { return r < 0x20 || r == 0x7f }) >= 0 {
 		return "", fmt.Errorf("%w: nombre de plantilla no válido %q", ErrTemplateNotFound, name)
 	}
-	p, err := s.ResolveNote(filepath.Join(s.BaseDir, TemplatesDir, name+".md"))
+	p, err := s.ResolveNote(s.templateFile(name))
 	if err != nil {
 		if errors.Is(err, os.ErrNotExist) {
 			return "", fmt.Errorf("%w: %q", ErrTemplateNotFound, name)
@@ -125,13 +128,9 @@ func (s *Storage) DailyNote(now time.Time) (*Note, bool, error) {
 	if _, err := os.Lstat(filepath.Join(dir, name+".md")); err == nil {
 		return existing()
 	}
-	var note *Note
-	if _, terr := s.templatePath(DailyTemplate); terr == nil {
-		note, err = s.CreateNoteFromTemplate(dir, name, DailyTemplate, now)
-	} else if errors.Is(terr, ErrTemplateNotFound) {
+	note, err := s.CreateNoteFromTemplate(dir, name, DailyTemplate, now)
+	if errors.Is(err, ErrTemplateNotFound) { // sin plantilla (o quitada mientras tanto): la nota con el título de la fecha
 		note, err = s.CreateNoteInDirWithBody(dir, name, "# "+name+"\n\n")
-	} else {
-		return nil, false, terr
 	}
 	if errors.Is(err, ErrNoteExists) { // otra instancia la creó entre medio
 		return existing()
@@ -146,4 +145,17 @@ func (s *Storage) DailyNote(now time.Time) (*Note, bool, error) {
 func (s *Storage) inTemplates(path string) bool {
 	rel, err := filepath.Rel(s.BaseDir, path)
 	return err == nil && (rel == TemplatesDir || strings.HasPrefix(filepath.ToSlash(rel), TemplatesDir+"/"))
+}
+
+// templateFile es el archivo de la plantilla name: el que existe con ".md" en cualquier combinación de mayúsculas (diario.MD), o name.md.
+func (s *Storage) templateFile(name string) string {
+	dir := filepath.Join(s.BaseDir, TemplatesDir)
+	if entries, err := os.ReadDir(dir); err == nil {
+		for _, e := range entries {
+			if !e.IsDir() && strings.EqualFold(e.Name(), name+".md") {
+				return filepath.Join(dir, e.Name())
+			}
+		}
+	}
+	return filepath.Join(dir, name+".md")
 }

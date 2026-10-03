@@ -245,11 +245,19 @@ func contentIndent(l string) int {
 	if m == nil {
 		return 0
 	}
-	sp := indentWidth(m[3])
+	col := indentWidth(m[1]) + len(m[2]) // columna donde empieza el espacio que sigue al marcador (un tab llega a la siguiente parada de 4)
+	sp := 0
+	for _, r := range m[3] {
+		if r == '\t' {
+			sp += 4 - (col+sp)%4
+		} else {
+			sp++
+		}
+	}
 	if sp == 0 || sp > 4 {
 		sp = 1
 	}
-	return indentWidth(m[1]) + len(m[2]) + sp
+	return col + sp
 }
 
 // taskBlock devuelve el rango [start, end] (índices de lines) de la tarea de la línea idx: lo que le pertenece según CommonMark, o sea su
@@ -294,6 +302,25 @@ func (s *Storage) BlockEnd(notePath string, line int) (int, error) {
 	return end + 1, nil
 }
 
+// shiftBlock corre d columnas el contenido de las líneas de un bloque: agrega d espacios (d > 0) o quita hasta -d espacios de la sangría
+// (d < 0). Las líneas en blanco no se tocan.
+func shiftBlock(lines []string, d int) {
+	for i, l := range lines {
+		if d == 0 || strings.TrimSpace(l) == "" {
+			continue
+		}
+		if d > 0 {
+			lines[i] = strings.Repeat(" ", d) + l
+			continue
+		}
+		n := 0
+		for n < -d && n < len(l) && l[n] == ' ' {
+			n++
+		}
+		lines[i] = l[n:]
+	}
+}
+
 var orderedMarker = regexp.MustCompile(`^(\s*)(\d{1,9})([.)])`)
 
 // SwapTasks intercambia de lugar las tareas de las líneas lineA y lineB (desde 1) de la misma nota, cada una con todo lo que le
@@ -331,15 +358,17 @@ func (s *Storage) SwapTasks(notePath string, lineA, lineB int, expected time.Tim
 		if ea >= b { // la segunda es parte del bloque de la primera
 			return nil, fmt.Errorf("%w: una cuelga de la otra", ErrNotSiblings)
 		}
-		// con la misma sangría, si entre las dos hay una línea con menos sangría (otro padre) o un encabezado (otra sección) ya no son
-		// hermanas y cambiarían de sitio en el árbol
+		// son hermanas solo si son ítems de la misma lista: entre las dos, cada línea es un blanco, un ítem de la misma sangría o algo
+		// con más sangría (contenido de otro ítem hermano). Una línea con menos sangría (otro padre), un encabezado, un párrafo o un
+		// bloque de código al margen las separan en listas o secciones distintas, y cambiarían de sitio en el documento
 		for _, l := range lines[ea+1 : b] {
 			t := strings.TrimSuffix(l, "\r")
 			if strings.TrimSpace(t) == "" {
 				continue
 			}
-			if indentWidth(leadingSpace(t)) < indent || (indentWidth(leadingSpace(t)) < 4 && strings.HasPrefix(strings.TrimLeft(t, " "), "#")) {
-				return nil, fmt.Errorf("%w: tienen padres o secciones distintos", ErrNotSiblings)
+			w := indentWidth(leadingSpace(t))
+			if w < indent || (w == indent && !itemMarker.MatchString(t)) {
+				return nil, fmt.Errorf("%w: hay otro contenido entre las dos", ErrNotSiblings)
 			}
 		}
 		// cada línea conserva SU terminación (\r o no) en su posición: así un archivo CRLF sin salto final no mezcla terminaciones
@@ -354,8 +383,11 @@ func (s *Storage) SwapTasks(notePath string, lineA, lineB int, expected time.Tim
 		// numerados: cada posición conserva su número
 		ma, mb := orderedMarker.FindStringSubmatch(blockA[0]), orderedMarker.FindStringSubmatch(blockB[0])
 		if ma != nil && mb != nil && ma[3] == mb[3] {
+			// el contenido de un ítem numerado empieza tras su número: si cambia el ancho (9. ↔ 10.), el resto del bloque se corre igual
 			blockA[0] = ma[1] + mb[2] + ma[3] + blockA[0][len(ma[0]):]
 			blockB[0] = mb[1] + ma[2] + mb[3] + blockB[0][len(mb[0]):]
+			shiftBlock(blockA[1:], len(mb[2])-len(ma[2]))
+			shiftBlock(blockB[1:], len(ma[2])-len(mb[2]))
 		}
 		out := make([]string, 0, len(lines))
 		out = append(out, flat[:a]...)
