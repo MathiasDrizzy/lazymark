@@ -531,3 +531,18 @@ func TestNoColorEmojiOnScreen(t *testing.T) {
 		t.Errorf("sin Nerd Font el vencimiento lleva ◷:\n%s", out)
 	}
 }
+
+// TestTasksPanelRowAfterTicking (C.8): al marcar una tarea con Espacio se le agrega ✅ hoy en el archivo, pero la fila del panel
+// Tareas sigue siendo "☑ texto … nota" (el panel solo muestra el vencimiento, no la fecha de completada).
+func TestTasksPanelRowAfterTicking(t *testing.T) {
+	m := newTestModel(t, 120, 35)
+	press(m, "2", "space")
+	for _, l := range strings.Split(plain(m), "\n") {
+		if strings.Contains(l, "☑") && strings.Contains(l, "") {
+			t.Errorf("la fila de una tarea marcada no lleva la fecha de completada: %q", l)
+		}
+	}
+	if !strings.Contains(plain(m), "☑") {
+		t.Errorf("la tarea marcada debe verse como hecha:\n%s", plain(m))
+	}
+}

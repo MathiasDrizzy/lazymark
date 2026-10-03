@@ -62,15 +62,12 @@ func DatePart(f storage.DateField, date string, overdue bool) string {
 	return dateStyle(f, overdue).Render(DateGlyph(f) + " " + date)
 }
 
-// PanelDates arma las fechas que se muestran junto al texto en el panel Tareas: el vencimiento (en rojo si venció) y, si la
-// tarea está hecha, cuándo; "" si no tiene ninguna.
+// PanelDates arma las fechas que se muestran junto al texto en el panel Tareas: solo el vencimiento (en rojo si venció). El
+// panel es angosto y la fecha de completada, que se agrega sola al marcar la tarea, se ve en las tarjetas y en la vista previa;
+// "" si no tiene vencimiento.
 func PanelDates(d storage.Dates, done bool, today string) string {
-	var parts []string
-	if d.Due != "" {
-		parts = append(parts, DatePart(storage.DateDue, d.Due, storage.Overdue(done, d.Due, today)))
+	if d.Due == "" {
+		return ""
 	}
-	if done && d.Done != "" {
-		parts = append(parts, DatePart(storage.DateDone, d.Done, false))
-	}
-	return strings.Join(parts, " ")
+	return DatePart(storage.DateDue, d.Due, storage.Overdue(done, d.Due, today))
 }
