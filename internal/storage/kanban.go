@@ -6,6 +6,7 @@ import (
 	"sort"
 	"strings"
 	"time"
+	"unicode"
 )
 
 // Columns son los ids de las columnas del tablero Kanban, en orden. La primera es donde cae una tarea sin tag;
@@ -116,12 +117,12 @@ func CleanTaskText(text string) string {
 // removeSpan quita text[start:end] y normaliza los espacios de alrededor: lo que queda a los lados se une con un solo espacio
 // (nunca pegado), y si lo de la derecha es solo espacio final (o el \r de una línea CRLF) se conserva tal cual.
 func removeSpan(text string, start, end int) string {
-	left := strings.TrimRight(text[:start], " \t")
+	left := strings.TrimRightFunc(text[:start], unicode.IsSpace)
 	right := text[end:]
 	if strings.TrimSpace(right) == "" {
 		return left + right
 	}
-	right = strings.TrimLeft(right, " \t")
+	right = strings.TrimLeftFunc(right, unicode.IsSpace) // también el espacio ideográfico (U+3000) del japonés y el chino
 	if left == "" {
 		return right
 	}

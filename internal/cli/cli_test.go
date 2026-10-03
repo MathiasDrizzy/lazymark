@@ -542,3 +542,31 @@ func TestTaskDateDefectsOfTheAudit(t *testing.T) {
 		t.Errorf("F3: el texto no debe quedar pegado al emoji:\n%q", got)
 	}
 }
+
+// TestDateRemovalKeepsAChecklistItem (C.7): quitar la única fecha de una tarea que no tiene más texto no la hace desaparecer
+// (la línea sigue siendo "- [ ] "): el comando sale con 0 y devuelve la tarea.
+func TestDateRemovalKeepsAChecklistItem(t *testing.T) {
+	dir := fixture(t)
+	p := filepath.Join(dir, "solo.md")
+	os.WriteFile(p, []byte("# S\n- [ ] 📅 2026-05-10\n"), 0o644)
+	out, err := run(t, dir, "task", "list", "--json", "--note", "solo.md")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var tasks []ops.TaskDTO
+	json.Unmarshal([]byte(out), &tasks)
+	if len(tasks) != 1 {
+		t.Fatalf("la tarea de solo fecha debe listarse: %s", out)
+	}
+	res, err := run(t, dir, "task", "due", tasks[0].ID, "none", "--json")
+	if err != nil {
+		t.Fatalf("salió con %d: %v", ExitCode(err), err)
+	}
+	var got ops.TaskDTO
+	if json.Unmarshal([]byte(res), &got) != nil || got.Due != "" || got.Text != "" || got.ID != tasks[0].ID {
+		t.Errorf("debe devolver la tarea como quedó (sin fecha ni texto): %s", res)
+	}
+	if b, _ := os.ReadFile(p); string(b) != "# S\n- [ ] \n" {
+		t.Errorf("la nota quedó %q", b)
+	}
+}

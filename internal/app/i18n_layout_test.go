@@ -61,16 +61,16 @@ func TestLayoutInEveryLanguage(t *testing.T) {
 }
 
 // TestStatusPluralAndKanbanButton (C.7): "1 nota cargada" en singular, y el botón "Kanban (W)" de la barra y el de volver
-// ("Notas (W)") se traducen (カンバン en japonés, 看板 en chino).
+// ("← Notas (Esc)") se traducen (カンバン en japonés, 看板 en chino).
 func TestStatusPluralAndKanbanButton(t *testing.T) {
 	defer i18n.SetLanguage("es")
 	for _, tc := range []struct {
-		lang, one, many, button string
+		lang, button, back string
 	}{
-		{"es", "1 nota cargada", "3 notas cargadas", "Kanban (W)"},
-		{"en", "1 note loaded", "3 notes loaded", "Kanban (W)"},
-		{"ja", "1 件のノートを読み込みました", "", "カンバン (W)"},
-		{"zh", "已加载 1 篇笔记", "", "看板 (W)"},
+		{"es", "Kanban (W)", "← Notas (Esc)"},
+		{"en", "Kanban (W)", "← Notes (Esc)"},
+		{"ja", "カンバン (W)", "← ノート (Esc)"},
+		{"zh", "看板 (W)", "← 笔记 (Esc)"},
 	} {
 		i18n.SetLanguage(tc.lang)
 		m := newTestModel(t, 120, 35)
@@ -78,6 +78,10 @@ func TestStatusPluralAndKanbanButton(t *testing.T) {
 		m.relayout()
 		if !strings.Contains(plain(m), tc.button) {
 			t.Errorf("%s: falta el botón %q en la barra:\n%s", tc.lang, tc.button, plain(m))
+		}
+		press(m, "W")
+		if !strings.Contains(plain(m), tc.back) {
+			t.Errorf("%s: falta el botón de volver %q en el Kanban:\n%s", tc.lang, tc.back, plain(m))
 		}
 	}
 	for _, tc := range []struct {

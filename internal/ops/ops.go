@@ -333,7 +333,21 @@ func (s *Service) SetDate(id, field, date string) (TaskDTO, error) {
 	if err := s.Store.SetTaskDate(n.Path, t.Line, f, date, n.ModTime); err != nil {
 		return TaskDTO{}, err
 	}
-	return s.afterWrite(n.Path, t.Line)
+	dto, err := s.afterWrite(n.Path, t.Line)
+	if errors.Is(err, storage.ErrTaskNotFound) && date == "" {
+		// quitar la única fecha de una tarea sin más texto la deja como una casilla vacía, que ya no cuenta como tarea: la
+		// escritura se hizo, así que no se informa "no existe"; se devuelve la tarea como quedó (sin texto ni esa fecha)
+		old := s.taskDTO(n, id, t)
+		old.Text = ""
+		switch f {
+		case storage.DateStart:
+			old.Start = ""
+		case storage.DateDue:
+			old.Due, old.Overdue = "", false
+		}
+		return old, nil
+	}
+	return dto, err
 }
 
 // afterWrite devuelve la tarea de la línea line de la nota path, con su id actual, ya escrita. El id sale de leer la nota de nuevo

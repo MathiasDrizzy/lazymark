@@ -91,7 +91,12 @@ func TestSetDate(t *testing.T) {
 		{"los espacios de alrededor se normalizan", "- [ ] a  📅 2026-05-10   b", DateDue, "", "- [ ] a b"},
 		{"el espacio final se conserva", "- [ ] a 📅 2026-05-10  ", DateDue, "", "- [ ] a  "},
 		{"al principio del texto", "- [ ] 📅 2026-05-10 tarea", DateDue, "", "- [ ] tarea"},
-		{"no deja dos del mismo emoji aunque se ponga otra fecha", "- [ ] a 🛫 2026-01-01 🛫 2026-01-02 🛫 mal", DateStart, "2026-03-03", "- [ ] a 🛫 2026-03-03 🛫 mal"},
+		{"reemplaza el primero y quita los repetidos; un emoji sin fecha no es marcador y se queda", "- [ ] a 🛫 2026-01-01 🛫 2026-01-02 🛫 mal", DateStart, "2026-03-03", "- [ ] a 🛫 2026-03-03 🛫 mal"},
+		{"al reemplazar no se pega al emoji que sigue", "- [ ] pegadas 🛫 2026-10-01📅 2026-10-03", DateStart, "2026-11-11", "- [ ] pegadas 🛫 2026-11-11 📅 2026-10-03"},
+		{"al agregar antes de una completada pegada al texto", "- [x] a✅ 2026-05-10", DateDue, "2026-06-01", "- [x] a 📅 2026-06-01 ✅ 2026-05-10"},
+		{"una completada inválida también va al final", "- [x] tarea ✅ 2026-13-45", DateDue, "2026-05-10", "- [x] tarea 📅 2026-05-10 ✅ 2026-13-45"},
+		{"una tarea que solo tenía la fecha sigue siendo tarea", "- [ ] 📅 2026-05-10", DateDue, "", "- [ ] "},
+		{"espacio ideográfico", "- [ ] 任务 📅 2026-05-10\u3000完成", DateDue, "", "- [ ] 任务 完成"},
 		{"con selector de variación", "- [ ] a 📅️ 2026-05-10", DateDue, "2026-06-01", "- [ ] a 📅 2026-06-01"},
 		{"con tag al final", "- [ ] a #kb/doing", DateDue, "2026-05-10", "- [ ] a #kb/doing 📅 2026-05-10"},
 	}

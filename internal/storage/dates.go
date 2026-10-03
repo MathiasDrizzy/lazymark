@@ -100,6 +100,9 @@ func Overdue(done bool, due, today string) bool {
 // Today es la fecha de hoy (AAAA-MM-DD); los tests la reemplazan.
 var Today = func() string { return time.Now().Format("2006-01-02") }
 
+// checkboxOnly reconoce una línea que termina en la casilla ("- [ ]"), sin texto ni espacio detrás.
+var checkboxOnly = regexp.MustCompile(`^\s*[-*]\s+\[[ xX]\]$`)
+
 // setDate devuelve la línea con el campo f puesto en value (AAAA-MM-DD) o quitado (value ""). Con un valor, reemplaza en su
 // sitio el primer marcador del campo (aunque su fecha sea inválida) y quita los demás: nunca quedan dos del mismo emoji; si no
 // hay ninguno, lo agrega al final (antes de la fecha de completada, si la hay, y antes del espacio y el \r finales). Con
@@ -130,19 +133,24 @@ func setDate(line string, f DateField, value string) string {
 			body = removeSpan(body, mine[i].start, mine[i].end)
 		}
 		if value != "" {
-			body = body[:mine[0].start] + field + body[mine[0].end:]
+			after := body[mine[0].end:]
+			if after != "" && after[0] != ' ' && after[0] != '\t' { // no se pega a lo que sigue (otro emoji, texto)
+				after = " " + after
+			}
+			body = body[:mine[0].start] + field + after
+		} else if checkboxOnly.MatchString(body) {
+			body += " " // "- [ ]" sin nada detrás deja de ser una tarea: se conserva el espacio de la casilla
 		}
 		return body + cr
 	}
 	if value == "" {
 		return line
 	}
-	hits := scanDates(body)
 	trimmed := strings.TrimRight(body, " \t")
 	tail := body[len(trimmed):]
 	at := len(trimmed)
-	if f != DateDone { // el emoji de completada va siempre al final
-		for _, h := range hits {
+	if f != DateDone { // el emoji de completada va siempre al final (también si su fecha es inválida)
+		for _, h := range scanMarkers(body) {
 			if h.field == DateDone {
 				at = h.start
 				for at > 0 && (trimmed[at-1] == ' ' || trimmed[at-1] == '\t') {
@@ -152,7 +160,11 @@ func setDate(line string, f DateField, value string) string {
 			}
 		}
 	}
-	return trimmed[:at] + " " + field + trimmed[at:] + tail + cr
+	rest := trimmed[at:]
+	if rest != "" && rest[0] != ' ' && rest[0] != '\t' {
+		rest = " " + rest // lo que sigue (el ✅ pegado a un texto) no queda pegado al campo nuevo
+	}
+	return trimmed[:at] + " " + field + rest + tail + cr
 }
 
 // SetTaskDate pone (value "AAAA-MM-DD") o quita (value "") el campo f de la tarea de la línea line de la nota, reescribiendo
