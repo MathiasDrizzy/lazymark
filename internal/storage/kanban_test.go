@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -470,7 +471,11 @@ func TestEnsureFolder(t *testing.T) {
 			t.Errorf("se escribió fuera: %v", es)
 		}
 	}
-	for _, bad := range []string{"../x", "a/../../x", "/tmp/x", "a//b", "a/\x01b", "a\\b"} {
+	bads := []string{"../x", "a/../../x", "/tmp/x", "a//b", "a/\x01b"}
+	if runtime.GOOS != "windows" { // en Windows la barra invertida es un separador más (ToSlash)
+		bads = append(bads, "a\\b")
+	}
+	for _, bad := range bads {
 		if _, err := s.EnsureFolder(bad); err == nil {
 			t.Errorf("%q debía rechazarse", bad)
 		}
