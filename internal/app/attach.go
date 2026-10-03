@@ -68,6 +68,9 @@ func (m *AppModel) handlePaste(msg tea.PasteMsg) tea.Cmd {
 		if ip, ok := p.(*inputPopup); ok {
 			return ip.paste(msg)
 		}
+		if sp, ok := p.(*searchPopup); ok {
+			return sp.paste(msg)
+		}
 		return nil
 	}
 	paths := clipboard.ParsePastedPaths(msg.Content)

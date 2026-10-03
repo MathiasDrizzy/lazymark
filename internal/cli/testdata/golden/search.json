@@ -1,0 +1,35 @@
+{
+  "query": "informe",
+  "matches": [
+    {
+      "note": "ctrl.md",
+      "path": "<DIR>/ctrl.md",
+      "title": "ctrl",
+      "line": 2,
+      "text": "escribir ]52;c;cHduZWQ= informe",
+      "start": 24,
+      "end": 31
+    },
+    {
+      "note": "ideas.md",
+      "path": "<DIR>/ideas.md",
+      "title": "ideas",
+      "line": 3,
+      "text": "- [ ] Escribir informe",
+      "start": 15,
+      "end": 22
+    },
+    {
+      "note": "proyecto.md",
+      "path": "<DIR>/proyecto.md",
+      "title": "proyecto",
+      "line": 5,
+      "text": "- [ ] Escribir informe",
+      "start": 15,
+      "end": 22
+    }
+  ],
+  "files": 4,
+  "skipped": 0,
+  "truncated": false
+}

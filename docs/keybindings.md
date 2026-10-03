@@ -17,6 +17,7 @@ Work everywhere.
 | `Ctrl+V` | Paste image |
 | `,` | Settings |
 | `x` | Trash |
+| `/` | Search |
 | `1` | Notes panel |
 | `2` | Tasks panel |
 | `3` | Categories panel |

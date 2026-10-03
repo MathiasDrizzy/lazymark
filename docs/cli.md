@@ -8,6 +8,7 @@ All commands take `--dir <folder>` (default: the notes folder of your config) an
 lazymark note list [--json]
 lazymark note show <path> [--json]
 lazymark note new  <title> [--folder <subfolder>] [--empty] [--json]
+lazymark search <text> [--regex] [--case] [--limit <n>] [--json]
 lazymark task list [--json] [--pending] [--column <id>] [--note <path>]
 lazymark task toggle <id> [--json]
 lazymark task move   <id> <column> [--json]
@@ -16,6 +17,16 @@ lazymark task start  <id> <YYYY-MM-DD|none> [--json]
 ```
 
 `note get <path>` and `task toggle --path <note> --line <n>` still work.
+
+## Search
+
+`lazymark search <text>` looks for the text in every note and prints `note:line: text` for each match, ordered by note and line. It is case-insensitive (accents count: `cafe` does not find `café`); `--case` makes it case-sensitive and `--regex` reads the text as a regular expression ([RE2 syntax](https://github.com/google/re2/wiki/Syntax)). `--limit <n>` caps the matches (500 by default; `truncated` tells you there were more). Several words without quotes are one search. No match is not an error: it prints nothing and exits with 0; an empty search, an invalid expression or a negative limit exit with 2 and touch nothing.
+
+There is no index: the notes are scanned on every search, in parallel, skipping the ones larger than 2 MiB (`skipped` counts them), the hidden folders (`.trash`) and `assets/`, and symbolic links that leave the notes folder. A note linked from inside the folder is searched once.
+
+`--json` prints `{"query", "matches", "files", "skipped", "truncated"}`; each match is `{"note", "path", "title", "line", "text", "start", "end"}`, where `text` is the line trimmed around the match (with `…` if it is long, and without control characters) and `start`/`end` are the byte offsets of the match inside `text`.
+
+In the app, `/` opens the same search with live results; `Enter` (or a second click) jumps to the note and the line.
 
 ## Exit codes
 
@@ -79,7 +90,7 @@ Notes are sorted by path, tasks by their order in the note.
 
 `lazymark mcp [--dir <folder>]` serves MCP over stdio (newline-delimited JSON-RPC 2.0). It speaks both eras of the protocol on the same connection:
 
-- **2026-07-28 (current):** no sessions and no `initialize` handshake. Every request carries its protocol version and client capabilities in `_meta` (`io.modelcontextprotocol/protocolVersion`, `io.modelcontextprotocol/clientCapabilities`), the server answers each one on its own (`resultType: "complete"` and its name in `_meta["io.modelcontextprotocol/serverInfo"]`) and implements `server/discover` (supported versions, capabilities, identity). A version it does not support gets `UnsupportedProtocolVersion` (`-32022`) with the list of the ones it does; a request without capabilities gets `-32602`. See [Versioning and Compatibility](https://modelcontextprotocol.io/specification/2026-07-28/basic/versioning) and [stdio](https://modelcontextprotocol.io/specification/2026-07-28/basic/transports/stdio).
+- **2026-07-28 (current):** no sessions and no `initialize` handshake. Every request carries its protocol version and client capabilities in `_meta` (`io.modelcontextprotocol/protocolVersion`, `io.modelcontextprotocol/clientCapabilities`), the server answers each one on its own (`resultType: "complete"` and its name in `_meta["io.modelcontextprotocol/serverInfo"]`) and implements `server/discover` (supported versions, capabilities, identity). A version it does not support gets `UnsupportedProtocolVersion` (`-32022`) with the list of the ones it does; a request with some but not all of the per-request fields (or with a field of the wrong type) gets `-32602`; an `id` that is `null`, an object or an array gets `-32600` (the specification requires a string or integer); `tools/list` carries `ttlMs` and `cacheScope` (`CacheableResult`); `ping`, which that revision removed, is answered with `-32601`. See [Versioning and Compatibility](https://modelcontextprotocol.io/specification/2026-07-28/basic/versioning) and [stdio](https://modelcontextprotocol.io/specification/2026-07-28/basic/transports/stdio).
 - **2025-11-25 and earlier (`2025-06-18`, `2025-03-26`, `2024-11-05`):** the `initialize` handshake; the server answers with the version the client asks for if it knows it, and with `2025-11-25` otherwise.
 
 Which one is used depends on how the client opens (the same rule the specification gives for dual-era servers). Claude Code speaks 2026-07-28 with its v2 runtime, but asks stdio servers for it only when `MCP_PROTOCOL_NEGOTIATION=auto` is set, and otherwise connects as before ([Claude Code MCP documentation](https://code.claude.com/docs/en/mcp)); both paths work with lazymark. The tools are the commands above:
@@ -89,6 +100,7 @@ Which one is used depends on how the client opens (the same rule the specificati
 | `list_notes` | | `note list` |
 | `read_note` | `path` | `note show` |
 | `create_note` | `title`, `folder?`, `empty?` | `note new` |
+| `search_notes` | `query`, `regex?`, `case_sensitive?`, `limit?` | `search` |
 | `list_tasks` | `pending_only?`, `column?`, `note_path?` | `task list` |
 | `move_task` | `id`, `column` | `task move` |
 | `set_task_date` | `id`, `field` (`start` or `due`), `date` (`YYYY-MM-DD` or `none`) | `task due` and `task start` |

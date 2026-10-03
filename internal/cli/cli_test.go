@@ -88,6 +88,8 @@ func run(t *testing.T, dir string, args ...string) (string, error) {
 	var err error
 	args = append(args, "--dir", dir)
 	switch args[0] {
+	case "search":
+		err = RunSearchWithWriter(&buf, args[1:], dir)
 	case "note":
 		err = RunNoteWithWriter(&buf, args[1:], dir)
 	case "task":
@@ -568,5 +570,72 @@ func TestDateRemovalKeepsAChecklistItem(t *testing.T) {
 	}
 	if b, _ := os.ReadFile(p); string(b) != "# S\n- [ ] \n" {
 		t.Errorf("la nota quedó %q", b)
+	}
+}
+
+// TestSearchCLI (C.1 H5-1): `lazymark search` con y sin --json, --regex, --case y --limit; sin coincidencias no es un error;
+// una búsqueda vacía o una expresión inválida salen con 2 sin tocar nada; la salida de texto no lleva caracteres de control.
+func TestSearchCLI(t *testing.T) {
+	dir := fixture(t)
+	os.WriteFile(filepath.Join(dir, "ctrl.md"), []byte("# c\nescribir \x1b]52;c;cHduZWQ=\x07 informe\n"), 0o644)
+	out, err := run(t, dir, "search", "informe")
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := "ctrl.md:2: escribir ]52;c;cHduZWQ= informe\nideas.md:3: - [ ] Escribir informe\nproyecto.md:5: - [ ] Escribir informe\n"
+	if out != want {
+		t.Errorf("texto:\n%q\nse esperaba:\n%q", out, want)
+	}
+	for _, args := range [][]string{{"search", "informe", "--json"}, {"search", "-regex", `Escribir \w+`, "--json"}} {
+		o, err := run(t, dir, args...)
+		if err != nil {
+			t.Fatal(err)
+		}
+		var res ops.SearchDTO
+		if err := json.Unmarshal([]byte(o), &res); err != nil || len(res.Matches) < 2 {
+			t.Fatalf("%v: %v %s", args, err, o)
+		}
+		for _, m := range res.Matches {
+			if m.Text[m.Start:m.End] == "" || !strings.EqualFold(m.Text[m.Start:m.End], "informe") && args[1] == "informe" {
+				t.Errorf("%v: el rango %d:%d de %q no es lo hallado", args, m.Start, m.End, m.Text)
+			}
+		}
+		if args[len(args)-1] == "--json" && args[1] == "informe" {
+			golden(t, "search.json", normalize(strings.ReplaceAll(o, `"ctrl.md"`, `"ctrl.md"`), dir))
+		}
+	}
+	if o, err := run(t, dir, "search", "ESCRIBIR", "--case"); err != nil || o != "" {
+		t.Errorf("--case no halla ESCRIBIR: %q %v", o, err)
+	}
+	if o, err := run(t, dir, "search", "nada de nada"); err != nil || o != "" {
+		t.Errorf("sin coincidencias sale con 0 y sin salida: %q %v", o, err)
+	}
+	if o, _ := run(t, dir, "search", "informe", "--limit", "1", "--json"); !strings.Contains(o, `"truncated": true`) {
+		t.Errorf("--limit 1 debía truncar: %s", o)
+	}
+	// varias palabras sin comillas son la misma búsqueda
+	if o, _ := run(t, dir, "search", "Escribir", "informe"); !strings.Contains(o, "ideas.md:3") {
+		t.Errorf("varias palabras: %q", o)
+	}
+	snap := snapshot(t, dir)
+	for name, args := range map[string][]string{
+		"vacía":              {"search"},
+		"regex inválida":     {"search", "(", "--regex"},
+		"límite negativo":    {"search", "x", "--limit", "-3"},
+		"flag desconocido":   {"search", "x", "--nope"},
+		"límite no numérico": {"search", "x", "--limit", "mucho"},
+	} {
+		o, err := run(t, dir, args...)
+		if ExitCode(err) != ExitUsage || o != "" {
+			t.Errorf("%s: código %d, salida %q: %v", name, ExitCode(err), o, err)
+		}
+	}
+	if o, err := run(t, dir, "search", "-h"); err != nil || !strings.Contains(o, "lazymark search") {
+		t.Errorf("-h: %q %v", o, err)
+	}
+	for k, v := range snap {
+		if snapshot(t, dir)[k] != v {
+			t.Errorf("%s cambió", k)
+		}
 	}
 }

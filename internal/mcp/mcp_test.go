@@ -90,7 +90,7 @@ func TestMCPSession(t *testing.T) {
 		t.Errorf("initialize: %s", init)
 	}
 
-	// tools/list: las 8 herramientas, cada una con descripción y esquema de entrada
+	// tools/list: las 9 herramientas, cada una con descripción y esquema de entrada
 	lst, _ := json.Marshal(r[2].Result)
 	var tl struct {
 		Tools []struct {
@@ -107,7 +107,7 @@ func TestMCPSession(t *testing.T) {
 			t.Errorf("%s: falta la descripción o el esquema", tool.Name)
 		}
 	}
-	if got := strings.Join(names, ","); got != "list_notes,read_note,create_note,list_tasks,move_task,set_task_date,toggle_task,get_kanban" {
+	if got := strings.Join(names, ","); got != "list_notes,read_note,create_note,search_notes,list_tasks,move_task,set_task_date,toggle_task,get_kanban" {
 		t.Errorf("herramientas: %s", got)
 	}
 
@@ -151,6 +151,11 @@ func TestMCPSession(t *testing.T) {
 		call(8, "create_note", map[string]interface{}{"title": "X", "folder": ".."}),
 		call(9, "move_task", map[string]interface{}{"id": todoID}),
 		call(10, "borrar_todo", nil),
+		call(16, "search_notes", map[string]interface{}{"query": "TAREA TODO"}),
+		call(17, "search_notes", map[string]interface{}{"query": "tarea (todo|doing)", "regex": true, "limit": 1}),
+		call(18, "search_notes", map[string]interface{}{"query": "(", "regex": true}),
+		call(19, "search_notes", map[string]interface{}{"query": "tarea todo", "case_sensitive": true}),
+		call(20, "search_notes", map[string]interface{}{}),
 		call(11, "set_task_date", map[string]interface{}{"id": todoID, "field": "due", "date": "2026-01-02"}),
 		call(12, "set_task_date", map[string]interface{}{"id": todoID, "field": "start", "date": "2026-02-30"}),
 		call(13, "set_task_date", map[string]interface{}{"id": todoID, "field": "done", "date": "2026-01-02"}),
@@ -190,6 +195,21 @@ func TestMCPSession(t *testing.T) {
 	}
 	if _, isErr := toolText(t, r[15]); !isErr {
 		t.Error("set_task_date sin date debía ser un error")
+	}
+	if txt, isErr := toolText(t, r[16]); isErr || !strings.Contains(txt, `"note": "proyecto.md"`) || !strings.Contains(txt, `"line": 3`) || !strings.Contains(txt, `"truncated": false`) {
+		t.Errorf("search_notes: %v %s", isErr, txt)
+	}
+	if txt, isErr := toolText(t, r[17]); isErr || !strings.Contains(txt, `"truncated": true`) {
+		t.Errorf("search_notes con regex y límite 1 debía truncar: %v %s", isErr, txt)
+	}
+	if txt, isErr := toolText(t, r[18]); !isErr || !strings.Contains(txt, "código 2") {
+		t.Errorf("search_notes con regex inválida: %v %s", isErr, txt)
+	}
+	if txt, isErr := toolText(t, r[19]); isErr || !strings.Contains(txt, `"matches": []`) {
+		t.Errorf("search_notes distinguiendo mayúsculas no halla 'tarea todo': %v %s", isErr, txt)
+	}
+	if _, isErr := toolText(t, r[20]); !isErr {
+		t.Error("search_notes sin query debía ser un error")
 	}
 	if b, _ := os.ReadFile(secreto); string(b) != "clave\n" {
 		t.Errorf("se tocó un archivo de fuera: %q", b)
@@ -247,7 +267,7 @@ func TestMCPModernEra(t *testing.T) {
 		modernReq(4, "tools/list", nil, modernMeta("1900-01-01")), // versión desconocida
 		modernReq(5, "tools/list", nil, noCaps),                   // falta clientCapabilities
 		modernReq(6, "tools/call", map[string]interface{}{"name": "nada"}, modernMeta(modernVersion)),
-		modernReq(7, "ping", nil, modernMeta(modernVersion)),
+		modernReq(7, "ping", nil, modernMeta(modernVersion)), // ping se quitó en 2026-07-28
 		// la misma conexión, época anterior: initialize clásico y herramientas sin _meta
 		map[string]interface{}{"id": 8, "method": "initialize", "params": map[string]interface{}{"protocolVersion": "2025-06-18"}},
 		map[string]interface{}{"id": 9, "method": "initialize", "params": map[string]interface{}{"protocolVersion": "1999-01-01"}},
@@ -261,7 +281,8 @@ func TestMCPModernEra(t *testing.T) {
 		}
 	}
 	list, _ := json.Marshal(r[2].Result)
-	if !strings.Contains(string(list), `"resultType":"complete"`) || !strings.Contains(string(list), `"name":"list_notes"`) || !strings.Contains(string(list), metaServerInfo) {
+	if !strings.Contains(string(list), `"resultType":"complete"`) || !strings.Contains(string(list), `"name":"list_notes"`) || !strings.Contains(string(list), metaServerInfo) ||
+		!strings.Contains(string(list), `"ttlMs":3600000`) || !strings.Contains(string(list), `"cacheScope":"public"`) {
 		t.Errorf("tools/list moderno: %s", list)
 	}
 	if txt, isErr := toolText(t, r[3]); isErr || !strings.Contains(txt, `"id": "a.md"`) {
@@ -279,8 +300,8 @@ func TestMCPModernEra(t *testing.T) {
 	if txt, isErr := toolText(t, r[6]); !isErr || !strings.Contains(txt, "no encontrada") {
 		t.Errorf("herramienta inexistente: %v %s", isErr, txt)
 	}
-	if r[7].Error != nil {
-		t.Errorf("ping: %+v", r[7].Error)
+	if e := r[7].Error; e == nil || e.Code != -32601 {
+		t.Errorf("ping ya no existe en 2026-07-28: %+v", r[7].Error)
 	}
 	for id, want := range map[float64]string{8: `"protocolVersion":"2025-06-18"`, 9: `"protocolVersion":"2025-11-25"`} {
 		if b, _ := json.Marshal(r[id].Result); !strings.Contains(string(b), want) {
@@ -292,5 +313,52 @@ func TestMCPModernEra(t *testing.T) {
 	}
 	if r[11].Error != nil {
 		t.Errorf("discover con versión anterior: %+v", r[11].Error)
+	}
+}
+
+// TestMCPMalformedRequests (C.0): lo mal formado se rechaza con el error que manda la spec, sin mezclar épocas ni dejar al cliente
+// esperando: id null o no escalar → -32600 con id null; `_meta` moderno incompleto o con tipos erróneos → -32602; JSON roto → -32700.
+func TestMCPMalformedRequests(t *testing.T) {
+	notes := t.TempDir()
+	lines := []string{
+		`{"jsonrpc":"2.0","id":null,"method":"tools/list"}`,
+		`{"jsonrpc":"2.0","id":{"a":1},"method":"tools/list"}`,
+		`{"jsonrpc":"2.0","id":[1],"method":"tools/list"}`,
+		`{"jsonrpc":"2.0","id":1,"method":"tools/list","params":{"_meta":{"io.modelcontextprotocol/clientCapabilities":{}}}}`,
+		`{"jsonrpc":"2.0","id":2,"method":"tools/list","params":{"_meta":{"io.modelcontextprotocol/protocolVersion":2026,"io.modelcontextprotocol/clientCapabilities":{}}}}`,
+		`{"jsonrpc":"2.0","id":3,"method":"tools/list","params":null}`,
+		`{"jsonrpc":"2.0","id":4,"method":"tools/list","params":{"_meta":{"progressToken":"x"}}}`, // época anterior con progressToken: vale
+		`{"jsonrpc":"2.0","method":"notifications/initialized"}`,                                  // notificación: sin respuesta
+		`{roto`,
+	}
+	var out bytes.Buffer
+	if err := NewServer(notes).Serve(strings.NewReader(strings.Join(lines, "\n")+"\n"), &out); err != nil {
+		t.Fatal(err)
+	}
+	var got []JSONRPCResponse
+	dec := json.NewDecoder(&out)
+	for dec.More() {
+		var r JSONRPCResponse
+		if err := dec.Decode(&r); err != nil {
+			t.Fatal(err)
+		}
+		got = append(got, r)
+	}
+	if len(got) != 8 {
+		t.Fatalf("%d respuestas, se esperaban 8 (la notificación no tiene): %+v", len(got), got)
+	}
+	codes := []int{-32600, -32600, -32600, -32602, -32602, 0, 0, -32700}
+	for i, want := range codes {
+		switch {
+		case want == 0 && got[i].Error != nil:
+			t.Errorf("respuesta %d: no debía ser un error: %+v", i, got[i].Error)
+		case want != 0 && (got[i].Error == nil || got[i].Error.Code != want):
+			t.Errorf("respuesta %d: se esperaba %d: %+v", i, want, got[i].Error)
+		}
+	}
+	for _, i := range []int{0, 1, 2, 7} { // sin id usable: "id": null
+		if got[i].ID != nil {
+			t.Errorf("respuesta %d: el id debía ser null: %v", i, got[i].ID)
+		}
 	}
 }

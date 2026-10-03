@@ -118,6 +118,7 @@ Commands that run without the interface, for scripts and other tools:
 | Command | What it does |
 |---|---|
 | `lazymark note list\|show\|new` | List the notes, print one, create one. |
+| `lazymark search <text>` | Full-text search in all the notes (`--regex`, `--case`, `--limit`, `--json`). |
 | `lazymark task list\|toggle\|move` | List the tasks, tick one, move one to a Kanban column. |
 | `lazymark paste [--no-newline] [<note.md>]` | Save the image you have copied (a screenshot or an image file) in the note's `assets/` folder and print `![](assets/…)`. Without a note it uses `$LAZYMARK_NOTE`. Exits with an error and prints nothing if there is no image. |
 | `lazymark editor-plugins install\|uninstall [micro\|vim\|nano]` | Add or remove the plugins that paste images from micro, vim and nano. See [editor-plugins.md](editor-plugins.md). |

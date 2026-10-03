@@ -16,6 +16,7 @@ const (
 	actCheatsheet
 	actSettings
 	actTrash
+	actSearch
 	actPanelNotes
 	actPanelTasks
 	actPanelTags
@@ -126,6 +127,7 @@ func defaultBindings() []Binding {
 		{actPaste, ctxGlobal, []string{"ctrl+v"}, "Pegar imagen", "Paste image", false},
 		{actSettings, ctxGlobal, []string{","}, "Ajustes", "Settings", false},
 		{actTrash, ctxGlobal, []string{"x"}, "Papelera", "Trash", false},
+		{actSearch, ctxGlobal, []string{"/"}, "Buscar", "Search", false},
 		{actPanelNotes, ctxGlobal, []string{"1"}, "Panel Notas", "Notes panel", false},
 		{actPanelTasks, ctxGlobal, []string{"2"}, "Panel Tareas", "Tasks panel", false},
 		{actPanelTags, ctxGlobal, []string{"3"}, "Panel Categorías", "Categories panel", false},

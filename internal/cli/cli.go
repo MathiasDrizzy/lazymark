@@ -361,3 +361,58 @@ func RunNoteWithWriter(w io.Writer, args []string, defaultNotesDir string) error
 		return nil
 	}
 }
+
+const searchUsageES = `uso: lazymark search <texto> [--regex] [--case] [--limit <n>] [--json] [--dir <carpeta>]
+Busca <texto> en todas las notas (sin distinguir mayúsculas; con --case, distinguiéndolas; con --regex, una expresión regular).
+Imprime "nota:línea: texto". Sin coincidencias no es un error (sale con 0 y no imprime nada).
+códigos de salida: 0 ok · 1 falló · 2 búsqueda vacía o expresión inválida (no se toca nada)
+`
+
+const searchUsageEN = `usage: lazymark search <text> [--regex] [--case] [--limit <n>] [--json] [--dir <folder>]
+Searches <text> in all the notes (case-insensitive; with --case, case-sensitive; with --regex, a regular expression).
+Prints "note:line: text". No matches is not an error (exits with 0 and prints nothing).
+exit codes: 0 ok · 1 failed · 2 empty search or invalid expression (nothing touched)
+`
+
+// RunSearch ejecuta `lazymark search …`.
+func RunSearch(args []string, defaultNotesDir string) error {
+	return RunSearchWithWriter(os.Stdout, args, defaultNotesDir)
+}
+
+// RunSearchWithWriter ejecuta la búsqueda escribiendo la salida en w.
+func RunSearchWithWriter(w io.Writer, args []string, defaultNotesDir string) error {
+	help := usageText(searchUsageES, searchUsageEN)
+	p := newParser("search", defaultNotesDir)
+	var (
+		regex, caseSensitive bool
+		limit                int
+	)
+	p.fs.BoolVar(&regex, "regex", false, "")
+	p.fs.BoolVar(&caseSensitive, "case", false, "")
+	p.fs.IntVar(&limit, "limit", 0, "")
+	if err := p.parse(args); err != nil {
+		return err
+	}
+	if p.help {
+		fmt.Fprint(w, help)
+		return nil
+	}
+	if len(p.posArgs) == 0 {
+		return &ops.Error{Code: ExitUsage, Err: errors.New("uso: lazymark search <texto> [--regex] [--case] [--limit <n>] [--json]")}
+	}
+	svc, err := p.service()
+	if err != nil {
+		return err
+	}
+	res, err := svc.Search(strings.Join(p.posArgs, " "), regex, caseSensitive, limit)
+	if err != nil {
+		return err
+	}
+	if p.json {
+		return printJSON(w, res)
+	}
+	for _, m := range res.Matches {
+		fmt.Fprint(w, plain(fmt.Sprintf("%s:%d: %s\n", m.Note, m.Line, m.Text)))
+	}
+	return nil
+}

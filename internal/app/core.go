@@ -97,7 +97,15 @@ func (c *core) push(p popup) { c.popups = append(c.popups, p) }
 
 func (c *core) pop() {
 	if n := len(c.popups); n > 0 {
+		closePopup(c.popups[n-1])
 		c.popups = c.popups[:n-1]
+	}
+}
+
+// closePopup avisa al popup que se va (si le importa: la búsqueda cancela su trabajo).
+func closePopup(p popup) {
+	if cl, ok := p.(interface{ close() }); ok {
+		cl.close()
 	}
 }
 

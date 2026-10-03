@@ -2,6 +2,7 @@ package mcp
 
 import (
 	"bufio"
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -22,7 +23,7 @@ type JSONRPCRequest struct {
 // JSONRPCResponse representa una respuesta JSON-RPC 2.0
 type JSONRPCResponse struct {
 	JSONRPC string      `json:"jsonrpc"`
-	ID      interface{} `json:"id,omitempty"`
+	ID      interface{} `json:"id"` // sin omitempty: un error sobre una petición ilegible lleva "id": null
 	Result  interface{} `json:"result,omitempty"`
 	Error   *RPCError   `json:"error,omitempty"`
 }
@@ -90,6 +91,13 @@ func (s *Server) Serve(r io.Reader, w io.Writer) error {
 			continue
 		}
 
+		if bad := invalidID(line); bad {
+			if err := encoder.Encode(rpcError(nil, -32600, "Invalid Request: el id debe ser un texto o un número", nil)); err != nil {
+				return err
+			}
+			continue
+		}
+
 		resp := s.handleRequest(&req)
 		if resp != nil {
 			if err := encoder.Encode(resp); err != nil {
@@ -137,17 +145,43 @@ func rpcError(id interface{}, code int, msg string, data interface{}) *JSONRPCRe
 	return &JSONRPCResponse{JSONRPC: "2.0", ID: id, Error: &RPCError{Code: code, Message: msg, Data: data}}
 }
 
+// invalidID indica si la línea trae un "id" que no es un texto ni un número (la spec: "Unlike base JSON-RPC, the ID MUST NOT be null";
+// "Requests MUST include a string or integer ID"). Una petición sin "id" es una notificación y no cuenta.
+func invalidID(line []byte) bool {
+	var probe struct {
+		ID json.RawMessage `json:"id"`
+	}
+	if json.Unmarshal(line, &probe) != nil || probe.ID == nil {
+		return false
+	}
+	id := bytes.TrimSpace(probe.ID)
+	if len(id) == 0 {
+		return true
+	}
+	return !(id[0] == '"' || id[0] == '-' || (id[0] >= '0' && id[0] <= '9'))
+}
+
 func (s *Server) handleRequest(req *JSONRPCRequest) *JSONRPCResponse {
 	// Notificaciones (sin ID): no tienen respuesta
 	if req.ID == nil {
 		return nil
 	}
 	meta := requestMeta(req.Params)
-	_, modern := meta[metaVersionKey]
+	// una petición es de la época moderna si lleva en `_meta` alguno de los campos por petición; si le falta uno obligatorio, está
+	// mal formada (-32602) y no se atiende como si fuera de la época anterior
+	_, hasVersion := meta[metaVersionKey]
+	_, hasCaps := meta[metaCapsKey]
+	_, hasInfo := meta["io.modelcontextprotocol/clientInfo"]
+	modern := hasVersion || hasCaps || hasInfo
 
 	if modern { // época moderna: la versión y las capacidades vienen en cada petición
+		if !hasVersion {
+			return rpcError(req.ID, errInvalidParam, "Invalid params: falta _meta."+metaVersionKey, nil)
+		}
 		var version string
-		_ = json.Unmarshal(meta[metaVersionKey], &version)
+		if err := json.Unmarshal(meta[metaVersionKey], &version); err != nil {
+			return rpcError(req.ID, errInvalidParam, "Invalid params: _meta."+metaVersionKey+" debe ser un texto", nil)
+		}
 		if version != modernVersion {
 			if !contains(legacyVersions, version) || req.Method != "server/discover" {
 				return rpcError(req.ID, errUnsupported, "Unsupported protocol version", obj{"supported": supportedVersions(), "requested": version})
@@ -191,11 +225,9 @@ func (s *Server) handleRequest(req *JSONRPCRequest) *JSONRPCResponse {
 			"serverInfo":      s.serverInfo(),
 		}}
 
-	case "ping":
-		return ok(obj{})
-
 	case "tools/list":
-		return ok(obj{"tools": s.getToolsList()})
+		// en la época moderna el resultado lleva su pista de caché (CacheableResult: ttlMs y cacheScope); la lista es fija y va en orden
+		return ok(obj{"tools": s.getToolsList(), "ttlMs": 3600000, "cacheScope": "public"})
 
 	case "tools/call":
 		var callParams struct {
@@ -263,6 +295,16 @@ func (s *Server) getToolsList() []obj {
 				"title":  str("Título de la nota."),
 				"folder": str("Subcarpeta de la carpeta de notas donde crearla (opcional; debe existir)."),
 				"empty":  obj{"type": "boolean", "description": "Si es true, la nota solo lleva su título."},
+			}),
+		},
+		{
+			"name":        "search_notes",
+			"description": "Busca texto en todas las notas (sin distinguir mayúsculas). Devuelve nota, línea y el contexto de cada coincidencia, ordenadas por nota y línea.",
+			"inputSchema": schema([]string{"query"}, obj{
+				"query":          str("El texto a buscar, o una expresión regular si regex es true."),
+				"regex":          obj{"type": "boolean", "description": "Si es true, query es una expresión regular (RE2)."},
+				"case_sensitive": obj{"type": "boolean", "description": "Si es true, distingue mayúsculas de minúsculas."},
+				"limit":          obj{"type": "integer", "description": "Máximo de coincidencias (por defecto 500)."},
 			}),
 		},
 		{
@@ -353,6 +395,19 @@ func (s *Server) callTool(name string, args map[string]interface{}) CallToolResu
 			return fail(err)
 		}
 		return ok(n)
+
+	case "search_notes":
+		if text("query") == "" {
+			return missing("'query'")
+		}
+		regex, _ := args["regex"].(bool)
+		cs, _ := args["case_sensitive"].(bool)
+		limit, _ := args["limit"].(float64)
+		res, err := svc.Search(text("query"), regex, cs, int(limit))
+		if err != nil {
+			return fail(err)
+		}
+		return ok(res)
 
 	case "list_tasks":
 		pending, _ := args["pending_only"].(bool)

@@ -17,7 +17,7 @@ func TestLayoutInEveryLanguage(t *testing.T) {
 	states := []struct {
 		name string
 		keys []string
-	}{{"notas", nil}, {"kanban", []string{"W"}}, {"ajustes", []string{","}}, {"atajos", []string{"?"}}, {"papelera", []string{"x"}}, {"mover", []string{"m"}}}
+	}{{"notas", nil}, {"kanban", []string{"W"}}, {"ajustes", []string{","}}, {"atajos", []string{"?"}}, {"papelera", []string{"x"}}, {"mover", []string{"m"}}, {"buscar", []string{"/"}}}
 	for _, lang := range i18n.Languages {
 		for _, sz := range []struct{ w, h int }{{120, 35}, {80, 24}} {
 			for _, st := range states {

@@ -4,6 +4,7 @@
 package ops
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"os"
@@ -15,6 +16,7 @@ import (
 
 	"github.com/MathiasDrizzy/lazymark/internal/config"
 	"github.com/MathiasDrizzy/lazymark/internal/i18n"
+	"github.com/MathiasDrizzy/lazymark/internal/search"
 	"github.com/MathiasDrizzy/lazymark/internal/storage"
 )
 
@@ -370,6 +372,43 @@ func (s *Service) afterWrite(path string, line int) (TaskDTO, error) {
 		}
 	}
 	return TaskDTO{}, fmt.Errorf("%w: la tarea de la línea %d de %s ya no está tras escribirla", storage.ErrTaskNotFound, line, path)
+}
+
+// SearchMatchDTO es una coincidencia de la búsqueda en la salida JSON (esquema estable, docs/cli.md).
+type SearchMatchDTO struct {
+	Note  string `json:"note"`  // ruta relativa a la carpeta de notas
+	Path  string `json:"path"`  // ruta absoluta
+	Title string `json:"title"` // título de la nota
+	Line  int    `json:"line"`  // desde 1
+	Text  string `json:"text"`  // la línea, recortada alrededor de lo hallado y sin caracteres de control
+	Start int    `json:"start"` // byte de text donde empieza lo hallado
+	End   int    `json:"end"`   // byte de text donde termina
+}
+
+// SearchDTO es el resultado de una búsqueda.
+type SearchDTO struct {
+	Query     string           `json:"query"`
+	Matches   []SearchMatchDTO `json:"matches"`
+	Files     int              `json:"files"`     // notas revisadas
+	Skipped   int              `json:"skipped"`   // notas que no se leyeron por pasar el tope de tamaño (2 MiB)
+	Truncated bool             `json:"truncated"` // hubo más coincidencias que limit
+}
+
+// Search busca texto en las notas (sin distinguir mayúsculas salvo caseSensitive; con regex, query es una expresión regular).
+// limit 0 es el tope por defecto (500). Una búsqueda vacía, una expresión inválida o un límite negativo son errores de uso.
+func (s *Service) Search(query string, regex, caseSensitive bool, limit int) (SearchDTO, error) {
+	if limit < 0 {
+		return SearchDTO{}, usage("el límite no puede ser negativo")
+	}
+	res, err := search.Run(context.Background(), s.Store, query, search.Options{Regex: regex, CaseSensitive: caseSensitive, MaxResults: limit})
+	if err != nil {
+		return SearchDTO{}, usage("%v", err)
+	}
+	out := SearchDTO{Query: query, Matches: []SearchMatchDTO{}, Files: res.Files, Skipped: res.Skipped, Truncated: res.Truncated}
+	for _, m := range res.Matches {
+		out.Matches = append(out.Matches, SearchMatchDTO{Note: m.Rel, Path: m.Path, Title: m.Title, Line: m.Line, Text: m.Text, Start: m.Start, End: m.End})
+	}
+	return out, nil
 }
 
 // IDByLine devuelve el id de la tarea que está en esa línea de la nota (para el formato anterior --path --line).

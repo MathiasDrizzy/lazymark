@@ -160,6 +160,20 @@ func (m *AppModel) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 	case mascotTickMsg:
 		return m, m.mascotTick(msg)
+	case searchTickMsg:
+		for _, p := range m.c.popups {
+			if sp, ok := p.(*searchPopup); ok {
+				return m, sp.run(msg.gen)
+			}
+		}
+	case searchDoneMsg:
+		for _, p := range m.c.popups {
+			if sp, ok := p.(*searchPopup); ok {
+				sp.done(msg)
+			}
+		}
+	case searchJumpMsg:
+		m.jumpTo(msg.m)
 	case uv.KittyGraphicsEvent:
 		if image.IsSupportReply(msg) {
 			m.c.kitty.SetSupported(true)
@@ -244,6 +258,7 @@ func (m *AppModel) panelContext() Context {
 func (m *AppModel) removePopup(p popup) {
 	for i, q := range m.c.popups {
 		if q == p {
+			closePopup(p)
 			m.c.popups = append(m.c.popups[:i], m.c.popups[i+1:]...)
 			return
 		}
@@ -266,6 +281,9 @@ func (m *AppModel) do(a Action) tea.Cmd {
 		return nil
 	case actTrash:
 		m.c.push(newTrashPopup(m.c, m.afterChange))
+		return nil
+	case actSearch:
+		m.c.push(newSearchPopup(m.c))
 		return nil
 	case actKanban:
 		m.kanbanOn = !m.kanbanOn
