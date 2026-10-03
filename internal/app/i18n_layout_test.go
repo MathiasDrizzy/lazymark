@@ -59,3 +59,35 @@ func TestLayoutInEveryLanguage(t *testing.T) {
 		}
 	}
 }
+
+// TestStatusPluralAndKanbanButton (C.7): "1 nota cargada" en singular, y el botón "Kanban (W)" de la barra y el de volver
+// ("Notas (W)") se traducen (カンバン en japonés, 看板 en chino).
+func TestStatusPluralAndKanbanButton(t *testing.T) {
+	defer i18n.SetLanguage("es")
+	for _, tc := range []struct {
+		lang, one, many, button string
+	}{
+		{"es", "1 nota cargada", "3 notas cargadas", "Kanban (W)"},
+		{"en", "1 note loaded", "3 notes loaded", "Kanban (W)"},
+		{"ja", "1 件のノートを読み込みました", "", "カンバン (W)"},
+		{"zh", "已加载 1 篇笔记", "", "看板 (W)"},
+	} {
+		i18n.SetLanguage(tc.lang)
+		m := newTestModel(t, 120, 35)
+		i18n.SetLanguage(tc.lang)
+		m.relayout()
+		if !strings.Contains(plain(m), tc.button) {
+			t.Errorf("%s: falta el botón %q en la barra:\n%s", tc.lang, tc.button, plain(m))
+		}
+	}
+	for _, tc := range []struct {
+		lang string
+		n    int
+		want string
+	}{{"es", 1, "1 nota cargada"}, {"es", 3, "3 notas cargadas"}, {"en", 1, "1 note loaded"}, {"en", 2, "2 notes loaded"}} {
+		i18n.SetLanguage(tc.lang)
+		if got := loadedStatus(tc.n); got != tc.want {
+			t.Errorf("%s %d: %q, se esperaba %q", tc.lang, tc.n, got, tc.want)
+		}
+	}
+}

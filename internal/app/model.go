@@ -2,6 +2,7 @@ package app
 
 import (
 	tea "charm.land/bubbletea/v2"
+	"fmt"
 	"github.com/MathiasDrizzy/lazymark/internal/clipboard"
 	"github.com/MathiasDrizzy/lazymark/internal/config"
 	"github.com/MathiasDrizzy/lazymark/internal/i18n"
@@ -74,8 +75,16 @@ func New(cfg *config.Config) (*AppModel, error) {
 	m.tasks = tasksPanel{c: c}
 	m.tags = tagsPanel{c: c}
 	m.kanban = kanbanSheet{c: c}
-	c.setStatus(i18n.T("%d notas cargadas", "%d notes loaded"), len(c.notes))
+	c.setStatus("%s", loadedStatus(len(c.notes)))
 	return m, nil
+}
+
+// loadedStatus es el aviso de arranque, con el singular cuando hay una sola nota.
+func loadedStatus(n int) string {
+	if n == 1 {
+		return fmt.Sprintf(i18n.T("%d nota cargada", "%d note loaded"), n)
+	}
+	return fmt.Sprintf(i18n.T("%d notas cargadas", "%d notes loaded"), n)
 }
 
 // Init consulta a la terminal si soporta gráficos Kitty (a=q + DA1). Mientras

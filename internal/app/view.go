@@ -209,7 +209,7 @@ func (m *AppModel) footerHints() (panel, global []hint, pinned bool) {
 		return m.kanbanHints(), global, true
 	}
 	if k := m.c.keys.Key(actKanban, ctxGlobal); k != "" {
-		kb := fmt.Sprintf("Kanban (%s)", buttonKey(k))
+		kb := fmt.Sprintf("%s (%s)", i18n.T("Kanban", "Kanban"), buttonKey(k))
 		global = append([]hint{{kb, kb, actKanban, true}}, global...)
 	}
 	for _, b := range m.c.keys.Footer(m.contexts()[0]) {

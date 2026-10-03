@@ -303,11 +303,7 @@ func (s *Service) move(id string, target func(storage.Task) int) (TaskDTO, error
 	if err := s.Store.MoveTask(n.Path, t.Line, s.Cols, target(t), n.ModTime); err != nil {
 		return TaskDTO{}, err
 	}
-	n2, t2, err := s.Store.FindTask(id)
-	if err != nil { // el id sigue siendo el mismo tras mover: si no aparece, algo la cambió
-		return TaskDTO{}, err
-	}
-	return s.taskDTO(n2, id, t2), nil
+	return s.afterWrite(n.Path, t.Line)
 }
 
 // SetDate pone la fecha de inicio (field "start") o de vencimiento ("due") de la tarea con ese id, o la quita (date ""
@@ -337,11 +333,29 @@ func (s *Service) SetDate(id, field, date string) (TaskDTO, error) {
 	if err := s.Store.SetTaskDate(n.Path, t.Line, f, date, n.ModTime); err != nil {
 		return TaskDTO{}, err
 	}
-	n2, t2, err := s.Store.FindTask(id) // el id no depende de las fechas
+	return s.afterWrite(n.Path, t.Line)
+}
+
+// afterWrite devuelve la tarea de la línea line de la nota path, con su id actual, ya escrita. El id sale de leer la nota de nuevo
+// (no es el de antes): si el cambio alteró el texto de la tarea (por ejemplo quitó un marcador que contaba para su huella) el id
+// es otro, y buscar el viejo daría "no existe" aunque la escritura ya se hizo.
+func (s *Service) afterWrite(path string, line int) (TaskDTO, error) {
+	notes, err := s.Store.ListNotes()
 	if err != nil {
 		return TaskDTO{}, err
 	}
-	return s.taskDTO(n2, id, t2), nil
+	for _, n := range notes {
+		if !same(n.Path, path) {
+			continue
+		}
+		ids := s.Store.TaskIDs(n)
+		for i, t := range n.Tasks {
+			if t.Line == line {
+				return s.taskDTO(n, ids[i], t), nil
+			}
+		}
+	}
+	return TaskDTO{}, fmt.Errorf("%w: la tarea de la línea %d de %s ya no está tras escribirla", storage.ErrTaskNotFound, line, path)
 }
 
 // IDByLine devuelve el id de la tarea que está en esa línea de la nota (para el formato anterior --path --line).

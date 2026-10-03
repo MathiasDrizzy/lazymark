@@ -41,16 +41,27 @@ type dateHit struct {
 	field      DateField
 	start, end int // el span del emoji y la fecha en el texto
 	date       string
+	valid      bool // la fecha existe en el calendario
 }
 
 // scanDates devuelve los campos de fecha válidos de text, en orden de aparición. Una fecha inválida no es un campo.
 func scanDates(text string) []dateHit {
 	var hits []dateHit
+	for _, h := range scanMarkers(text) {
+		if h.valid {
+			hits = append(hits, h)
+		}
+	}
+	return hits
+}
+
+// scanMarkers devuelve todos los marcadores de fecha de text (un emoji de fecha seguido de algo con forma de fecha
+// AAAA-MM-DD), válidos o no. Al escribir, un marcador inválido del mismo campo cuenta: se reemplaza o se quita, para que
+// nunca queden dos del mismo emoji.
+func scanMarkers(text string) []dateHit {
+	var hits []dateHit
 	for _, m := range dateRe.FindAllStringSubmatchIndex(text, -1) {
 		date := text[m[4]:m[5]]
-		if !ValidDate(date) {
-			continue
-		}
 		var f DateField
 		switch text[m[2]:m[3]] {
 		case dateEmoji[DateStart]:
@@ -60,7 +71,7 @@ func scanDates(text string) []dateHit {
 		default:
 			f = DateDone
 		}
-		hits = append(hits, dateHit{field: f, start: m[0], end: m[1], date: date})
+		hits = append(hits, dateHit{field: f, start: m[0], end: m[1], date: date, valid: ValidDate(date)})
 	}
 	return hits
 }
@@ -89,9 +100,11 @@ func Overdue(done bool, due, today string) bool {
 // Today es la fecha de hoy (AAAA-MM-DD); los tests la reemplazan.
 var Today = func() string { return time.Now().Format("2006-01-02") }
 
-// setDate devuelve la línea con el campo f puesto en value (AAAA-MM-DD) o quitado (value ""): reemplaza en su sitio la
-// primera fecha válida del campo; si no hay, la agrega al final (antes de la fecha de completada, si la hay, y antes
-// del espacio y el \r finales). No toca nada más de la línea.
+// setDate devuelve la línea con el campo f puesto en value (AAAA-MM-DD) o quitado (value ""). Con un valor, reemplaza en su
+// sitio el primer marcador del campo (aunque su fecha sea inválida) y quita los demás: nunca quedan dos del mismo emoji; si no
+// hay ninguno, lo agrega al final (antes de la fecha de completada, si la hay, y antes del espacio y el \r finales). Con
+// value "" quita todos los marcadores del campo. Al quitar, los espacios alrededor se normalizan: el texto no queda pegado a
+// otro emoji. No toca nada más de la línea.
 func setDate(line string, f DateField, value string) string {
 	if value != "" && !ValidDate(value) {
 		panic("setDate: fecha inválida " + value) // los llamadores validan antes
@@ -101,44 +114,45 @@ func setDate(line string, f DateField, value string) string {
 	if strings.HasSuffix(body, "\r") {
 		cr, body = "\r", strings.TrimSuffix(body, "\r")
 	}
-	hits := scanDates(body)
-	first := -1
-	for i, h := range hits {
+	var mine []dateHit
+	for _, h := range scanMarkers(body) {
 		if h.field == f {
-			first = i
-			break
+			mine = append(mine, h)
 		}
 	}
 	field := f.Emoji() + " " + value
-	switch {
-	case first >= 0 && value == "":
-		h := hits[first]
-		start := h.start
-		for start > 0 && (body[start-1] == ' ' || body[start-1] == '\t') {
-			start--
+	if len(mine) > 0 {
+		firstToRemove := 1 // con un valor se reemplaza el primero y se quitan los demás
+		if value == "" {
+			firstToRemove = 0 // sin valor se quitan todos
 		}
-		body = body[:start] + body[h.end:]
-	case first >= 0:
-		h := hits[first]
-		body = body[:h.start] + field + body[h.end:]
-	case value != "":
-		trimmed := strings.TrimRight(body, " \t")
-		tail := body[len(trimmed):]
-		at := len(trimmed)
-		if f != DateDone { // el emoji de completada va siempre al final
-			for _, h := range hits {
-				if h.field == DateDone {
-					at = h.start
-					for at > 0 && (trimmed[at-1] == ' ' || trimmed[at-1] == '\t') {
-						at--
-					}
-					break
+		for i := len(mine) - 1; i >= firstToRemove; i-- { // de atrás hacia adelante: los índices anteriores siguen valiendo
+			body = removeSpan(body, mine[i].start, mine[i].end)
+		}
+		if value != "" {
+			body = body[:mine[0].start] + field + body[mine[0].end:]
+		}
+		return body + cr
+	}
+	if value == "" {
+		return line
+	}
+	hits := scanDates(body)
+	trimmed := strings.TrimRight(body, " \t")
+	tail := body[len(trimmed):]
+	at := len(trimmed)
+	if f != DateDone { // el emoji de completada va siempre al final
+		for _, h := range hits {
+			if h.field == DateDone {
+				at = h.start
+				for at > 0 && (trimmed[at-1] == ' ' || trimmed[at-1] == '\t') {
+					at--
 				}
+				break
 			}
 		}
-		body = trimmed[:at] + " " + field + trimmed[at:] + tail
 	}
-	return body + cr
+	return trimmed[:at] + " " + field + trimmed[at:] + tail + cr
 }
 
 // SetTaskDate pone (value "AAAA-MM-DD") o quita (value "") el campo f de la tarea de la línea line de la nota, reescribiendo

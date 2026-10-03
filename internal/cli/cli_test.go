@@ -474,3 +474,71 @@ func TestTaskDueAndStart(t *testing.T) {
 		}
 	}
 }
+
+// TestTaskDateDefectsOfTheAudit (C.7): los tres casos exactos de la auditoría de C.5–C.6, con la CLI.
+//   - F1: una fecha inválida con el mismo emoji se reemplaza: nunca quedan dos marcadores del mismo campo.
+//   - F2: `none` quita todos los marcadores del campo y el código de salida refleja lo que pasó (0 si escribió, y el id nuevo
+//     va en la salida y en --json).
+//   - F3: al quitar una fecha el texto no queda pegado a otro emoji.
+func TestTaskDateDefectsOfTheAudit(t *testing.T) {
+	dir := fixture(t)
+	notePath := filepath.Join(dir, "fechas.md")
+	write := func(body string) { os.WriteFile(notePath, []byte(body), 0o644) }
+	read := func() string { b, _ := os.ReadFile(notePath); return string(b) }
+	idOf := func(text string) string {
+		out, err := run(t, dir, "task", "list", "--json", "--note", "fechas.md")
+		if err != nil {
+			t.Fatal(err)
+		}
+		var tasks []ops.TaskDTO
+		json.Unmarshal([]byte(out), &tasks)
+		for _, tk := range tasks {
+			if strings.HasPrefix(tk.Text, text) {
+				return tk.ID
+			}
+		}
+		t.Fatalf("no hay la tarea %q en %s", text, out)
+		return ""
+	}
+
+	// F1
+	write("# F\n- [ ] invalida 📅 2026-13-45\n")
+	if _, err := run(t, dir, "task", "due", idOf("invalida"), "2026-10-10"); err != nil {
+		t.Fatalf("F1: %v", err)
+	}
+	if got := read(); got != "# F\n- [ ] invalida 📅 2026-10-10\n" {
+		t.Errorf("F1: la fecha inválida debía reemplazarse sin duplicar el emoji:\n%q", got)
+	}
+
+	// F2: dos 📅 y `none`: quita las dos, sale con 0 y el id de la salida es el de la tarea ahora
+	write("# F\n- [ ] doble 📅 2026-10-01 📅 2026-10-02\n")
+	before := idOf("doble")
+	out, err := run(t, dir, "task", "due", before, "none", "--json")
+	if err != nil || ExitCode(err) != 0 {
+		t.Fatalf("F2: salió con %d aunque escribió: %v", ExitCode(err), err)
+	}
+	if got := read(); got != "# F\n- [ ] doble\n" {
+		t.Errorf("F2: none debía quitar todos los 📅:\n%q", got)
+	}
+	var tk ops.TaskDTO
+	if err := json.Unmarshal([]byte(out), &tk); err != nil {
+		t.Fatal(err)
+	}
+	if now := idOf("doble"); tk.ID != now || tk.Due != "" {
+		t.Errorf("F2: el JSON debe llevar el id nuevo %q y no tener fecha: %+v", now, tk)
+	}
+	write("# F\n- [ ] doble 📅 2026-10-01 📅 2026-10-02\n")
+	text, err := run(t, dir, "task", "due", idOf("doble"), "none")
+	if err != nil || !strings.HasPrefix(text, idOf("doble")+" → ") {
+		t.Errorf("F2: la salida de texto lleva el id nuevo: %q %v", text, err)
+	}
+
+	// F3
+	write("# F\n- [ ] pegadas 🛫 2026-10-01📅 2026-10-03\n")
+	if _, err := run(t, dir, "task", "start", idOf("pegadas"), "none"); err != nil {
+		t.Fatalf("F3: %v", err)
+	}
+	if got := read(); got != "# F\n- [ ] pegadas 📅 2026-10-03\n" {
+		t.Errorf("F3: el texto no debe quedar pegado al emoji:\n%q", got)
+	}
+}

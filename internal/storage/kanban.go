@@ -113,22 +113,23 @@ func CleanTaskText(text string) string {
 	return strings.Join(strings.Fields(text), " ")
 }
 
-// removeSpan quita text[start:end] con los espacios que lo preceden.
+// removeSpan quita text[start:end] y normaliza los espacios de alrededor: lo que queda a los lados se une con un solo espacio
+// (nunca pegado), y si lo de la derecha es solo espacio final (o el \r de una línea CRLF) se conserva tal cual.
 func removeSpan(text string, start, end int) string {
-	for start > 0 && (text[start-1] == ' ' || text[start-1] == '\t') {
-		start--
+	left := strings.TrimRight(text[:start], " \t")
+	right := text[end:]
+	if strings.TrimSpace(right) == "" {
+		return left + right
 	}
-	return text[:start] + text[end:]
+	right = strings.TrimLeft(right, " \t")
+	if left == "" {
+		return right
+	}
+	return left + " " + right
 }
 
-// removeHit quita una etiqueta con los espacios que la preceden.
-func removeHit(text string, h tagHit) string {
-	start := h.start
-	for start > 0 && (text[start-1] == ' ' || text[start-1] == '\t') {
-		start--
-	}
-	return text[:start] + text[h.end:]
-}
+// removeHit quita una etiqueta del tablero y normaliza los espacios (ver removeSpan).
+func removeHit(text string, h tagHit) string { return removeSpan(text, h.start, h.end) }
 
 // RewriteForColumn devuelve la línea de tarea con la casilla y el tag de la columna target: a la de hecho, `[x]` y sin
 // tag (y con `✅ hoy` si no tenía fecha de completada); a la primera, `[ ]` y sin tag; a las demás, `[ ]` y `#kb/<id>`
@@ -221,18 +222,7 @@ func withCompletion(line string, done bool) string {
 	case done && !has:
 		return setDate(line, DateDone, Today())
 	case !done && has:
-		for { // también las repetidas: si no, quedaría una fecha de completada en una tarea abierta
-			hasMore := false
-			for _, h := range scanDates(line) {
-				if h.field == DateDone {
-					hasMore = true
-				}
-			}
-			if !hasMore {
-				return line
-			}
-			line = setDate(line, DateDone, "")
-		}
+		return setDate(line, DateDone, "") // quita todos los ✅
 	}
 	return line
 }
