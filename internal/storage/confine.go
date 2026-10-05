@@ -16,11 +16,17 @@ var ErrOutsideNotes = errors.New("la ruta no es una nota de la carpeta de notas"
 // escribirla: debe ser un archivo regular .md que, una vez resueltos los enlaces simbólicos y los "..",
 // esté dentro de la carpeta de notas. Acepta rutas absolutas o relativas a esa carpeta y devuelve la
 // ruta canónica. Todo lo demás da ErrOutsideNotes (o el error del sistema si no existe).
-func (s *Storage) ResolveNote(path string) (string, error) {
+func (s *Storage) ResolveNote(path string) (string, error) { return s.resolveFile(path, true) }
+
+// ResolveFile es ResolveNote sin exigir la extensión .md: un archivo regular (no un FIFO ni un dispositivo) dentro de la carpeta de notas, con
+// los "..", los enlaces simbólicos y las rutas absolutas resueltos. Lo usa la vista previa para las imágenes.
+func (s *Storage) ResolveFile(path string) (string, error) { return s.resolveFile(path, false) }
+
+func (s *Storage) resolveFile(path string, requireMD bool) (string, error) {
 	if strings.TrimSpace(path) == "" {
 		return "", fmt.Errorf("%w: ruta vacía", ErrOutsideNotes)
 	}
-	if !strings.EqualFold(filepath.Ext(path), ".md") {
+	if requireMD && !strings.EqualFold(filepath.Ext(path), ".md") {
 		return "", fmt.Errorf("%w: %q no termina en .md", ErrOutsideNotes, path)
 	}
 	if !filepath.IsAbs(path) {

@@ -67,6 +67,10 @@ func New(cfg *config.Config) (*AppModel, error) {
 		clip:  clipboard.New(),
 		keys:  NewKeymap(cfg),
 	}
+	c.kitty.Resolve = func(p string) (string, bool) { // las imágenes de la vista previa: solo archivos regulares de la carpeta de notas
+		real, err := c.store.ResolveFile(p)
+		return real, err == nil
+	}
 	if cfg.HideCompletedTasks {
 		c.taskFilter = views.TaskFilterPending
 	}

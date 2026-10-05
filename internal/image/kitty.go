@@ -121,7 +121,11 @@ const maxReady = 24
 // imágenes están transmitidas, cuáles están codificadas y esperando, y las
 // secuencias que faltan por enviar. Se usa desde un solo hilo (el de Update/View de
 // Bubble Tea); solo Encode, que no toca el Client, corre en otras goroutines.
+// MaxFileBytes es el tamaño máximo del archivo de una imagen (una imagen mayor se muestra como texto y no se lee).
+const MaxFileBytes = 25 << 20
+
 type Client struct {
+	Resolve   func(path string) (string, bool) // si no es nil, aprueba la ruta de cada imagen y devuelve su ruta real (la app la confina a la carpeta de notas)
 	supported bool
 	visible   bool
 	gen       int
@@ -263,14 +267,21 @@ func (c *Client) Block(path string, maxCols, maxRows int) (lines []string, ok bo
 	if !c.supported || !c.visible {
 		return nil, false
 	}
+	if c.Resolve != nil { // la app confina la imagen a la carpeta de notas y da su ruta real
+		real, ok := c.Resolve(path)
+		if !ok {
+			return nil, false
+		}
+		path = real
+	}
 	fi, err := os.Stat(path)
-	if err != nil {
+	if err != nil || !fi.Mode().IsRegular() || fi.Size() > MaxFileBytes {
 		return nil, false
 	}
 	dkey := fmt.Sprintf("%s|%d|%d", path, fi.ModTime().UnixNano(), fi.Size())
 	d, known := c.dims[dkey]
 	if !known {
-		f, err := os.Open(path)
+		f, err := openRegular(path)
 		if err != nil {
 			return nil, false
 		}
@@ -370,7 +381,7 @@ func Encode(j Job) (string, error) {
 		if j.Data != nil {
 			return bytes.NewReader(j.Data), func() {}, nil
 		}
-		f, err := os.Open(j.Path)
+		f, err := openRegular(j.Path)
 		if err != nil {
 			return nil, nil, err
 		}

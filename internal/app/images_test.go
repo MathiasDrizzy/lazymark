@@ -1,9 +1,15 @@
 package app
 
 import (
+	goimage "image"
+	"image/png"
+	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
+	"syscall"
 	"testing"
+	"time"
 
 	tea "charm.land/bubbletea/v2"
 	"github.com/MathiasDrizzy/lazymark/internal/image"
@@ -324,5 +330,67 @@ func TestImageSurvivesPopups(t *testing.T) {
 		if after := placeholderCells(r.AppModel); after != total {
 			t.Errorf("%v: tras cerrar, celdas de imagen = %d, se esperaban %d", keys, after, total)
 		}
+	}
+}
+
+// TestPreviewImagesStayInsideNotes (ORD-015 C.5 S1): una nota con ![x](/dev/tty), un FIFO, ../fuera.png y un enlace simbólico que sale no abre
+// ninguno de esos archivos (la TUI no se cuelga) ni los transmite: cada uno se ve como su texto de reemplazo; una imagen normal de dentro sí
+// se muestra.
+func TestPreviewImagesStayInsideNotes(t *testing.T) {
+	r := newImageRig(t, 120, 35, true)
+	base := r.c.store.BaseDir
+	outside := filepath.Join(filepath.Dir(base), "fuera-"+filepath.Base(base))
+	os.MkdirAll(outside, 0o755)
+	writePNGFile(t, filepath.Join(outside, "secreto.png"))
+	writePNGFile(t, filepath.Join(base, "dentro.png"))
+	if runtime.GOOS != "windows" {
+		if err := syscall.Mkfifo(filepath.Join(base, "fifo.png"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		os.Symlink(filepath.Join(outside, "secreto.png"), filepath.Join(base, "enlace.png"))
+	}
+	body := "# Trampas\n\n![a](/dev/tty)\n\n![b](fifo.png)\n\n![c](../fuera-" + filepath.Base(base) + "/secreto.png)\n\n![d](enlace.png)\n\n![e](" + filepath.Join(outside, "secreto.png") + ")\n\n![ok](dentro.png)\n"
+	os.WriteFile(filepath.Join(base, "trampas.md"), []byte(body), 0o644)
+	r.c.reload()
+	r.afterChange()
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		r.show("trampas.md")
+		_ = plain(r.AppModel)
+	}()
+	select {
+	case <-done:
+	case <-time.After(5 * time.Second):
+		t.Fatal("la TUI se colgó al mostrar una nota con imágenes que no son archivos regulares de la carpeta de notas")
+	}
+	got := r.take()
+	if n := transmits(got); n != 1 {
+		t.Errorf("solo debe transmitirse la imagen de dentro: %d transmisiones", n)
+	}
+	out := plain(r.AppModel)
+	for _, want := range []string{"[imagen: tty]", "[imagen: fifo.png]", "[imagen: secreto.png]", "[imagen: enlace.png]"} {
+		if runtime.GOOS == "windows" && (want == "[imagen: fifo.png]" || want == "[imagen: enlace.png]") {
+			continue
+		}
+		if !strings.Contains(out, want) {
+			t.Errorf("falta el texto de reemplazo %q:\n%s", want, out)
+		}
+	}
+}
+
+func writePNGFile(t *testing.T, path string) {
+	t.Helper()
+	img := goimage.NewRGBA(goimage.Rect(0, 0, 60, 40))
+	for i := range img.Pix {
+		img.Pix[i] = byte(i * 7)
+	}
+	f, err := os.Create(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer f.Close()
+	if err := png.Encode(f, img); err != nil {
+		t.Fatal(err)
 	}
 }
