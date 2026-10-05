@@ -64,6 +64,9 @@ func (p *previewPanel) lines(note *storage.Note, width int) []string {
 			shown.Content, p.links = markLinks(shown.Content, p.c.links, note.Path)
 		}
 		raw := strings.Split(renderMarkdown(&shown, width, p.imgs), "\n")
+		if note.TooLarge { // no se leyó: solo se avisa
+			raw = []string{lipgloss.NewStyle().Foreground(theme.ColorPeach).Render(fmt.Sprintf(i18n.T("[nota demasiado grande: %d MB, el máximo es %d MB (max_note_mb)]", "[note too large: %d MB, the maximum is %d MB (max_note_mb)]"), note.Size>>20, storage.MaxNoteBytes>>20))}
+		}
 		if p.c != nil && p.c.links != nil {
 			extra, pls := backlinkLines(p.c.links.Backlinks(note.Path), width)
 			raw = append(raw, extra...)

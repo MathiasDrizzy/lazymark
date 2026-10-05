@@ -127,6 +127,8 @@ type Config struct {
 	KanbanColumns []KanbanColumn `json:"kanban_columns"`
 	// Mascot: si el perezoso dormido aparece en los estados de reposo (carpeta o nota vacía). Por defecto sí.
 	Mascot bool `json:"mascot"`
+	// MaxNoteMB es el tamaño máximo, en MB, de una nota que lazymark lee (listado, vista previa, CLI y MCP). Una más grande se muestra como "demasiado grande" y no se carga. Por defecto 10.
+	MaxNoteMB int `json:"max_note_mb"`
 	// ScreenBackground: "theme" (por defecto) o "terminal". Ver ScreenBackgroundTheme.
 	ScreenBackground string `json:"screen_background"`
 	configPath       string `json:"-"`
@@ -186,6 +188,7 @@ func DefaultConfig(notesDir string) *Config {
 		KanbanCards:        KanbanCardsRects,
 		ScreenBackground:   ScreenBackgroundTheme,
 		Mascot:             true,
+		MaxNoteMB:          10,
 		NerdFont:           true,
 		KanbanColumns:      DefaultKanbanColumns(),
 	}
@@ -374,6 +377,14 @@ func (c *Config) SetNotesDir(dir string) {
 }
 
 // Path devuelve la ruta del archivo de configuración.
+// MaxNoteBytes es MaxNoteMB en bytes (10 MB si no es un valor válido).
+func (c *Config) MaxNoteBytes() int64 {
+	if c.MaxNoteMB <= 0 || c.MaxNoteMB > 4096 {
+		return 10 << 20
+	}
+	return int64(c.MaxNoteMB) << 20
+}
+
 func (c *Config) Path() string {
 	if c.configPath == "" {
 		c.configPath = configFilePath()

@@ -174,6 +174,7 @@
  "[3]─Categories": "[3]─Categorie",
  "[4] Preview": "[4] Anteprima",
  "[4]─Preview": "[4]─Anteprima",
+ "[note too large: %d MB, the maximum is %d MB (max_note_mb)]": "[nota troppo grande: %d MB, il massimo è %d MB (max_note_mb)]",
  "and %d more": "e altri %d",
  "auto": "auto",
  "compact": "compatte",

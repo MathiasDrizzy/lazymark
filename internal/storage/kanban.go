@@ -3,7 +3,7 @@ package storage
 import (
 	"errors"
 	"fmt"
-	"os"
+	"github.com/MathiasDrizzy/lazymark/internal/safeio"
 	"regexp"
 	"sort"
 	"strings"
@@ -289,7 +289,7 @@ func (s *Storage) BlockEnd(notePath string, line int) (int, error) {
 	if err != nil {
 		return 0, err
 	}
-	data, err := os.ReadFile(notePath)
+	data, err := safeio.ReadRegular(notePath, MaxNoteBytes)
 	if err != nil {
 		return 0, err
 	}

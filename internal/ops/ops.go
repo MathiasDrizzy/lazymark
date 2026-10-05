@@ -7,6 +7,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/MathiasDrizzy/lazymark/internal/safeio"
 	"os"
 	"path/filepath"
 	"sort"
@@ -51,7 +52,7 @@ func Code(err error) int {
 		return ExitOK
 	case errors.As(err, &e):
 		return e.Code
-	case errors.Is(err, storage.ErrOutsideNotes), errors.Is(err, storage.ErrTemplateInvalid):
+	case errors.Is(err, storage.ErrOutsideNotes), errors.Is(err, storage.ErrTemplateInvalid), errors.Is(err, safeio.ErrTooLarge), errors.Is(err, safeio.ErrNotRegular):
 		return ExitUsage
 	case errors.Is(err, storage.ErrNoteChanged):
 		return ExitConflict
@@ -81,6 +82,7 @@ func New(notesDir string) (*Service, error) {
 	for i, c := range cfg.KanbanColumns {
 		titles[i] = c.DisplayTitle(lang)
 	}
+	storage.MaxNoteBytes = cfg.MaxNoteBytes()
 	return &Service{Store: storage.New(cfg.NotesDir), Cols: storage.Columns(cfg.KanbanIDs()), Titles: titles, Config: cfg.KanbanColumns}, nil
 }
 
@@ -163,7 +165,7 @@ func (s *Service) ShowNote(path string) (NoteContentDTO, error) {
 	if err != nil {
 		return NoteContentDTO{}, err
 	}
-	data, err := os.ReadFile(real)
+	data, err := safeio.ReadRegular(real, storage.MaxNoteBytes)
 	if err != nil {
 		return NoteContentDTO{}, err
 	}

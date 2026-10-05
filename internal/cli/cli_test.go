@@ -9,7 +9,9 @@ import (
 	"path/filepath"
 	"reflect"
 	"regexp"
+	"runtime"
 	"strings"
+	"syscall"
 	"testing"
 	"time"
 
@@ -750,5 +752,44 @@ func TestTemplateErrorsAndWarningsCLI(t *testing.T) {
 	}
 	if b, _ := os.ReadFile(n.Path); !strings.HasPrefix(string(b), "# Con variables\n{{fecha}} 20") {
 		t.Errorf("la nota: %q", b)
+	}
+}
+
+// TestHostileFilesCLI (ORD-015 C.5 S2 y S3): `note list` con un FIFO llamado x.md no se cuelga y no lo lista; `note show` de una nota de más de
+// 10 MB sale con 2 sin leerla; `task list` tampoco se cuelga.
+func TestHostileFilesCLI(t *testing.T) {
+	dir := fixture(t)
+	if runtime.GOOS != "windows" {
+		if err := syscall.Mkfifo(filepath.Join(dir, "trampa.md"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	big := filepath.Join(dir, "enorme.md")
+	f, _ := os.Create(big)
+	f.Truncate(storage.MaxNoteBytes + 1)
+	f.Close()
+	type res struct {
+		out string
+		err error
+	}
+	call := func(args ...string) res {
+		ch := make(chan res, 1)
+		go func() { o, e := run(t, dir, args...); ch <- res{o, e} }()
+		select {
+		case r := <-ch:
+			return r
+		case <-time.After(5 * time.Second):
+			t.Fatalf("%v: se colgó", args)
+			return res{}
+		}
+	}
+	if r := call("note", "list"); r.err != nil || strings.Contains(r.out, "trampa") {
+		t.Errorf("note list: %v %q", r.err, r.out)
+	}
+	if r := call("task", "list"); r.err != nil {
+		t.Errorf("task list: %v", r.err)
+	}
+	if r := call("note", "show", big); r.err == nil || ExitCode(r.err) != 2 {
+		t.Errorf("note show de una nota enorme: código %d, error %v", ExitCode(r.err), r.err)
 	}
 }

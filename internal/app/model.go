@@ -50,6 +50,7 @@ type AppModel struct {
 
 // New crea el modelo con la configuración dada y carga las notas.
 func New(cfg *config.Config) (*AppModel, error) {
+	storage.MaxNoteBytes = cfg.MaxNoteBytes()
 	store := storage.New(cfg.NotesDir)
 	if _, err := store.ListNotes(); err != nil {
 		return nil, err

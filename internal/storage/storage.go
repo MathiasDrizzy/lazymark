@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
+	"github.com/MathiasDrizzy/lazymark/internal/safeio"
 	"io/fs"
 	"os"
 	"path/filepath"
@@ -37,6 +38,7 @@ type Note struct {
 	ModTime  time.Time
 	Size     int64
 	Tasks    []Task
+	TooLarge bool // pesa más de MaxNoteBytes: no se leyó (Content vacío)
 	Images   []string
 	// Warnings son avisos de la creación de la nota (hoy: las {{variables}} desconocidas de su plantilla); no se guardan.
 	Warnings []string
@@ -63,6 +65,13 @@ type NoteEntry struct {
 }
 
 // Storage maneja el acceso y persistencia en el sistema de archivos
+// MaxNoteBytes es el tamaño máximo de una nota que se lee (config max_note_mb, 10 MB por defecto). Una nota más grande se lista sin su contenido
+// (Note.TooLarge) y las operaciones que la leerían entera dan ErrNoteTooLarge: una nota de cientos de MB no se carga en memoria.
+var MaxNoteBytes int64 = 10 << 20
+
+// ErrNoteTooLarge es el error de leer una nota que pesa más de MaxNoteBytes.
+var ErrNoteTooLarge = safeio.ErrTooLarge
+
 type Storage struct {
 	BaseDir       string
 	CurrentSubDir string
@@ -160,8 +169,9 @@ func (s *Storage) ListTreeEntries(expanded map[string]bool) ([]NoteEntry, error)
 				if !s.linkStaysInside(fullPath, de) {
 					continue
 				}
-				contentBytes, err := os.ReadFile(fullPath)
-				if err != nil {
+				contentBytes, err := safeio.ReadRegular(fullPath, MaxNoteBytes)
+				tooLarge := errors.Is(err, safeio.ErrTooLarge)
+				if err != nil && !tooLarge { // un FIFO, un dispositivo o una nota ilegible no se listan
 					continue
 				}
 				content := string(contentBytes)
@@ -170,12 +180,13 @@ func (s *Storage) ListTreeEntries(expanded map[string]bool) ([]NoteEntry, error)
 				title = strings.ReplaceAll(title, "_", " ")
 
 				note := Note{
-					ID:      name,
-					Title:   title,
-					Path:    fullPath,
-					Content: content,
-					ModTime: info.ModTime(),
-					Size:    info.Size(),
+					ID:       name,
+					Title:    title,
+					Path:     fullPath,
+					Content:  content,
+					ModTime:  info.ModTime(),
+					Size:     info.Size(),
+					TooLarge: tooLarge,
 				}
 				if !s.inTemplates(fullPath) { // una plantilla es un molde: sus etiquetas y casillas no cuentan
 					note.Tags = s.extractTags(content)
@@ -249,8 +260,9 @@ func (s *Storage) ListNotes() ([]Note, error) {
 			return nil
 		}
 
-		contentBytes, err := os.ReadFile(path)
-		if err != nil {
+		contentBytes, err := safeio.ReadRegular(path, MaxNoteBytes)
+		tooLarge := errors.Is(err, safeio.ErrTooLarge)
+		if err != nil && !tooLarge { // un FIFO, un dispositivo o una nota ilegible no se listan
 			return nil
 		}
 		content := string(contentBytes)
@@ -259,12 +271,13 @@ func (s *Storage) ListNotes() ([]Note, error) {
 		title = strings.ReplaceAll(title, "_", " ")
 
 		note := Note{
-			ID:      d.Name(),
-			Title:   title,
-			Path:    path,
-			Content: content,
-			ModTime: info.ModTime(),
-			Size:    info.Size(),
+			ID:       d.Name(),
+			Title:    title,
+			Path:     path,
+			Content:  content,
+			ModTime:  info.ModTime(),
+			Size:     info.Size(),
+			TooLarge: tooLarge,
 		}
 		if !s.inTemplates(path) { // una plantilla es un molde, no una nota: sus etiquetas y casillas no cuentan
 			note.Tags = s.extractTags(content)
@@ -585,7 +598,7 @@ func rewriteLines(notePath string, expected time.Time, edit func(lines []string)
 	if !expected.IsZero() && !before.ModTime().Equal(expected) {
 		return ErrNoteChanged
 	}
-	data, err := os.ReadFile(notePath)
+	data, err := safeio.ReadRegular(notePath, MaxNoteBytes)
 	if err != nil {
 		return fmt.Errorf("error al leer la nota: %w", err)
 	}
@@ -679,7 +692,7 @@ func (s *Storage) AppendToNote(notePath, text string, expected time.Time) error 
 	if !expected.IsZero() && !fi.ModTime().Equal(expected) {
 		return ErrNoteChanged
 	}
-	data, err := os.ReadFile(notePath)
+	data, err := safeio.ReadRegular(notePath, MaxNoteBytes)
 	if err != nil {
 		return err
 	}
