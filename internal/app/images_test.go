@@ -7,7 +7,6 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
-	"syscall"
 	"testing"
 	"time"
 
@@ -344,7 +343,7 @@ func TestPreviewImagesStayInsideNotes(t *testing.T) {
 	writePNGFile(t, filepath.Join(outside, "secreto.png"))
 	writePNGFile(t, filepath.Join(base, "dentro.png"))
 	if runtime.GOOS != "windows" {
-		if err := syscall.Mkfifo(filepath.Join(base, "fifo.png"), 0o644); err != nil {
+		if err := mkfifo(filepath.Join(base, "fifo.png")); err != nil {
 			t.Fatal(err)
 		}
 		os.Symlink(filepath.Join(outside, "secreto.png"), filepath.Join(base, "enlace.png"))

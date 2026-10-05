@@ -5,7 +5,6 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
-	"syscall"
 	"testing"
 	"time"
 )
@@ -34,7 +33,7 @@ func TestReadRegularNeverBlocks(t *testing.T) {
 		t.Skip("sin FIFO en Windows")
 	}
 	fifo := filepath.Join(t.TempDir(), "f.md")
-	if err := syscall.Mkfifo(fifo, 0o644); err != nil {
+	if err := mkfifo(fifo); err != nil {
 		t.Skip(err)
 	}
 	for _, p := range []string{fifo, "/dev/tty", "/dev/zero"} {

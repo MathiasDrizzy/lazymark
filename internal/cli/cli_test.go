@@ -11,7 +11,6 @@ import (
 	"regexp"
 	"runtime"
 	"strings"
-	"syscall"
 	"testing"
 	"time"
 
@@ -760,7 +759,7 @@ func TestTemplateErrorsAndWarningsCLI(t *testing.T) {
 func TestHostileFilesCLI(t *testing.T) {
 	dir := fixture(t)
 	if runtime.GOOS != "windows" {
-		if err := syscall.Mkfifo(filepath.Join(dir, "trampa.md"), 0o644); err != nil {
+		if err := mkfifo(filepath.Join(dir, "trampa.md")); err != nil {
 			t.Fatal(err)
 		}
 	}

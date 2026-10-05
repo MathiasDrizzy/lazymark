@@ -5,7 +5,6 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
-	"syscall"
 	"testing"
 	"time"
 )
@@ -29,7 +28,7 @@ func TestHostileNotesFolder(t *testing.T) {
 	t.Cleanup(func() { MaxNoteBytes = old })
 	s, _ := kanbanNote(t, "# ok\n- [ ] tarea\n")
 	if runtime.GOOS != "windows" {
-		if err := syscall.Mkfifo(filepath.Join(s.BaseDir, "trampa.md"), 0o644); err != nil {
+		if err := mkfifo(filepath.Join(s.BaseDir, "trampa.md")); err != nil {
 			t.Fatal(err)
 		}
 	}

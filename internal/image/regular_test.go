@@ -4,7 +4,6 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
-	"syscall"
 	"testing"
 	"time"
 )
@@ -28,7 +27,7 @@ func TestNeverOpensNonRegularFiles(t *testing.T) {
 		t.Skip("sin FIFO en Windows")
 	}
 	fifo := filepath.Join(t.TempDir(), "trampa.png")
-	if err := syscall.Mkfifo(fifo, 0o644); err != nil {
+	if err := mkfifo(fifo); err != nil {
 		t.Skip("no se puede crear un FIFO:", err)
 	}
 	for _, p := range []string{fifo, "/dev/tty", "/dev/zero", "/dev/null"} {
