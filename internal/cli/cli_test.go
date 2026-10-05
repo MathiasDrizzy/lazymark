@@ -924,3 +924,25 @@ func TestDatesMigrateMidwayCLI(t *testing.T) {
 		t.Errorf("a.md quedó migrada: %q", b)
 	}
 }
+
+// TestDatesMigrateFirstNoteFailsCLI (ORD-017 rev 3): si falla la primera nota, el mensaje es el error (sin "0 line(s) in 0 note(s)") y el código no es 0.
+func TestDatesMigrateFirstNoteFailsCLI(t *testing.T) {
+	if runtime.GOOS == "windows" || os.Geteuid() == 0 {
+		t.Skip("necesita una carpeta de solo lectura")
+	}
+	dir := t.TempDir()
+	os.MkdirAll(filepath.Join(dir, "a"), 0o755)
+	os.WriteFile(filepath.Join(dir, "a", "n.md"), []byte("- [ ] t 📅 2026-05-10\n"), 0o644)
+	os.Chmod(filepath.Join(dir, "a"), 0o555)
+	t.Cleanup(func() { os.Chmod(filepath.Join(dir, "a"), 0o755) })
+	out, err := run(t, dir, "dates", "migrate", "--to", "dataview")
+	if err == nil {
+		t.Fatalf("debe fallar:\n%s", out)
+	}
+	if strings.Contains(out, "0 line") || strings.Contains(out, "interrump") || strings.Contains(out, "interrupted") {
+		t.Errorf("no debe parecer una migración hecha:\n%s", out)
+	}
+	if !strings.Contains(err.Error(), "n.md") {
+		t.Errorf("el error nombra la nota: %v", err)
+	}
+}

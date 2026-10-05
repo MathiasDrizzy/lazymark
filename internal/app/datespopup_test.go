@@ -396,3 +396,28 @@ func TestDatesPopupWarnsStartAfterDue(t *testing.T) {
 		t.Error("con el inicio antes del vencimiento no hay aviso")
 	}
 }
+
+// TestSearchFragmentsKeepLinksRaw (ORD-017 rev 3): al buscar `due`, el fragmento de [[due:: …]] y de [due:: …](url) se ve tal cual (son un wikilink y un link, no fechas) y
+// el campo de verdad de otra línea sí se dibuja con glifo.
+func TestSearchFragmentsKeepLinksRaw(t *testing.T) {
+	m := newTestModel(t, 200, 40)
+	dir := m.c.store.BaseDir
+	for _, n := range m.c.notes {
+		os.Remove(n.Path)
+	}
+	path := filepath.Join(dir, "lk.md")
+	os.WriteFile(path, []byte("# Lk\n\n- [ ] A [[due:: 2026-05-10]] fin\n- [ ] B [due:: 2026-05-11](https://x.y) fin\n- [ ] C [due:: 2026-05-12] fin\n"), 0o644)
+	m.c.reload()
+	m.afterChange()
+	press(m, "/")
+	typeSearch(m, "due")
+	scr := plain(m)
+	for _, want := range []string{"[[due:: 2026-05-10]]", "[due:: 2026-05-11](https://x.y)"} {
+		if !strings.Contains(scr, want) {
+			t.Errorf("el fragmento debe mostrar %q tal cual:\n%s", want, scr)
+		}
+	}
+	if strings.Contains(scr, "[due:: 2026-05-12]") || !strings.Contains(scr, "2026-05-12") {
+		t.Errorf("el campo de verdad se dibuja como glifo + fecha:\n%s", scr)
+	}
+}

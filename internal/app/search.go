@@ -322,15 +322,13 @@ func renderedLineOf(lines []string, note *storage.Note, line int) int {
 
 // glyphDates cambia los emojis de fecha y los campos Dataview de text por glifos (views.ReplaceDateEmoji) y devuelve dónde queda lo hallado [s, e): se
 // reemplaza por tramos (antes, lo hallado y después) para que las posiciones sigan siendo exactas.
-var dateSpanRe = regexp.MustCompile(`[\[(][ \t]*[A-Za-z]+[ \t]*::[^\])\n]*[\])]|[🛫📅✅⏳➕]\x{FE0F}?[ \t]*\d{4}-\d{2}-\d{2}`)
-
 func glyphDates(text string, s, e int) (string, int, int) {
 	if s < 0 || e < s || e > len(text) {
 		return views.ReplaceDateEmoji(text), -1, -1
 	}
-	for _, m := range dateSpanRe.FindAllStringIndex(text, -1) { // lo hallado dentro de un marcador (buscar "due") abarca el marcador entero: así se reemplaza completo
-		if m[0] < e && m[1] > s {
-			s, e = min(s, m[0]), max(e, m[1])
+	for _, m := range storage.DataviewSpans(text) { // lo hallado dentro de un marcador (buscar "due") abarca el marcador entero: así se reemplaza completo
+		if m.Start < e && m.End > s {
+			s, e = min(s, m.Start), max(e, m.End)
 		}
 	}
 	before, hit, after := views.ReplaceDateEmoji(text[:s]), views.ReplaceDateEmoji(text[s:e]), views.ReplaceDateEmoji(text[e:])

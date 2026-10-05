@@ -115,8 +115,8 @@ func scanMarkers(text string) []dateHit {
 		k, d, paren := 2, 4, false // [clave:: fecha] o (clave:: fecha)
 		if m[2] >= 0 {
 			k, d = 2, 4
-			// `[[due:: 2026-05-10]]` es un wikilink y `[due:: 2026-05-10](https://…)` el texto de un link Markdown: no son campos
-			if (m[0] > 0 && text[m[0]-1] == '[') || (m[1] < len(text) && (text[m[1]] == ']' || text[m[1]] == '(')) {
+			// `[[due:: 2026-05-10]]` es un wikilink, `[due:: 2026-05-10](https://…)` el texto de un link Markdown y `[due:: 2026-05-10][ref]` / `[…][]` uno de referencia: no son campos
+			if (m[0] > 0 && text[m[0]-1] == '[') || (m[1] < len(text) && (text[m[1]] == ']' || text[m[1]] == '(' || (text[m[1]] == '[' && !nextIsField(text[m[1]:])))) {
 				continue
 			}
 		} else {
@@ -498,4 +498,28 @@ func convertDates(line string, to DateFormat) string {
 		line = line[:h.start] + marker + line[h.end:]
 	}
 	return line
+}
+
+// DateSpan es un campo de fecha Dataview válido de un texto: dónde está (bytes [Start, End)), cuál es y su fecha.
+type DateSpan struct {
+	Start, End int
+	Field      DateField
+	Date       string
+}
+
+// DataviewSpans devuelve los campos Dataview válidos de text con las mismas reglas que la lectura (no cuentan los links, los wikilinks ni el código en
+// línea), para que lo que se dibuja como fecha sea justo lo que se lee como fecha.
+func DataviewSpans(text string) []DateSpan {
+	var out []DateSpan
+	for _, h := range scanMarkers(text) {
+		if h.format == FormatDataview && h.valid {
+			out = append(out, DateSpan{Start: h.start, End: h.end, Field: h.field, Date: h.date})
+		}
+	}
+	return out
+}
+
+// nextIsField dice si lo que sigue ("[…") es otro campo (`[start:: …][due:: …]`, pegados): entonces no es la etiqueta de un link de referencia.
+func nextIsField(rest string) bool {
+	return dataviewDateRe.FindStringIndex(rest) != nil && dataviewDateRe.FindStringIndex(rest)[0] == 0
 }

@@ -1,7 +1,6 @@
 package views
 
 import (
-	"regexp"
 	"strings"
 
 	"charm.land/lipgloss/v2"
@@ -32,9 +31,6 @@ func DateGlyph(f storage.DateField) string {
 	return g[1]
 }
 
-// dataviewField reconoce un campo de fecha en el formato Dataview, entre corchetes o paréntesis, para dibujarlo como glifo y fecha.
-var dataviewField = regexp.MustCompile(`\[[ \t]*(start|due|completion|scheduled|created)[ \t]*::[ \t]*(\d{4}-\d{2}-\d{2})[ \t]*\]|\([ \t]*(start|due|completion|scheduled|created)[ \t]*::[ \t]*(\d{4}-\d{2}-\d{2})[ \t]*\)`)
-
 // ReplaceDateEmoji cambia las fechas de un texto que se va a dibujar por los glifos monocromos, antes de medirlo (un emoji ocupa 2 celdas y el glifo
 // 1): los emojis de Obsidian Tasks (🛫 📅 ✅ ⏳ ➕, con su selector de variación U+FE0F) y los campos Dataview (`[due:: 2026-05-10]` se dibuja
 // `<glifo> 2026-05-10`). El color lo da el texto que lo rodea. En pantalla nunca hay emojis de fecha ni la sintaxis Dataview.
@@ -46,20 +42,17 @@ func ReplaceDateEmoji(s string) string {
 		}
 		s = strings.NewReplacer(pairs...).Replace(s)
 	}
-	if strings.Contains(s, "::") {
-		s = dataviewField.ReplaceAllStringFunc(s, func(m string) string {
-			sm := dataviewField.FindStringSubmatch(m)
-			key, date := sm[1], sm[2]
-			if key == "" {
-				key, date = sm[3], sm[4]
-			}
-			for f := storage.DateStart; f <= storage.DateCreated; f++ {
-				if f.Key() == key {
-					return DateGlyph(f) + " " + date
-				}
-			}
-			return m
-		})
+	if strings.Contains(s, "::") { // solo los campos que de verdad se leen como fecha (no los wikilinks, ni los links, ni el código en línea)
+		spans := storage.DataviewSpans(s)
+		var sb strings.Builder
+		last := 0
+		for _, sp := range spans {
+			sb.WriteString(s[last:sp.Start])
+			sb.WriteString(DateGlyph(sp.Field) + " " + sp.Date)
+			last = sp.End
+		}
+		sb.WriteString(s[last:])
+		s = sb.String()
 	}
 	return s
 }

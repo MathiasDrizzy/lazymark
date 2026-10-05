@@ -544,7 +544,7 @@ func RunDatesWithWriter(w io.Writer, args []string, defaultNotesDir string) erro
 	}
 	res, err := svc.MigrateDates(to, dry)
 	if err != nil {
-		if res.Lines > 0 || res.Error != "" { // se cortó a mitad: se informa qué notas ya se migraron (y el código de salida no es 0)
+		if res.Lines > 0 { // se cortó a mitad (si falló la primera nota no se migró nada: solo el error, sin un "0 línea(s)" que parezca éxito): se informa qué notas ya se migraron (y el código de salida no es 0)
 			if p.json {
 				_ = printJSON(w, res)
 			} else {

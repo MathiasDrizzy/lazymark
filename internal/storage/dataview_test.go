@@ -299,3 +299,29 @@ func TestEditRemovesRepeatedField(t *testing.T) {
 		t.Errorf("queda un solo due: %q", got)
 	}
 }
+
+// TestReferenceLinksAndUnpairedBackticks (ORD-017 rev 3, R3-1): `[due:: …][ref]` y `[due:: …][]` son links de CommonMark (ni se leen ni se migran); un acento
+// grave sin pareja es texto y no esconde el campo; con pareja (aunque sea con otro acento de por medio, como lo hace CommonMark) sí es código. Lo que no cambia:
+// `[x] (url)` con espacio es campo, `\[…\]` es texto y `[…](texto)` es un link.
+func TestReferenceLinksAndUnpairedBackticks(t *testing.T) {
+	for _, line := range []string{"- [ ] Ref [due:: 2026-05-10][ref]", "- [ ] Ref [due:: 2026-05-10][]", `- [ ] Esc \[due:: 2026-05-12\]`, "- [ ] N [due:: 2026-05-14](urgente)"} {
+		if d := ParseDates(line); d != (Dates{}) {
+			t.Errorf("%q no es un campo: %+v", line, d)
+		}
+		if conv := convertDates(line, FormatEmoji); conv != line {
+			t.Errorf("%q no se migra: %q", line, conv)
+		}
+	}
+	if d := ParseDates("- [ ] Esp [due:: 2026-05-11] (http://x.y)"); d.Due != "2026-05-11" {
+		t.Errorf("con espacio antes del paréntesis sí es campo: %+v", d)
+	}
+	for _, line := range []string{"- [ ] don`t y [due:: 2026-05-13] solo", "- [ ] `` y [due:: 2026-05-13]", "- [ ] ``a` [due:: 2026-05-13]"} {
+		if d := ParseDates(line); d.Due != "2026-05-13" {
+			t.Errorf("el acento grave sin pareja es texto: %q → %+v", line, d)
+		}
+	}
+	// con pareja es código (CommonMark: don`t … `code` abre un code span entre el primero y el segundo acento)
+	if d := ParseDates("- [ ] don`t y [due:: 2026-05-13] y `code`"); d.Due != "" {
+		t.Errorf("entre dos acentos graves es código: %+v", d)
+	}
+}

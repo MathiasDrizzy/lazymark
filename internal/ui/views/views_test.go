@@ -149,3 +149,15 @@ func TestCollectKanbanAndRender(t *testing.T) {
 		t.Errorf("Tipo de zona inesperado: %v", zone.Type)
 	}
 }
+
+// TestReplaceDateEmojiLeavesLinksAlone (ORD-017 rev 3): un wikilink o un link con forma de campo se dibuja como lo que es; el campo de verdad, con su glifo.
+func TestReplaceDateEmojiLeavesLinksAlone(t *testing.T) {
+	for _, s := range []string{"[[due:: 2026-05-10]]", "[due:: 2026-05-10](https://x.y)", "[due:: 2026-05-10][ref]", "`[due:: 2026-05-10]`"} {
+		if got := ReplaceDateEmoji(s); got != s {
+			t.Errorf("%q no debe cambiar: %q", s, got)
+		}
+	}
+	if got := ReplaceDateEmoji("a [due:: 2026-05-10] b"); strings.Contains(got, "::") || !strings.Contains(got, "2026-05-10") {
+		t.Errorf("el campo se dibuja con glifo: %q", got)
+	}
+}
