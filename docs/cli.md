@@ -17,7 +17,7 @@ lazymark task due    <id> <YYYY-MM-DD|none> [--json]
 lazymark task start  <id> <YYYY-MM-DD|none> [--json]
 ```
 
-`note new --template <name>` fills the note from `templates/<name>.md` (see [templates.md](templates.md)); a template that does not exist exits with 3 and creates nothing. `daily` creates today's note `journal/YYYY-MM-DD.md` from `templates/daily.md`, or opens it if it exists, and prints its path (`--json`: the note plus `"created": true|false`); it never modifies an existing one.
+`note new --template <name>` fills the note from `templates/<name>.md` (see [templates.md](templates.md)); a template that does not exist exits with 3 and one that is not valid text (binary, UTF-16, over 256 KB) exits with 2; neither creates anything. An unknown `{{variable}}` stays as written, is reported on stderr (`warning: unknown variable: {{x}}`) and in a `warnings` array of the JSON, and does not change the exit code. `daily` creates today's note `journal/YYYY-MM-DD.md` from `templates/daily.md`, or opens it if it exists, and prints its path (`--json`: the note plus `"created": true|false`); it never modifies an existing one.
 
 `note get <path>` and `task toggle --path <note> --line <n>` still work.
 

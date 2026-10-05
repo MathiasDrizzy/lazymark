@@ -158,7 +158,7 @@ func TestInvalidTemplatesAreRejected(t *testing.T) {
 		"templates/nulos.md":  "# titulo\x00con nulo\n",
 		"templates/latin1.md": "caf\xe9 \xff\xfe\n",
 		"templates/ok.md":     "\xef\xbb\xbf# {{title}}\n",
-		"templates/enorme.md": "# x\n" + strings.Repeat("0123456789abcdef", 70<<10), // ~1,1 MB
+		"templates/enorme.md": "# x\n" + strings.Repeat("0123456789abcdef", 70<<10), // ~1,1 MB, bastante más que el tope
 	})
 	os.WriteFile(filepath.Join(s.BaseDir, "templates", "utf16.md"), utf16, 0o644)
 	for _, name := range []string{"nulos", "latin1", "utf16", "enorme"} {
@@ -195,7 +195,7 @@ func TestSwapNumberedWithTabs(t *testing.T) {
 		},
 		"mezcla": {
 			"9. [ ] a\n   - [ ] s1\n\t- [ ] s2\n  \t- [ ] s3\n10. [ ] b\n    texto\n\tmás\n",
-			"9. [ ] b\n   texto\n\tmás\n10. [ ] a\n    - [ ] s1\n\t- [ ] s2\n  \t- [ ] s3\n",
+			"9. [ ] b\n   texto\n\tmás\n10. [ ] a\n    - [ ] s1\n\t - [ ] s2\n  \t - [ ] s3\n",
 		},
 	}
 	for name, c := range cases {
@@ -244,5 +244,19 @@ func TestTemplateVariables(t *testing.T) {
 	s2 := tplStore(t, map[string]string{"templates/ok.md": "{{date}} {{title}}\n"})
 	if n, err := s2.CreateNoteFromTemplate(s2.BaseDir, "A", "ok", tplNow); err != nil || len(n.Warnings) != 0 {
 		t.Errorf("sin avisos: %v %v", err, n)
+	}
+}
+
+// TestTemplateSizeLimit (ORD-014): el tope es 256 KB exactos: una plantilla de justo 256 KB vale y una de 256 KB + 1 byte se rechaza.
+func TestTemplateSizeLimit(t *testing.T) {
+	s := tplStore(t, map[string]string{
+		"templates/justo.md":  strings.Repeat("a", maxTemplateBytes),
+		"templates/pasada.md": strings.Repeat("a", maxTemplateBytes+1),
+	})
+	if got, err := s.RenderTemplate("justo", "T", tplNow); err != nil || len(got) != maxTemplateBytes {
+		t.Errorf("256 KB exactos debe valer: %d %v", len(got), err)
+	}
+	if _, err := s.RenderTemplate("pasada", "T", tplNow); !errors.Is(err, ErrTemplateInvalid) {
+		t.Errorf("256 KB + 1 debe rechazarse: %v", err)
 	}
 }

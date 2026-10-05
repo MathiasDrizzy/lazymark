@@ -96,12 +96,18 @@ func (s *Storage) renderTemplate(name, title string, now time.Time) (string, []s
 	if err != nil {
 		return "", nil, err
 	}
+	if !fi.Mode().IsRegular() { // una tubería o un dispositivo no es una plantilla (y leerlo podría bloquear)
+		return "", nil, fmt.Errorf("%w: %q no es un archivo", ErrTemplateInvalid, name)
+	}
 	if fi.Size() > maxTemplateBytes {
 		return "", nil, fmt.Errorf("%w: %q pesa más de %d KB", ErrTemplateInvalid, name, maxTemplateBytes>>10)
 	}
 	data, err := os.ReadFile(p)
 	if err != nil {
 		return "", nil, err
+	}
+	if len(data) > maxTemplateBytes { // creció entre el Stat y la lectura
+		return "", nil, fmt.Errorf("%w: %q pesa más de %d KB", ErrTemplateInvalid, name, maxTemplateBytes>>10)
 	}
 	if bytes.IndexByte(data, 0) >= 0 || !utf8.Valid(data) {
 		return "", nil, fmt.Errorf("%w: %q no es texto UTF-8", ErrTemplateInvalid, name)

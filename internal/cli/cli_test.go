@@ -701,7 +701,7 @@ func TestDailyCLI(t *testing.T) {
 	}
 }
 
-// TestTemplateErrorsAndWarningsCLI (ORD-014 M1 y M2): una plantilla binaria, UTF-16 o de más de 1 MB sale con 2 y no crea nada (note new y
+// TestTemplateErrorsAndWarningsCLI (ORD-014 M1 y M2): una plantilla binaria, UTF-16 o de más de 256 KB sale con 2 y no crea nada (note new y
 // daily); una variable desconocida deja la nota con la variable tal cual, avisa por stderr y en el JSON, y no cambia el código de salida.
 func TestTemplateErrorsAndWarningsCLI(t *testing.T) {
 	dir := fixture(t)

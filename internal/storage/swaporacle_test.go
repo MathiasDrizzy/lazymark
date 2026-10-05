@@ -194,3 +194,28 @@ func TestSwapTasksSecondOpinionItems(t *testing.T) {
 		}
 	})
 }
+
+// TestSwapNumberedMixedTabsKeepsHierarchy (ORD-014, segunda opinión): en un bloque con líneas de espacios y de tab, al correr el contenido
+// (9. → 10.) las de tab también se corren (después del tab) para no igualar niveles: la subtarea no pierde a su hija.
+func TestSwapNumberedMixedTabsKeepsHierarchy(t *testing.T) {
+	doc := "9. [ ] a\n   - [ ] s1\n\t - [ ] hija\n10. [ ] b\n"
+	s, p := kanbanNote(t, doc)
+	if _, _, err := s.SwapTasks(p, 1, 4, time.Time{}); err != nil {
+		t.Fatal(err)
+	}
+	b, _ := os.ReadFile(p)
+	want := "9. [ ] b\n10. [ ] a\n    - [ ] s1\n\t  - [ ] hija\n"
+	if string(b) != want {
+		t.Errorf("\n got %q\nwant %q", b, want)
+	}
+	// la hija sigue colgando de s1 (goldmark): existe un ítem cuyo texto empieza en s1 y contiene a la hija
+	var s1 string
+	for _, li := range itemsHTML(t, string(b)) {
+		if strings.Contains(li, "s1") && !strings.Contains(li, "> a\n") && !strings.Contains(li, "> b") {
+			s1 = li
+		}
+	}
+	if !strings.Contains(s1, "hija") {
+		t.Errorf("s1 debe contener a su hija; ítems: %q", itemsHTML(t, string(b)))
+	}
+}

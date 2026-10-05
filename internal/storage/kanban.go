@@ -303,18 +303,34 @@ func (s *Storage) BlockEnd(notePath string, line int) (int, error) {
 }
 
 // shiftBlock corre d columnas el contenido de las líneas de un bloque cuya primera línea tiene ahora su contenido en la columna ci:
-// agrega d espacios (d > 0) o quita hasta -d espacios de la sangría (d < 0). Una línea sangrada con tabulador no se toca si ya llega a ci
-// (un espacio antes de un tab no cambia su ancho y solo ensuciaría el archivo); si no llega, se reconstruye con espacios al ancho nuevo.
-// Las líneas en blanco no se tocan.
+// agrega d espacios (d > 0) o quita hasta -d espacios de la sangría (d < 0). Las líneas en blanco no se tocan. Con tabuladores:
+//   - si todas las líneas sangradas del bloque usan tab, no se tocan mientras lleguen a ci (un espacio antes de un tab no cambia su ancho y
+//     solo ensuciaría el archivo); si no llegan, se reconstruyen con espacios al ancho nuevo;
+//   - si el bloque mezcla tabs y espacios, las de tab se corren igual que las de espacios, pero después del tab (el tab se conserva y el
+//     ancho cambia en d): así no se igualan niveles y una subtarea no pierde a su hija.
 func shiftBlock(lines []string, d, ci int) {
+	spaces := false // alguna línea sangrada solo con espacios
+	for _, l := range lines {
+		if ws := leadingSpace(l); ws != "" && strings.TrimSpace(l) != "" && !strings.Contains(ws, "\t") {
+			spaces = true
+		}
+	}
 	for i, l := range lines {
 		if d == 0 || strings.TrimSpace(l) == "" {
 			continue
 		}
 		ws := leadingSpace(l)
 		if strings.Contains(ws, "\t") {
-			if w := indentWidth(ws); w < ci {
-				lines[i] = strings.Repeat(" ", max(0, w+d)) + l[len(ws):]
+			switch {
+			case spaces && d > 0:
+				lines[i] = ws + strings.Repeat(" ", d) + l[len(ws):]
+			case spaces:
+				trim := len(ws) - len(strings.TrimRight(ws, " ")) // los espacios después del último tab
+				lines[i] = ws[:len(ws)-min(trim, -d)] + l[len(ws):]
+			default:
+				if w := indentWidth(ws); w < ci {
+					lines[i] = strings.Repeat(" ", max(0, w+d)) + l[len(ws):]
+				}
 			}
 			continue
 		}
