@@ -322,7 +322,7 @@ func TestSearchTimeout(t *testing.T) {
 // TestRegexCostCap (ORD-016 L1): el costo de una expresión (su programa compilado, con las clases Unicode pesadas) se calcula antes de ejecutarla: una
 // repetición anidada que pasaba el tope de {100} se rechaza al instante con el mismo mensaje; las expresiones de uso corriente se aceptan.
 func TestRegexCostCap(t *testing.T) {
-	for _, bad := range []string{`([\p{L}\p{N}]{50}){20}x`, `(\p{L}{10}){10}[\p{L}\p{N}]{100}`, `(\w{50}){20}(\p{L}{100}){2}`, `[\p{L}\p{N}]{1000}x`, `(\p{L}{100}){3}`, `(a?){1000}b`, `(a?){110}b`, `\w{330}x`, `(?i)\w{330}x`, `\w{1000}x`, `(\w{50}){20}x`, `[a-z]{1000}x`, `.{1000}x`, `((a|b)?){500}c`} {
+	for _, bad := range []string{`([\p{L}\p{N}]{50}){20}x`, `(\p{L}{10}){10}[\p{L}\p{N}]{100}`, `(\w{50}){20}(\p{L}{100}){2}`, `[\p{L}\p{N}]{1000}x`, `(\p{L}{100}){3}`, `(a?){1000}b`, `(a?){110}b`, `.{300}x`, `\w{330}x`, `(?i)\w{330}x`, `\w{1000}x`, `(\w{50}){20}x`, `[a-z]{1000}x`, `.{1000}x`, `((a|b)?){500}c`} {
 		start := time.Now()
 		_, err := Compile(bad, Options{Regex: true})
 		if err == nil || !strings.Contains(err.Error(), "demasiado costosa") {
@@ -332,7 +332,7 @@ func TestRegexCostCap(t *testing.T) {
 			t.Errorf("%s: el rechazo tardó %v", bad, d)
 		}
 	}
-	for _, good := range []string{`[\p{L}\p{N}]{20}x`, `[\p{L}\p{N}]{100}x`, `\w{160}x`, `(a|b|c){40}x`, `\w+@\w+\.\w{2,6}`, `(\p{L}+\s*){5}x`, `\bTODO\b`, `^#+ `, `\d{4}-\d{2}-\d{2}`, `(?i)error|warning|fatal`, `https?://[^\s)]+`} {
+	for _, good := range []string{`[\p{L}\p{N}]{20}x`, `[\p{L}\p{N}]{100}x`, `\w{160}x`, `.{200}x`, `[^\n]{200}x`, `(a|b|c){40}x`, `\w+@\w+\.\w{2,6}`, `(\p{L}+\s*){5}x`, `\bTODO\b`, `^#+ `, `\d{4}-\d{2}-\d{2}`, `(?i)error|warning|fatal`, `https?://[^\s)]+`} {
 		if _, err := Compile(good, Options{Regex: true}); err != nil {
 			t.Errorf("%s debe aceptarse: %v", good, err)
 		}

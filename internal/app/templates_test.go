@@ -1,6 +1,7 @@
 package app
 
 import (
+	tea "charm.land/bubbletea/v2"
 	"os"
 	"path/filepath"
 	"strings"
@@ -289,5 +290,25 @@ func TestNewNoteSuggestedNameIsReplacedByTyping(t *testing.T) {
 	press(m, "enter")
 	if !exists("dentro2.md") {
 		t.Error("renombrar edita el nombre actual: escribir lo agrega")
+	}
+}
+
+// TestSuggestedNameReplacedByShiftedKeys (ORD-017, segunda opinión): una letra con Shift (mayúscula o símbolo, así llegan en terminales con el protocolo de
+// teclas completo) también reemplaza la sugerencia; Ctrl y Alt no (son atajos de edición).
+func TestSuggestedNameReplacedByShiftedKeys(t *testing.T) {
+	m, dir := tplModel(t)
+	m.notes.selectPath(filepath.Join(dir, "compras.md"))
+	press(m, "c")
+	for _, r := range "Dentro_Z" {
+		mod := tea.KeyMod(0)
+		if r == 'D' || r == 'Z' || r == '_' {
+			mod = tea.ModShift
+		}
+		m.Update(tea.KeyPressMsg{Code: r, Text: string(r), Mod: mod})
+	}
+	press(m, "enter")
+	if _, err := os.Stat(filepath.Join(dir, "dentro_z.md")); err != nil {
+		entries, _ := os.ReadDir(dir)
+		t.Errorf("las teclas con Shift reemplazan la sugerencia (dentro_z.md): %v", entries)
 	}
 }

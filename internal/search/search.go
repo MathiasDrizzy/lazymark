@@ -365,8 +365,8 @@ func regexCost(re *syntax.Regexp) int {
 			} else {
 				cost += 180 + len(in.Rune)*7/100
 			}
-		case syntax.InstRuneAny, syntax.InstRuneAnyNotNL:
-			cost += 180
+		case syntax.InstRuneAny, syntax.InstRuneAnyNotNL: // un cualquiera es más barato que una clase: .{200}x tarda 2,4 s en 2 MB
+			cost += 120
 		case syntax.InstAlt, syntax.InstAltMatch:
 			cost += 300
 		}

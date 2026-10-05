@@ -338,3 +338,18 @@ func TestFolderRenameEdits(t *testing.T) {
 		t.Errorf("fuera/: %v", e)
 	}
 }
+
+// TestFolderRenameEditsWindowsSeparators (ORD-017, segunda opinión): un enlace escrito con barra invertida ([[carpeta\nota]]) resuelve (key lo normaliza) y también se
+// actualiza al renombrar la carpeta; renombrar una nota con ese enlace conserva su carpeta.
+func TestFolderRenameEditsWindowsSeparators(t *testing.T) {
+	base := filepath.FromSlash("/n")
+	ix := NewIndex(base, notes(base, map[string]string{"carpeta/nota.md": "# n\n", "hub.md": "ver [[carpeta\\nota]]\n"}))
+	e := ix.FolderRenameEdits(filepath.Join(base, "carpeta"), "trabajos")
+	if len(e) != 1 || e[0].After != "ver [[trabajos/nota]]" {
+		t.Errorf("carpeta: %+v", e)
+	}
+	e = ix.RenameEdits(filepath.Join(base, "carpeta", "nota.md"), "nueva")
+	if len(e) != 1 || e[0].After != "ver [[carpeta\\nueva]]" {
+		t.Errorf("nota: %+v", e)
+	}
+}

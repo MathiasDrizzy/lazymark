@@ -203,3 +203,26 @@ func TestDateFormatsAgainstOracle(t *testing.T) {
 		}
 	}
 }
+
+// TestMigrateKeepsTextAndWikilinks (ORD-017, segunda opinión): al migrar, un campo Dataview pegado a texto (`[due:: …]nota`) no se funde con él (queda un
+// espacio y la fecha se sigue leyendo); y `[[due:: 2026-05-10]]` (un wikilink) no es un campo de fecha: ni se lee ni se migra.
+func TestMigrateKeepsTextAndWikilinks(t *testing.T) {
+	line := "- [ ] tarea [due:: 2026-05-10]nota"
+	got := convertDates(line, FormatEmoji)
+	if got != "- [ ] tarea 📅 2026-05-10 nota" {
+		t.Errorf("pegado a texto: %q", got)
+	}
+	if d := ParseDates(got); d.Due != "2026-05-10" {
+		t.Errorf("la fecha migrada se sigue leyendo: %+v", d)
+	}
+	if back := convertDates(got, FormatDataview); back != "- [ ] tarea [due:: 2026-05-10] nota" {
+		t.Errorf("de vuelta: %q", back)
+	}
+	wl := "- [ ] ver [[due:: 2026-05-10]] y [[nota]] [due:: 2026-06-01]"
+	if d := ParseDates(wl); d.Due != "2026-06-01" {
+		t.Errorf("el wikilink no es un campo: %+v", d)
+	}
+	if conv := convertDates(wl, FormatEmoji); conv != "- [ ] ver [[due:: 2026-05-10]] y [[nota]] 📅 2026-06-01" {
+		t.Errorf("el wikilink no se toca: %q", conv)
+	}
+}

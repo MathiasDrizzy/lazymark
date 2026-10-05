@@ -7,6 +7,8 @@ import (
 	"sort"
 	"strings"
 	"time"
+	"unicode"
+	"unicode/utf8"
 )
 
 // Las fechas de una tarea van al final de su línea, en uno de los dos formatos de Obsidian Tasks (que son markdown inocuo: GFM los muestra como
@@ -111,6 +113,10 @@ func scanMarkers(text string) []dateHit {
 		k, d, paren := 2, 4, false // [clave:: fecha] o (clave:: fecha)
 		if m[2] >= 0 {
 			k, d = 2, 4
+			// `[[due:: 2026-05-10]]` es un wikilink, no un campo
+			if (m[0] > 0 && text[m[0]-1] == '[') || (m[1] < len(text) && text[m[1]] == ']') {
+				continue
+			}
 		} else {
 			k, d, paren = 6, 8, true
 		}
@@ -423,7 +429,11 @@ func convertDates(line string, to DateFormat) string {
 	hits := scanDates(line)
 	for i := len(hits) - 1; i >= 0; i-- {
 		h := hits[i]
-		line = line[:h.start] + renderMarker(h.field, h.date, to, false) + line[h.end:]
+		marker := renderMarker(h.field, h.date, to, false)
+		if r, _ := utf8.DecodeRuneInString(line[h.end:]); h.end < len(line) && (unicode.IsLetter(r) || unicode.IsDigit(r)) {
+			marker += " " // un marcador pegado a texto no se funde con él (la fecha dejaría de leerse)
+		}
+		line = line[:h.start] + marker + line[h.end:]
 	}
 	return line
 }

@@ -313,7 +313,7 @@ func (ix *Index) FolderRenameEdits(oldFolder, newName string) []Edit {
 	fsegs := strings.Split(fkey, "/")
 	m := len(fsegs)
 	return ix.collectEdits(func(l Link, dst *storage.Note, _ string) (string, bool) {
-		if l.Target == "" || !strings.Contains(l.Target, "/") {
+		if l.Target == "" || !strings.ContainsAny(l.Target, `/\`) {
 			return "", false
 		}
 		r, err := filepath.Rel(ix.base, dst.Path)
@@ -324,7 +324,7 @@ func (ix *Index) FolderRenameEdits(oldFolder, newName string) []Edit {
 		if len(dsegs) <= m || strings.Join(dsegs[:m], "/") != fkey {
 			return "", false // la nota no está dentro de la carpeta
 		}
-		segs := strings.Split(strings.ReplaceAll(strings.TrimSpace(l.Target), "\\", "/"), "/")
+		segs := strings.Split(strings.ReplaceAll(strings.TrimSpace(l.Target), `\`, "/"), "/")
 		j := (m - 1) - (len(dsegs) - len(segs)) // el tramo del enlace que corresponde a la carpeta
 		if j < 0 || j >= len(segs) {
 			return "", false // el enlace no menciona la carpeta (solo su final)
@@ -407,7 +407,7 @@ func (ix *Index) collectEdits(match func(l Link, dst *storage.Note, from string)
 func rewrite(l Link, newBase string) string {
 	return rewriteName(l, func(name string) string {
 		dir := ""
-		if i := strings.LastIndex(name, "/"); i >= 0 {
+		if i := strings.LastIndexAny(name, `/\`); i >= 0 { // también la barra invertida de Windows
 			dir = name[:i+1]
 		}
 		return dir + newBase

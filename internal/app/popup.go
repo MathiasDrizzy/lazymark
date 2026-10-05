@@ -192,7 +192,7 @@ func (p *inputPopup) bottomRight() bool   { return false }
 func (p *inputPopup) handle(_ Action, msg tea.KeyPressMsg) (tea.Cmd, bool) {
 	if p.fresh && msg.String() != "enter" {
 		p.fresh = false
-		if msg.Text != "" && msg.Mod == 0 { // un carácter normal: reemplaza la sugerencia
+		if msg.Text != "" && msg.Mod&(tea.ModCtrl|tea.ModAlt|tea.ModMeta|tea.ModSuper) == 0 { // un carácter (con Shift también): reemplaza la sugerencia
 			p.input.SetValue("")
 		}
 	}
