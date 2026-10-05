@@ -15,6 +15,7 @@ import (
 	"sort"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 	"unicode/utf8"
 
@@ -104,6 +105,9 @@ func Run(ctx context.Context, store *storage.Storage, query string, opts Options
 	var cancelTimeout context.CancelFunc
 	ctx, cancelTimeout = context.WithTimeout(ctx, timeout)
 	defer cancelTimeout()
+	if opts.Regex && abandoned.Load() >= int32(2*runtime.NumCPU()) { // ya hay demasiadas búsquedas lentas sin terminar: no se lanza otra
+		return Result{TimedOut: true, Elapsed: time.Since(start)}, nil
+	}
 	maxBytes, maxResults := opts.MaxFileBytes, opts.MaxResults
 	if maxBytes <= 0 {
 		maxBytes = DefaultMaxFileBytes
@@ -347,6 +351,9 @@ func repeatTooBig(re *syntax.Regexp) bool {
 	return false
 }
 
+// abandoned cuenta las coincidencias de regex abandonadas por tiempo que todavía no terminaron.
+var abandoned atomic.Int32
+
 // searchFileCtx es searchFile que se abandona al cancelarse ctx: una coincidencia de regex sobre una línea enorme no se puede interrumpir por dentro,
 // así que se corre aparte y, si ctx termina antes, se deja de esperarla (acaba sola y su resultado se descarta).
 func searchFileCtx(ctx context.Context, path, base string, re *regexp.Regexp, prefilter bool, maxBytes int64) (matches []Match, skipped, capped bool) {
@@ -363,6 +370,13 @@ func searchFileCtx(ctx context.Context, path, base string, re *regexp.Regexp, pr
 	case o := <-ch:
 		return o.m, o.sk, o.cap
 	case <-ctx.Done():
+		select {
+		case o := <-ch: // terminó justo ahora
+			return o.m, o.sk, o.cap
+		default:
+		}
+		abandoned.Add(1) // sigue corriendo: se cuenta hasta que acabe, para no acumular búsquedas lentas
+		go func() { <-ch; abandoned.Add(-1) }()
 		return nil, false, false
 	}
 }

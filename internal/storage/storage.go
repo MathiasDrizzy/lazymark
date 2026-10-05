@@ -710,11 +710,13 @@ func (s *Storage) AppendToNote(notePath, text string, expected time.Time) error 
 		add = nl + nl + text + nl
 	}
 	// atómico: el archivo nuevo (lo leído más lo agregado) se escribe aparte y se renombra encima, y solo si la nota sigue como se leyó
-	after, err := os.Stat(notePath)
-	if err != nil || !after.ModTime().Equal(fi.ModTime()) || after.Size() != fi.Size() {
-		return ErrNoteChanged
-	}
-	return safeio.WriteFileAtomic(notePath, append(data, add...), 0o644)
+	return safeio.WriteFileAtomicIf(notePath, append(data, add...), 0o644, func() error {
+		after, err := os.Stat(notePath) // justo antes del renombrado: si otro programa guardó mientras tanto, no se pisa
+		if err != nil || !after.ModTime().Equal(fi.ModTime()) || after.Size() != fi.Size() {
+			return ErrNoteChanged
+		}
+		return nil
+	})
 }
 
 // InsertAfterLine inserta text, separado por una línea en blanco, debajo de la

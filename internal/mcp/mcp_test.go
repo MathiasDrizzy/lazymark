@@ -1,6 +1,7 @@
 package mcp
 
 import (
+	"bufio"
 	"bytes"
 	"encoding/json"
 	"fmt"
@@ -422,5 +423,34 @@ func TestMCPArgumentTypes(t *testing.T) {
 	r := session(t, dir, call(1, "search_notes", map[string]interface{}{"query": "a", "limit": 3, "regex": false}))[1]
 	if _, isErr := toolText(t, r); isErr {
 		t.Error("argumentos válidos no deben dar error")
+	}
+}
+
+// TestMCPNullOptionalArguments (ORD-015 segunda opinión): un argumento opcional con valor null es "no enviado", no un error de tipo.
+func TestMCPNullOptionalArguments(t *testing.T) {
+	dir := t.TempDir()
+	os.WriteFile(filepath.Join(dir, "a.md"), []byte("# a\n- [ ] t\n"), 0o644)
+	r := session(t, dir, call(1, "search_notes", map[string]interface{}{"query": "a", "limit": nil, "regex": nil, "case_sensitive": nil}))[1]
+	if text, isErr := toolText(t, r); isErr {
+		t.Errorf("null en opcionales no es un error: %q", text)
+	}
+}
+
+// TestReadLineLimitIsOnThePayload (ORD-015 segunda opinión): una línea de exactamente 1 MiB de contenido se acepta con \n o con \r\n; con un byte más, no.
+func TestReadLineLimitIsOnThePayload(t *testing.T) {
+	for _, nl := range []string{"\n", "\r\n"} {
+		for _, c := range []struct {
+			n       int
+			tooLong bool
+		}{{maxLineBytes, false}, {maxLineBytes + 1, true}} {
+			r := bufio.NewReaderSize(strings.NewReader(strings.Repeat("x", c.n)+nl+"{}"+nl), 64*1024)
+			line, tooLong, _ := readLine(r, maxLineBytes)
+			if tooLong != c.tooLong || (!tooLong && len(line) != c.n) {
+				t.Errorf("%q de %d bytes: tooLong=%v (se esperaba %v), len=%d", nl, c.n, tooLong, c.tooLong, len(line))
+			}
+			if next, _, _ := readLine(r, maxLineBytes); string(next) != "{}" {
+				t.Errorf("la línea siguiente debe leerse bien: %q", next)
+			}
+		}
 	}
 }

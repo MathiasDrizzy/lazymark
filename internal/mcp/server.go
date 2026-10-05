@@ -138,7 +138,7 @@ func readLine(r *bufio.Reader, max int) (line []byte, tooLong bool, err error) {
 	for {
 		chunk, e := r.ReadSlice('\n')
 		if !tooLong {
-			if len(buf)+len(chunk) > max+1 { // +1: el salto
+			if len(buf)+len(chunk) > max+2 { // +2: el salto (\n o \r\n); el tope es sobre el contenido
 				tooLong, buf = true, nil
 			} else {
 				buf = append(buf, chunk...)
@@ -147,7 +147,11 @@ func readLine(r *bufio.Reader, max int) (line []byte, tooLong bool, err error) {
 		if e == bufio.ErrBufferFull {
 			continue
 		}
-		return bytes.TrimRight(buf, "\r\n"), tooLong, e
+		line = bytes.TrimRight(buf, "\r\n")
+		if len(line) > max {
+			tooLong, line = true, nil
+		}
+		return line, tooLong, e
 	}
 }
 
@@ -549,6 +553,9 @@ func checkArgs(args map[string]interface{}) string {
 			continue
 		}
 		v := args[k]
+		if v == nil { // null en un argumento opcional es "no enviado"
+			continue
+		}
 		ok := false
 		switch kind {
 		case "texto":

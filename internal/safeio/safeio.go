@@ -53,6 +53,16 @@ func ReadRegular(path string, max int64) ([]byte, error) {
 // un enlace simbólico preparado de antemano no lo desvía), lo sincroniza y lo renombra encima. Conserva los permisos del archivo que reemplaza
 // (o perm si es nuevo). Si algo falla, el archivo original queda como estaba y el temporal se borra.
 func WriteFileAtomic(path string, data []byte, perm os.FileMode) error {
+	return WriteFileAtomicIf(path, data, perm, nil)
+}
+
+// WriteFileAtomicIf es WriteFileAtomic con un chequeo que corre justo antes del renombrado (ya con el temporal escrito y sincronizado): si devuelve un
+// error, no se renombra, el original queda como estaba y se devuelve ese mismo error. Sirve para no pisar un cambio hecho por otro programa mientras
+// se escribía. Si path es un enlace simbólico se escribe el archivo al que apunta (el enlace se conserva).
+func WriteFileAtomicIf(path string, data []byte, perm os.FileMode, check func() error) error {
+	if real, err := filepath.EvalSymlinks(path); err == nil {
+		path = real
+	}
 	if fi, err := os.Stat(path); err == nil {
 		perm = fi.Mode().Perm()
 	}
@@ -70,6 +80,12 @@ func WriteFileAtomic(path string, data []byte, perm os.FileMode) error {
 	}
 	if werr == nil {
 		werr = os.Chmod(name, perm)
+	}
+	if werr == nil && check != nil {
+		if cerr := check(); cerr != nil {
+			_ = os.Remove(name)
+			return cerr
+		}
 	}
 	if werr == nil {
 		werr = os.Rename(name, path)

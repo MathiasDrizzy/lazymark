@@ -82,3 +82,50 @@ func TestWriteFileAtomic(t *testing.T) {
 		t.Errorf("%q", b)
 	}
 }
+
+// TestWriteFileAtomicKeepsSymlinks (ORD-015 segunda opinión): si el destino es un enlace simbólico (un config.json de dotfiles), se escribe el archivo
+// al que apunta y el enlace sigue siendo un enlace.
+func TestWriteFileAtomicKeepsSymlinks(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("sin enlaces simbólicos sin privilegios")
+	}
+	dir := t.TempDir()
+	real := filepath.Join(dir, "real.json")
+	link := filepath.Join(dir, "link.json")
+	os.WriteFile(real, []byte("viejo"), 0o644)
+	if err := os.Symlink(real, link); err != nil {
+		t.Skip(err)
+	}
+	if err := WriteFileAtomic(link, []byte("nuevo"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if fi, _ := os.Lstat(link); fi.Mode()&os.ModeSymlink == 0 {
+		t.Error("el enlace simbólico se reemplazó por un archivo")
+	}
+	if b, _ := os.ReadFile(real); string(b) != "nuevo" {
+		t.Errorf("el destino real no se actualizó: %q", b)
+	}
+}
+
+// TestWriteFileAtomicIf: el chequeo corre justo antes del renombrado; si falla, el original queda y no sobra el temporal.
+func TestWriteFileAtomicIf(t *testing.T) {
+	dir := t.TempDir()
+	p := filepath.Join(dir, "a.md")
+	os.WriteFile(p, []byte("original"), 0o644)
+	errNo := errors.New("cambió")
+	if err := WriteFileAtomicIf(p, []byte("nuevo"), 0o644, func() error { return errNo }); !errors.Is(err, errNo) {
+		t.Fatalf("el error del chequeo se devuelve: %v", err)
+	}
+	if b, _ := os.ReadFile(p); string(b) != "original" {
+		t.Errorf("el original no debe tocarse: %q", b)
+	}
+	if es, _ := os.ReadDir(dir); len(es) != 1 {
+		t.Errorf("no debe sobrar el temporal: %v", es)
+	}
+	if err := WriteFileAtomicIf(p, []byte("nuevo"), 0o644, func() error { return nil }); err != nil {
+		t.Fatal(err)
+	}
+	if b, _ := os.ReadFile(p); string(b) != "nuevo" {
+		t.Errorf("%q", b)
+	}
+}

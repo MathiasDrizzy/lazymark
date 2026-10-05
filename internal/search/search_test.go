@@ -316,3 +316,18 @@ func TestSearchTimeout(t *testing.T) {
 		t.Errorf("búsqueda normal: %v %+v", err, res.TimedOut)
 	}
 }
+
+// TestTooManyAbandonedSearches (ORD-015 segunda opinión): si ya hay muchas coincidencias lentas abandonadas corriendo, una búsqueda nueva con regex
+// no lanza más: avisa que se cortó en vez de acumular goroutines.
+func TestTooManyAbandonedSearches(t *testing.T) {
+	store, _ := corpus(t)
+	abandoned.Store(10000)
+	defer abandoned.Store(0)
+	res, err := Run(context.Background(), store, `a.*b`, Options{Regex: true})
+	if err != nil || !res.TimedOut || len(res.Matches) != 0 {
+		t.Errorf("con búsquedas lentas pendientes debe cortarse: %v %+v", err, res)
+	}
+	if res, err := Run(context.Background(), store, "a", Options{}); err != nil || res.TimedOut {
+		t.Errorf("el texto literal no se ve afectado: %v %v", err, res.TimedOut)
+	}
+}
