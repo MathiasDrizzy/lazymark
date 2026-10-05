@@ -209,6 +209,9 @@ func (p *searchPopup) status() string {
 		return i18n.T("Sin resultados", "No results")
 	}
 	s := fmt.Sprintf(i18n.T("%d resultado(s) en %d nota(s)", "%d result(s) in %d note(s)"), p.n, p.res.Files)
+	if p.res.TimedOut {
+		s += " · " + i18n.T("búsqueda cortada: tardó demasiado", "search cut short: it took too long")
+	}
 	if p.res.Truncated {
 		s += " · " + i18n.T("hay más: afina la búsqueda", "there are more: narrow the search")
 	}

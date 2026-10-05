@@ -290,3 +290,29 @@ func TestWindowOnHugeLine(t *testing.T) {
 		t.Errorf("recortar una línea enorme reservó %d KB", grown>>10)
 	}
 }
+
+// TestSearchTimeout (ORD-015 C.5 S4): una regex lenta sobre una nota grande no deja la búsqueda colgada: pasado el tiempo máximo devuelve lo que
+// tenga con TimedOut, sin error; y una repetición enorme ({1000}) se rechaza al compilar.
+func TestSearchTimeout(t *testing.T) {
+	store, dir := corpus(t)
+	line := strings.Repeat("abcdefghij", 200000) // 2 MB en una sola línea
+	os.WriteFile(filepath.Join(dir, "larga.md"), []byte(line+"\n"), 0o644)
+	start := time.Now()
+	res, err := Run(context.Background(), store, `(\p{L}|\p{N}){60}x`, Options{Regex: true, Timeout: 100 * time.Millisecond})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if d := time.Since(start); d > 3*time.Second {
+		t.Errorf("la búsqueda tardó %v con un máximo de 100 ms", d)
+	}
+	if !res.TimedOut {
+		t.Errorf("debe avisar que se cortó por tiempo: %+v", res)
+	}
+	if _, err := Run(context.Background(), store, `[\p{L}\p{N}]{1000}x`, Options{Regex: true}); err == nil {
+		t.Error("una repetición de 1000 se rechaza")
+	}
+	// una búsqueda normal no se corta
+	if res, err := Run(context.Background(), store, "abcdef", Options{Timeout: 5 * time.Second}); err != nil || res.TimedOut || len(res.Matches) == 0 {
+		t.Errorf("búsqueda normal: %v %+v", err, res.TimedOut)
+	}
+}

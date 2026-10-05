@@ -405,9 +405,10 @@ type SearchMatchDTO struct {
 type SearchDTO struct {
 	Query     string           `json:"query"`
 	Matches   []SearchMatchDTO `json:"matches"`
-	Files     int              `json:"files"`     // notas revisadas
-	Skipped   int              `json:"skipped"`   // notas que no se leyeron por pasar el tope de tamaño (2 MiB)
-	Truncated bool             `json:"truncated"` // hubo más coincidencias que limit
+	Files     int              `json:"files"`               // notas revisadas
+	Skipped   int              `json:"skipped"`             // notas que no se leyeron por pasar el tope de tamaño (2 MiB)
+	Truncated bool             `json:"truncated"`           // hubo más coincidencias que limit
+	TimedOut  bool             `json:"timed_out,omitempty"` // la búsqueda se cortó por pasar el tiempo máximo (10 s): puede haber más
 }
 
 // Search busca texto en las notas (sin distinguir mayúsculas salvo caseSensitive; con regex, query es una expresión regular).
@@ -420,7 +421,7 @@ func (s *Service) Search(query string, regex, caseSensitive bool, limit int) (Se
 	if err != nil {
 		return SearchDTO{}, usage("%v", err)
 	}
-	out := SearchDTO{Query: query, Matches: []SearchMatchDTO{}, Files: res.Files, Skipped: res.Skipped, Truncated: res.Truncated}
+	out := SearchDTO{Query: query, Matches: []SearchMatchDTO{}, Files: res.Files, Skipped: res.Skipped, Truncated: res.Truncated, TimedOut: res.TimedOut}
 	for _, m := range res.Matches {
 		out.Matches = append(out.Matches, SearchMatchDTO{Note: m.Rel, Path: m.Path, Title: m.Title, Line: m.Line, Text: m.Text, Start: m.Start, End: m.End})
 	}

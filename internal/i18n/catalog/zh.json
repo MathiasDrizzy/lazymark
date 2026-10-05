@@ -194,6 +194,7 @@
  "open": "打开",
  "overdue": "已逾期",
  "rectangles": "矩形",
+ "search cut short: it took too long": "搜索已中断：耗时过长",
  "search the notes…": "搜索笔记…",
  "switch": "切换",
  "theme": "主题",
@@ -208,6 +209,7 @@
  "usage: lazymark paste [--no-newline] [<note.md>]\n\nSaves the copied image (a screenshot or an image file) in the assets/ folder next to the\nnote and prints `![](assets/…)`. The note must exist and end in .md; without an argument it\nuses $LAZYMARK_NOTE. Options: -n, --no-newline (no trailing newline), -h, --help.\n": "用法: lazymark paste [--no-newline] [<笔记.md>]\n\n将复制的图片（截图或图片文件）保存至笔记同级的 assets/ 文件夹中，\n并输出 `![](assets/…)`。笔记必须存在且以 .md 结尾；未提供参数时\n使用 $LAZYMARK_NOTE。选项: -n, --no-newline (末尾不换行), -h, --help。\n",
  "usage: lazymark search <text> [--regex] [--case] [--limit <n>] [--json] [--dir <folder>]\nSearches <text> in all the notes (case-insensitive; with --case, case-sensitive; with --regex, a regular expression).\nPrints \"note:line: text\". No matches is not an error (exits with 0 and prints nothing).\nexit codes: 0 ok · 1 failed · 2 empty search or invalid expression (nothing touched)\n": "用法: lazymark search <文本> [--regex] [--case] [--limit <n>] [--json] [--dir <文件夹>]\n在所有笔记中搜索 <文本>（不区分大小写；加 --case 则区分；加 --regex 则为正则表达式）。\n以“笔记:行: 文本”的格式输出。没有结果不算错误（退出码 0，无输出）。\n退出码: 0 成功 · 1 失败 · 2 搜索为空或表达式无效（未作任何修改）\n",
  "usage: lazymark task list   [--json] [--pending] [--column <id>] [--note <path>] [--dir <folder>]\n       lazymark task toggle <id> [--json] [--dir <folder>]\n       lazymark task move   <id> <column> [--json] [--dir <folder>]\n       lazymark task due    <id> <YYYY-MM-DD|none> [--json] [--dir <folder>]   (due date 📅)\n       lazymark task start  <id> <YYYY-MM-DD|none> [--json] [--dir <folder>]   (start date 🛫)\nexit codes: 0 ok · 1 failed · 2 invalid arguments (nothing touched) · 3 not found · 4 the note changed (nothing written)\n": "用法: lazymark task list   [--json] [--pending] [--column <id>] [--note <路径>] [--dir <文件夹>]\n      lazymark task toggle <id> [--json] [--dir <文件夹>]\n      lazymark task move   <id> <列> [--json] [--dir <文件夹>]\n      lazymark task due    <id> <YYYY-MM-DD|none> [--json] [--dir <文件夹>]   (截止日期 📅)\n      lazymark task start  <id> <YYYY-MM-DD|none> [--json] [--dir <文件夹>]   (开始日期 🛫)\n退出码: 0 成功 · 1 失败 · 2 无效参数（未作任何修改） · 3 未找到 · 4 笔记已更改（未写入任何内容）\n",
+ "warning: search cut short: it took more than 10 s (there may be more matches)": "警告：搜索已中断：超过 10 秒（可能还有更多匹配）",
  "warning: unknown variable: ": "警告：未知变量： ",
  "yes": "是",
  "←/→ change · click: select, 2nd click: change": "←/→ 更改 · 单击: 选择，再次单击: 更改"

@@ -194,6 +194,7 @@
  "open": "apri",
  "overdue": "scaduta",
  "rectangles": "rettangoli",
+ "search cut short: it took too long": "ricerca interrotta: troppo lenta",
  "search the notes…": "cerca nelle note…",
  "switch": "cambia",
  "theme": "tema",
@@ -208,6 +209,7 @@
  "usage: lazymark paste [--no-newline] [<note.md>]\n\nSaves the copied image (a screenshot or an image file) in the assets/ folder next to the\nnote and prints `![](assets/…)`. The note must exist and end in .md; without an argument it\nuses $LAZYMARK_NOTE. Options: -n, --no-newline (no trailing newline), -h, --help.\n": "uso: lazymark paste [--no-newline] [<nota.md>]\n\nSalva l'immagine copiata (uno screenshot o un file immagine) nella cartella assets/ accanto alla\nnota e stampa `![](assets/…)`. La nota deve esistere e terminare con .md; senza argomenti usa\n$LAZYMARK_NOTE. Opzioni: -n, --no-newline (senza a capo finale), -h, --help.\n",
  "usage: lazymark search <text> [--regex] [--case] [--limit <n>] [--json] [--dir <folder>]\nSearches <text> in all the notes (case-insensitive; with --case, case-sensitive; with --regex, a regular expression).\nPrints \"note:line: text\". No matches is not an error (exits with 0 and prints nothing).\nexit codes: 0 ok · 1 failed · 2 empty search or invalid expression (nothing touched)\n": "uso: lazymark search <testo> [--regex] [--case] [--limit <n>] [--json] [--dir <cartella>]\nCerca <testo> in tutte le note (senza distinguere maiuscole; con --case, distinguendole; con --regex, un'espressione regolare).\nStampa \"nota:riga: testo\". Nessun risultato non è un errore (esce con 0 e non stampa nulla).\ncodici di uscita: 0 ok · 1 fallito · 2 ricerca vuota o espressione non valida (nessuna modifica)\n",
  "usage: lazymark task list   [--json] [--pending] [--column <id>] [--note <path>] [--dir <folder>]\n       lazymark task toggle <id> [--json] [--dir <folder>]\n       lazymark task move   <id> <column> [--json] [--dir <folder>]\n       lazymark task due    <id> <YYYY-MM-DD|none> [--json] [--dir <folder>]   (due date 📅)\n       lazymark task start  <id> <YYYY-MM-DD|none> [--json] [--dir <folder>]   (start date 🛫)\nexit codes: 0 ok · 1 failed · 2 invalid arguments (nothing touched) · 3 not found · 4 the note changed (nothing written)\n": "uso: lazymark task list   [--json] [--pending] [--column <id>] [--note <percorso>] [--dir <cartella>]\n     lazymark task toggle <id> [--json] [--dir <cartella>]\n     lazymark task move   <id> <colonna> [--json] [--dir <cartella>]\n     lazymark task due    <id> <YYYY-MM-DD|none> [--json] [--dir <cartella>]   (scadenza 📅)\n     lazymark task start  <id> <YYYY-MM-DD|none> [--json] [--dir <cartella>]   (inizio 🛫)\ncodici di uscita: 0 ok · 1 fallito · 2 argomenti non validi (nessuna modifica) · 3 non trovato · 4 la nota è cambiata (nessuna scrittura)\n",
+ "warning: search cut short: it took more than 10 s (there may be more matches)": "avviso: ricerca interrotta: oltre 10 s (potrebbero esserci altre corrispondenze)",
  "warning: unknown variable: ": "avviso: variabile sconosciuta: ",
  "yes": "sì",
  "←/→ change · click: select, 2nd click: change": "←/→ cambia · clic: seleziona, 2° clic: cambia"

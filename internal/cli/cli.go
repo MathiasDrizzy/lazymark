@@ -421,6 +421,9 @@ func RunSearchWithWriter(w io.Writer, args []string, defaultNotesDir string) err
 	if err != nil {
 		return err
 	}
+	if res.TimedOut {
+		fmt.Fprintln(Stderr, i18n.T("aviso: búsqueda cortada: tardó más de 10 s (puede haber más coincidencias)", "warning: search cut short: it took more than 10 s (there may be more matches)"))
+	}
 	if p.json {
 		return printJSON(w, res)
 	}

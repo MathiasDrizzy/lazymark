@@ -10,6 +10,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"regexp/syntax"
 	"runtime"
 	"sort"
 	"strings"
@@ -24,7 +25,10 @@ import (
 const (
 	DefaultMaxFileBytes = 2 << 20 // las notas más grandes no se leen (se cuentan en Result.Skipped)
 	DefaultMaxResults   = 500
-	maxPerFile          = 50
+	DefaultTimeout      = 10 * time.Second
+	// maxRepeat es la mayor repetición ({n}) que acepta una expresión regular: una como [\p{L}\p{N}]{1000} tarda decenas de segundos en 2 MB.
+	maxRepeat  = 100
+	maxPerFile = 50
 	// ContextWidth es el ancho (en caracteres) de la línea que se devuelve alrededor de la coincidencia.
 	ContextWidth = 140
 )
@@ -36,6 +40,8 @@ type Options struct {
 	CaseSensitive bool
 	MaxFileBytes  int64 // 0: DefaultMaxFileBytes
 	MaxResults    int   // 0: DefaultMaxResults
+	// Timeout es el tiempo máximo de la búsqueda (0: DefaultTimeout). Pasado ese tiempo devuelve lo hallado con Result.TimedOut.
+	Timeout time.Duration
 }
 
 // Match es una coincidencia: la línea (recortada alrededor de lo hallado) y dónde está lo hallado dentro de ella.
@@ -55,6 +61,7 @@ type Result struct {
 	Files     int  // notas revisadas
 	Skipped   int  // notas que no se leyeron por pasar el tope de tamaño
 	Truncated bool // hubo más coincidencias que MaxResults
+	TimedOut  bool // se cortó por pasar Options.Timeout: puede haber más coincidencias
 	Elapsed   time.Duration
 }
 
@@ -70,6 +77,11 @@ func Compile(query string, opts Options) (*regexp.Regexp, error) {
 	if !opts.CaseSensitive {
 		expr = "(?i)" + expr
 	}
+	if opts.Regex {
+		if tree, err := syntax.Parse(expr, syntax.Perl); err == nil && repeatTooBig(tree) {
+			return nil, fmt.Errorf("expresión regular demasiado costosa: una repetición pasa de %d", maxRepeat)
+		}
+	}
 	re, err := regexp.Compile(expr)
 	if err != nil {
 		return nil, fmt.Errorf("expresión regular inválida: %w", err)
@@ -84,6 +96,14 @@ func Run(ctx context.Context, store *storage.Storage, query string, opts Options
 	if err != nil {
 		return Result{}, err
 	}
+	timeout := opts.Timeout
+	if timeout <= 0 {
+		timeout = DefaultTimeout
+	}
+	parent := ctx
+	var cancelTimeout context.CancelFunc
+	ctx, cancelTimeout = context.WithTimeout(ctx, timeout)
+	defer cancelTimeout()
 	maxBytes, maxResults := opts.MaxFileBytes, opts.MaxResults
 	if maxBytes <= 0 {
 		maxBytes = DefaultMaxFileBytes
@@ -108,7 +128,7 @@ func Run(ctx context.Context, store *storage.Storage, query string, opts Options
 		go func() {
 			defer wg.Done()
 			for p := range jobs {
-				matches, skipped, capped := searchFile(cctx, p, base, re, !opts.Regex, maxBytes)
+				matches, skipped, capped := searchFileCtx(cctx, p, base, re, !opts.Regex, maxBytes)
 				mu.Lock()
 				res.Files++
 				if skipped {
@@ -146,7 +166,8 @@ feed:
 		res.Matches, res.Truncated = res.Matches[:maxResults], true
 	}
 	res.Elapsed = time.Since(start)
-	return res, ctx.Err() // solo el contexto del llamador: parar por haber llegado al tope no es un error
+	res.TimedOut = ctx.Err() == context.DeadlineExceeded && parent.Err() == nil // se cortó por tiempo, no por el llamador
+	return res, parent.Err()                                                    // solo el contexto del llamador: parar por haber llegado al tope o por tiempo no es un error
 }
 
 // searchFile busca en un archivo; skipped indica que no se leyó por su tamaño.
@@ -311,4 +332,37 @@ func dedupe(paths []string) []string {
 		out = append(out, p)
 	}
 	return out
+}
+
+// repeatTooBig dice si la expresión tiene una repetición {n,m} con n o m mayores que maxRepeat.
+func repeatTooBig(re *syntax.Regexp) bool {
+	if re.Op == syntax.OpRepeat && (re.Min > maxRepeat || re.Max > maxRepeat) {
+		return true
+	}
+	for _, sub := range re.Sub {
+		if repeatTooBig(sub) {
+			return true
+		}
+	}
+	return false
+}
+
+// searchFileCtx es searchFile que se abandona al cancelarse ctx: una coincidencia de regex sobre una línea enorme no se puede interrumpir por dentro,
+// así que se corre aparte y, si ctx termina antes, se deja de esperarla (acaba sola y su resultado se descarta).
+func searchFileCtx(ctx context.Context, path, base string, re *regexp.Regexp, prefilter bool, maxBytes int64) (matches []Match, skipped, capped bool) {
+	type out struct {
+		m       []Match
+		sk, cap bool
+	}
+	ch := make(chan out, 1)
+	go func() {
+		m, sk, cp := searchFile(ctx, path, base, re, prefilter, maxBytes)
+		ch <- out{m, sk, cp}
+	}()
+	select {
+	case o := <-ch:
+		return o.m, o.sk, o.cap
+	case <-ctx.Done():
+		return nil, false, false
+	}
 }

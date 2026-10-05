@@ -194,6 +194,7 @@
  "open": "開く",
  "overdue": "期限切れ",
  "rectangles": "四角形",
+ "search cut short: it took too long": "検索を打ち切りました: 時間がかかりすぎました",
  "search the notes…": "ノートを検索…",
  "switch": "切替",
  "theme": "テーマ",
@@ -208,6 +209,7 @@
  "usage: lazymark paste [--no-newline] [<note.md>]\n\nSaves the copied image (a screenshot or an image file) in the assets/ folder next to the\nnote and prints `![](assets/…)`. The note must exist and end in .md; without an argument it\nuses $LAZYMARK_NOTE. Options: -n, --no-newline (no trailing newline), -h, --help.\n": "使用法: lazymark paste [--no-newline] [<ノート.md>]\n\nコピーされた画像 (スクリーンショットまたは画像ファイル) をノートと同じ階層の assets/ フォルダに\n保存し、`![](assets/…)` を出力します。ノートは存在し、.md で終わる必要があります。引数がない場合は\n$LAZYMARK_NOTE を使用します。オプション: -n, --no-newline (末尾の改行なし)、-h, --help。\n",
  "usage: lazymark search <text> [--regex] [--case] [--limit <n>] [--json] [--dir <folder>]\nSearches <text> in all the notes (case-insensitive; with --case, case-sensitive; with --regex, a regular expression).\nPrints \"note:line: text\". No matches is not an error (exits with 0 and prints nothing).\nexit codes: 0 ok · 1 failed · 2 empty search or invalid expression (nothing touched)\n": "使用法: lazymark search <テキスト> [--regex] [--case] [--limit <n>] [--json] [--dir <フォルダ>]\nすべてのノートから <テキスト> を検索します (大文字小文字は区別しません。--case で区別、--regex で正規表現)。\n「ノート:行: テキスト」の形式で出力します。結果がなくてもエラーではありません (終了コード 0、出力なし)。\n終了コード: 0 成功 · 1 失敗 · 2 空の検索または無効な式 (変更なし)\n",
  "usage: lazymark task list   [--json] [--pending] [--column <id>] [--note <path>] [--dir <folder>]\n       lazymark task toggle <id> [--json] [--dir <folder>]\n       lazymark task move   <id> <column> [--json] [--dir <folder>]\n       lazymark task due    <id> <YYYY-MM-DD|none> [--json] [--dir <folder>]   (due date 📅)\n       lazymark task start  <id> <YYYY-MM-DD|none> [--json] [--dir <folder>]   (start date 🛫)\nexit codes: 0 ok · 1 failed · 2 invalid arguments (nothing touched) · 3 not found · 4 the note changed (nothing written)\n": "使用法: lazymark task list   [--json] [--pending] [--column <id>] [--note <パス>] [--dir <フォルダ>]\n        lazymark task toggle <id> [--json] [--dir <フォルダ>]\n        lazymark task move   <id> <カラム> [--json] [--dir <フォルダ>]\n        lazymark task due    <id> <YYYY-MM-DD|none> [--json] [--dir <フォルダ>]   (期限 📅)\n        lazymark task start  <id> <YYYY-MM-DD|none> [--json] [--dir <フォルダ>]   (開始日 🛫)\n終了コード: 0 成功 · 1 失敗 · 2 無効な引数 (変更なし) · 3 存在しません · 4 ノートが外部で変更されました (書き込みなし)\n",
+ "warning: search cut short: it took more than 10 s (there may be more matches)": "警告: 検索を打ち切りました: 10 秒を超えました（他にも一致があるかもしれません）",
  "warning: unknown variable: ": "警告: 不明な変数: ",
  "yes": "はい",
  "←/→ change · click: select, 2nd click: change": "←/→ 変更 · クリック: 選択、2回目のクリック: 変更"
