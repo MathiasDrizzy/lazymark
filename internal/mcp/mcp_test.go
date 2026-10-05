@@ -4,11 +4,13 @@ import (
 	"bufio"
 	"bytes"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 )
 
 // session ejecuta UNA sesión stdio contra el servidor: escribe todas las líneas JSON-RPC por stdin, como lo
@@ -451,6 +453,47 @@ func TestReadLineLimitIsOnThePayload(t *testing.T) {
 			if next, _, _ := readLine(r, maxLineBytes); string(next) != "{}" {
 				t.Errorf("la línea siguiente debe leerse bien: %q", next)
 			}
+		}
+	}
+}
+
+// errAfter entrega unos datos y después falla con un error de E/S (no EOF): un stdin roto.
+type errAfter struct {
+	data []byte
+	err  error
+}
+
+func (r *errAfter) Read(p []byte) (int, error) {
+	if len(r.data) == 0 {
+		return 0, r.err
+	}
+	n := copy(p, r.data)
+	r.data = r.data[n:]
+	return n, nil
+}
+
+// TestMCPStdinIOError (ORD-016 L2): un error de E/S en stdin (no un EOF) termina el servidor limpiamente con ese error, sin bucle: lo que se leyó antes
+// se contesta, y con el error a mitad de una línea esa línea parcial se descarta o se atiende una sola vez.
+func TestMCPStdinIOError(t *testing.T) {
+	boom := errors.New("boom de E/S")
+	for name, data := range map[string]string{
+		"error tras una petición completa": `{"jsonrpc":"2.0","id":1,"method":"tools/list"}` + "\n",
+		"error a mitad de una línea":       `{"jsonrpc":"2.0","id":1,"meth`,
+		"error sin datos":                  "",
+	} {
+		var out bytes.Buffer
+		done := make(chan error, 1)
+		go func() { done <- NewServer(t.TempDir()).Serve(&errAfter{data: []byte(data), err: boom}, &out) }()
+		select {
+		case err := <-done:
+			if !errors.Is(err, boom) {
+				t.Errorf("%s: Serve debe devolver el error de E/S: %v", name, err)
+			}
+		case <-time.After(3 * time.Second):
+			t.Fatalf("%s: el servidor no termina tras un error de E/S (bucle)", name)
+		}
+		if n := strings.Count(out.String(), "\n"); n > 2 {
+			t.Errorf("%s: demasiadas respuestas (%d): %q", name, n, out.String())
 		}
 	}
 }

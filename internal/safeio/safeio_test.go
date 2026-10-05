@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"strings"
 	"testing"
 	"time"
 )
@@ -126,5 +127,42 @@ func TestWriteFileAtomicIf(t *testing.T) {
 	}
 	if b, _ := os.ReadFile(p); string(b) != "nuevo" {
 		t.Errorf("%q", b)
+	}
+}
+
+// TestWriteFileAtomicRejectsBrokenSymlink (ORD-016 L2): si el destino es un enlace simbólico roto no se escribe a ciegas (reemplazaría el enlace por un
+// archivo): se rechaza con un error claro, el enlace queda como estaba y no sobra ningún temporal.
+func TestWriteFileAtomicRejectsBrokenSymlink(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("sin enlaces simbólicos sin privilegios")
+	}
+	dir := t.TempDir()
+	link := filepath.Join(dir, "roto.json")
+	if err := os.Symlink(filepath.Join(dir, "no-existe.json"), link); err != nil {
+		t.Skip(err)
+	}
+	err := WriteFileAtomic(link, []byte("x"), 0o644)
+	if err == nil || !strings.Contains(err.Error(), "enlace simbólico") {
+		t.Fatalf("un enlace roto se rechaza con un mensaje claro: %v", err)
+	}
+	if fi, _ := os.Lstat(link); fi == nil || fi.Mode()&os.ModeSymlink == 0 {
+		t.Error("el enlace debe seguir siendo un enlace")
+	}
+	if es, _ := os.ReadDir(dir); len(es) != 1 {
+		t.Errorf("no debe sobrar ni crearse nada: %v", es)
+	}
+}
+
+// TestReservedWindowsNames (ORD-016 L2): los nombres reservados de Windows (CON, NUL, COM1…, con o sin extensión) son dispositivos: no se abren.
+func TestReservedWindowsNames(t *testing.T) {
+	for _, n := range []string{"CON", "con", "NUL.md", "aux.txt", "COM1", "lpt9.png", `C:\notas\PRN`, "COM¹"} {
+		if !reservedWindowsName(n) {
+			t.Errorf("%q es un nombre reservado", n)
+		}
+	}
+	for _, n := range []string{"nota.md", "console.md", "COM10", "comunidad", "null.md.bak", "a/con.d/x.md"} {
+		if reservedWindowsName(n) {
+			t.Errorf("%q no es un nombre reservado", n)
+		}
 	}
 }

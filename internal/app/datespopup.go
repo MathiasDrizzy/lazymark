@@ -26,6 +26,7 @@ type datesPopup struct {
 	inputs  [2]textinput.Model // 0: inicio, 1: vence
 	focus   int
 	err     string
+	today   time.Time // "hoy" al abrir el popup: la vista previa y lo que se escribe usan el mismo, aunque pase la medianoche
 	onSaved func()
 }
 
@@ -36,6 +37,7 @@ const (
 
 func newDatesPopup(c *core, path string, line int, text string, d storage.Dates, onSaved func()) *datesPopup {
 	p := &datesPopup{c: c, path: path, line: line, text: text, orig: d, onSaved: onSaved}
+	p.today = readToday()
 	for i, v := range [2]string{d.Start, d.Due} {
 		ti := textinput.New()
 		ti.SetStyles(themedInputStyles())
@@ -58,7 +60,8 @@ func (c *core) openDates(path string, line int, text string, d storage.Dates, on
 func (p *datesPopup) contexts() []Context { return nil }
 func (p *datesPopup) bottomRight() bool   { return false }
 
-func (p *datesPopup) today() time.Time {
+// readToday es "hoy" (storage.Today) como fecha; si no se puede leer, el día del reloj.
+func readToday() time.Time {
 	t, err := time.ParseInLocation("2006-01-02", storage.Today(), time.Local)
 	if err != nil {
 		return time.Now()
@@ -68,7 +71,7 @@ func (p *datesPopup) today() time.Time {
 
 // resolve devuelve la fecha que sale del campo i ("" = sin fecha) o el error de no entenderla.
 func (p *datesPopup) resolve(i int) (string, error) {
-	return storage.ParseDateInput(p.inputs[i].Value(), p.today(), i18n.CurrentLanguage())
+	return storage.ParseDateInput(p.inputs[i].Value(), p.today, i18n.CurrentLanguage())
 }
 
 func (p *datesPopup) setFocus(i int) {
@@ -176,7 +179,7 @@ func (p *datesPopup) resolved(i int) string {
 	case v == "":
 		return dim("→ " + i18n.T("sin fecha", "no date"))
 	}
-	d, _ := time.ParseInLocation("2006-01-02", v, time.Local)
+	d, _ := time.Parse("2006-01-02", v) // en UTC: el día de la semana no depende de la zona horaria
 	return lipgloss.NewStyle().Foreground(theme.ColorGreen).Render("→ " + v + " (" + storage.WeekdayName(d.Weekday(), i18n.CurrentLanguage()) + ")")
 }
 

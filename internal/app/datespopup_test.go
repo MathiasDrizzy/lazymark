@@ -5,6 +5,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/MathiasDrizzy/lazymark/internal/storage"
 )
@@ -174,4 +175,33 @@ func mustRead(t *testing.T, p string) []byte {
 		t.Fatal(err)
 	}
 	return b
+}
+
+// TestDatesPopupPreviewMatchesWhatIsWritten (ORD-016 L2): la fecha que se ve resuelta y la que se escribe coinciden en cualquier zona horaria y aunque
+// pase la medianoche entre que se abre el popup y se guarda: "hoy" se fija al abrirlo; el día de la semana mostrado no depende de la zona.
+func TestDatesPopupPreviewMatchesWhatIsWritten(t *testing.T) {
+	for _, tz := range []string{"UTC", "Pacific/Kiritimati", "Pacific/Pago_Pago", "America/Sao_Paulo", "Asia/Kolkata", "Pacific/Apia"} {
+		t.Run(tz, func(t *testing.T) {
+			loc, err := time.LoadLocation(tz)
+			if err != nil {
+				t.Skip(err)
+			}
+			old := time.Local
+			time.Local = loc
+			t.Cleanup(func() { time.Local = old })
+			m, path, line := datesRig(t) // hoy fijo: 2026-10-05 (lunes)
+			press(m, "d")
+			typeText(m, "+1d")
+			out := plain(m)
+			if !strings.Contains(out, "→ 2026-10-06 (martes)") {
+				t.Fatalf("[%s] la vista previa de +1d (martes):\n%s", tz, out)
+			}
+			// pasa la medianoche con el popup abierto
+			storage.Today = func() string { return "2026-10-06" }
+			press(m, "enter")
+			if got := fileLines(t, path)[line-1]; got != "- [ ] Pan 🛫 2026-10-06" {
+				t.Errorf("[%s] se escribió algo distinto de lo que se vio (2026-10-06): %q", tz, got)
+			}
+		})
+	}
 }

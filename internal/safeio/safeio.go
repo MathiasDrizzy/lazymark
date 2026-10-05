@@ -8,6 +8,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"strings"
 )
 
 var (
@@ -60,7 +61,11 @@ func WriteFileAtomic(path string, data []byte, perm os.FileMode) error {
 // error, no se renombra, el original queda como estaba y se devuelve ese mismo error. Sirve para no pisar un cambio hecho por otro programa mientras
 // se escribía. Si path es un enlace simbólico se escribe el archivo al que apunta (el enlace se conserva).
 func WriteFileAtomicIf(path string, data []byte, perm os.FileMode, check func() error) error {
-	if real, err := filepath.EvalSymlinks(path); err == nil {
+	if fi, err := os.Lstat(path); err == nil && fi.Mode()&os.ModeSymlink != 0 {
+		real, err := filepath.EvalSymlinks(path)
+		if err != nil { // un enlace roto: escribir a ciegas lo reemplazaría por un archivo; se rechaza
+			return fmt.Errorf("%s es un enlace simbólico roto: no se escribe", filepath.Base(path))
+		}
 		path = real
 	}
 	if fi, err := os.Stat(path); err == nil {
@@ -95,4 +100,28 @@ func WriteFileAtomicIf(path string, data []byte, perm os.FileMode, check func() 
 		return fmt.Errorf("error al escribir %s: %w", filepath.Base(path), werr)
 	}
 	return nil
+}
+
+// reservedWindowsName dice si el último tramo de path es un nombre reservado de Windows (CON, PRN, AUX, NUL, COM1-9, LPT1-9, con o sin extensión,
+// sin distinguir mayúsculas): en Windows son dispositivos y abrirlos puede quedarse esperando.
+func reservedWindowsName(path string) bool {
+	base := path
+	if i := strings.LastIndexAny(base, `/\`); i >= 0 {
+		base = base[i+1:]
+	}
+	if i := strings.IndexByte(base, '.'); i >= 0 {
+		base = base[:i]
+	}
+	switch b := strings.ToUpper(strings.TrimRight(base, " ")); b {
+	case "CON", "PRN", "AUX", "NUL":
+		return true
+	default:
+		if len([]rune(b)) == 4 && (strings.HasPrefix(b, "COM") || strings.HasPrefix(b, "LPT")) {
+			switch r := []rune(b)[3]; {
+			case r >= '1' && r <= '9', r == '¹', r == '²', r == '³':
+				return true
+			}
+		}
+		return false
+	}
 }
