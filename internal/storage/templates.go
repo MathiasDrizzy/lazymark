@@ -195,6 +195,9 @@ func (s *Storage) DailyNote(now time.Time) (*Note, bool, error) {
 	return note, true, nil
 }
 
+// InTemplates dice si path está dentro de templates/ (o es esa carpeta): ahí una nota es una plantilla.
+func (s *Storage) InTemplates(path string) bool { return s.inTemplates(path) }
+
 // inTemplates dice si path está dentro de templates/ (en la raíz de la carpeta de notas).
 func (s *Storage) inTemplates(path string) bool {
 	rel, err := filepath.Rel(s.BaseDir, path)

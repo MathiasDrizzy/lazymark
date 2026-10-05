@@ -504,6 +504,9 @@ func (p *notesPanel) promptFromTemplate() tea.Cmd {
 		return nil
 	}
 	dir := p.targetDir()
+	if p.c.store.InTemplates(dir) { // una nota nueva dentro de templates/ sería una plantilla, no una nota: va a la raíz
+		dir = p.c.store.BaseDir
+	}
 	p.c.push(newTemplatePopup(names, func(tpl string) tea.Cmd {
 		suggest := fmt.Sprintf("%s %d", i18n.T("Nueva nota", "New note"), len(p.c.notes)+1)
 		p.c.push(newInputPopup(i18n.T("Nueva nota", "New note")+" · "+tpl, suggest, func(name string) tea.Cmd {

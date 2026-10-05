@@ -144,3 +144,62 @@ func pickTemplate(m *AppModel, tpl string) {
 	}
 	press(m, "enter")
 }
+
+// TestNewFromTemplateNeverLandsInTemplates (ORD-016 C.4 / L6): con la carpeta templates/ (o una nota de dentro) seleccionada, C no crea la nota nueva
+// dentro de templates/ —donde pasaría a ser una plantilla y dejaría de contar sus tareas— sino en la raíz de la carpeta de notas. Con otra carpeta
+// seleccionada sigue creando ahí, y c (nota normal) en templates/ sigue creando una plantilla a propósito.
+func TestNewFromTemplateNeverLandsInTemplates(t *testing.T) {
+	m, dir := tplModel(t)
+	create := func(name string) {
+		press(m, "C")
+		pickTemplate(m, "reunion")
+		press(m, "ctrl+a", "ctrl+k")
+		for _, r := range name {
+			press(m, string(r))
+		}
+		press(m, "enter")
+	}
+	exists := func(rel string) bool { _, err := os.Stat(filepath.Join(dir, rel)); return err == nil }
+	// la carpeta templates seleccionada
+	m.notes.selectPath(filepath.Join(dir, "templates"))
+	create("Desde carpeta")
+	if exists("templates/desde-carpeta.md") || !exists("desde-carpeta.md") {
+		t.Errorf("con la carpeta templates seleccionada la nota va a la raíz: en templates=%v en raíz=%v", exists("templates/desde-carpeta.md"), exists("desde-carpeta.md"))
+	}
+	// una plantilla seleccionada
+	m.notes.selectPath(filepath.Join(dir, "templates", "daily.md"))
+	create("Desde plantilla")
+	if exists("templates/desde-plantilla.md") || !exists("desde-plantilla.md") {
+		t.Errorf("con una plantilla seleccionada también va a la raíz")
+	}
+	// otra carpeta: sigue ahí
+	os.MkdirAll(filepath.Join(dir, "proyecto"), 0o755)
+	m.c.reload()
+	m.afterChange()
+	m.notes.selectPath(filepath.Join(dir, "proyecto"))
+	create("En proyecto")
+	if !exists("proyecto/en-proyecto.md") {
+		t.Error("con otra carpeta seleccionada la nota se crea ahí")
+	}
+	// la nota creada no es una plantilla: sus tareas cuentan
+	found := false
+	for _, tk := range m.c.tasks {
+		if tk.Text == "orden del día" && strings.Contains(tk.NotePath, "desde-carpeta") {
+			found = true
+		}
+	}
+	if !found {
+		t.Error("las tareas de la nota nueva aparecen en Tareas (no es una plantilla)")
+	}
+	// c normal en templates/ crea una plantilla a propósito
+	m.notes.selectPath(filepath.Join(dir, "templates"))
+	press(m, "c")
+	press(m, "ctrl+a", "ctrl+k")
+	for _, r := range "Mi molde" {
+		press(m, string(r))
+	}
+	press(m, "enter")
+	if !exists("templates/mi-molde.md") {
+		t.Error("c dentro de templates/ crea una plantilla a propósito")
+	}
+}
