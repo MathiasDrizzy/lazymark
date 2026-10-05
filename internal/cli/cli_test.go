@@ -901,3 +901,26 @@ func TestStartAfterDueWarningCLI(t *testing.T) {
 		t.Errorf("con el orden correcto no avisa: %v %q", err, errBuf.String())
 	}
 }
+
+// TestDatesMigrateMidwayCLI (ORD-017 rev 2, R2-3): si una nota no se puede escribir, el CLI dice qué notas ya se migraron y sale con un código distinto de 0.
+func TestDatesMigrateMidwayCLI(t *testing.T) {
+	if runtime.GOOS == "windows" || os.Geteuid() == 0 {
+		t.Skip("necesita una carpeta de solo lectura")
+	}
+	dir := t.TempDir()
+	os.WriteFile(filepath.Join(dir, "a.md"), []byte("- [ ] t 📅 2026-05-10\n"), 0o644)
+	os.MkdirAll(filepath.Join(dir, "z"), 0o755)
+	os.WriteFile(filepath.Join(dir, "z", "b.md"), []byte("- [ ] t 📅 2026-05-10\n"), 0o644)
+	os.Chmod(filepath.Join(dir, "z"), 0o555)
+	t.Cleanup(func() { os.Chmod(filepath.Join(dir, "z"), 0o755) })
+	out, err := run(t, dir, "dates", "migrate", "--to", "dataview")
+	if err == nil {
+		t.Fatalf("debe fallar con la carpeta de solo lectura:\n%s", out)
+	}
+	if !strings.Contains(out, "a.md") || strings.Contains(out, "b.md") {
+		t.Errorf("informa lo ya migrado (a.md) y no lo que falló:\n%s", out)
+	}
+	if b, _ := os.ReadFile(filepath.Join(dir, "a.md")); string(b) != "- [ ] t [due:: 2026-05-10]\n" {
+		t.Errorf("a.md quedó migrada: %q", b)
+	}
+}

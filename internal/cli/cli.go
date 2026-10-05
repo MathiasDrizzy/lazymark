@@ -544,6 +544,20 @@ func RunDatesWithWriter(w io.Writer, args []string, defaultNotesDir string) erro
 	}
 	res, err := svc.MigrateDates(to, dry)
 	if err != nil {
+		if res.Lines > 0 || res.Error != "" { // se cortó a mitad: se informa qué notas ya se migraron (y el código de salida no es 0)
+			if p.json {
+				_ = printJSON(w, res)
+			} else {
+				fmt.Fprintln(w, plain(fmt.Sprintf(i18n.T("Migración interrumpida: ya se escribieron %d línea(s) en %d nota(s):", "Migration interrupted: %d line(s) in %d note(s) were already written:"), res.Lines, res.Notes)))
+				seen := map[string]bool{}
+				for _, c := range res.Changes {
+					if !seen[c.Note] {
+						seen[c.Note] = true
+						fmt.Fprintln(w, "  "+plain(c.Note))
+					}
+				}
+			}
+		}
 		return err
 	}
 	if p.json {

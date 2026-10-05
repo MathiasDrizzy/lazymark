@@ -93,20 +93,15 @@ func (c Columns) Of(t Task) int {
 }
 
 // CleanTaskText devuelve el texto de la tarea sin lo que es del tablero y de las fechas: las etiquetas #kb/<col> (y las
-// #doing… heredadas) y la primera fecha válida de cada campo (🛫 📅 ✅). Las demás etiquetas y las fechas inválidas o
-// repetidas se quedan.
+// #doing… heredadas) y todas las fechas válidas (los emojis de Tasks y los campos Dataview; gana la primera de cada campo, las repetidas se quitan igual). Las demás etiquetas y las fechas inválidas se quedan.
 func CleanTaskText(text string) string {
 	type span struct{ start, end int }
 	var spans []span
 	for _, h := range scanTags(text) {
 		spans = append(spans, span{h.start, h.end})
 	}
-	seen := map[DateField]bool{}
-	for _, h := range scanDates(text) {
-		if !seen[h.field] {
-			seen[h.field] = true
-			spans = append(spans, span{h.start, h.end})
-		}
+	for _, h := range scanDates(text) { // todos los marcadores válidos, también los repetidos: ninguna sintaxis de fecha reconocida queda en el texto
+		spans = append(spans, span{h.start, h.end})
 	}
 	sort.Slice(spans, func(i, j int) bool { return spans[i].start > spans[j].start })
 	for _, sp := range spans {

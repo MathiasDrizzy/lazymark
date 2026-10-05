@@ -1,10 +1,12 @@
 package storage
 
 import (
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 )
 
 const migrateFixture = "# Migración\r\n" +
@@ -95,5 +97,42 @@ func TestMigrateDates(t *testing.T) {
 	}
 	if n, _ := s.MigrateDates(FormatEmoji, false); len(n) != 0 {
 		t.Error("idempotente también hacia emojis")
+	}
+}
+
+// TestMigrateStopsMidwayAndReports (ORD-017 rev 2, R2-3): si una nota cambia afuera mientras se migra, esa no se escribe, el error nombra la nota, lo ya migrado se
+// devuelve y no se toca ninguna de las siguientes.
+func TestMigrateStopsMidwayAndReports(t *testing.T) {
+	dir := t.TempDir()
+	for _, n := range []string{"a.md", "b.md", "c.md"} {
+		os.WriteFile(filepath.Join(dir, n), []byte("- [ ] t 📅 2026-05-10\n"), 0o644)
+	}
+	migrateBeforeWrite = func(path string) {
+		if filepath.Base(path) == "b.md" { // otro programa guarda b.md justo antes
+			os.WriteFile(path, []byte("- [ ] t 📅 2026-05-10\notra línea\n"), 0o644)
+			future := time.Now().Add(time.Hour)
+			os.Chtimes(path, future, future)
+		}
+	}
+	defer func() { migrateBeforeWrite = nil }()
+	done, err := New(dir).MigrateDates(FormatDataview, false)
+	if err == nil || !errors.Is(err, ErrNoteChanged) || !strings.Contains(err.Error(), "b.md") {
+		t.Fatalf("el error nombra la nota que cambió: %v", err)
+	}
+	var names []string
+	for _, c := range done {
+		names = append(names, filepath.Base(c.Path))
+	}
+	if len(names) != 1 || names[0] != "a.md" {
+		t.Errorf("solo a.md se migró antes del corte: %v", names)
+	}
+	if b, _ := os.ReadFile(filepath.Join(dir, "a.md")); string(b) != "- [ ] t [due:: 2026-05-10]\n" {
+		t.Errorf("a.md: %q", b)
+	}
+	if b, _ := os.ReadFile(filepath.Join(dir, "b.md")); string(b) != "- [ ] t 📅 2026-05-10\notra línea\n" {
+		t.Errorf("b.md conserva el cambio de afuera: %q", b)
+	}
+	if b, _ := os.ReadFile(filepath.Join(dir, "c.md")); string(b) != "- [ ] t 📅 2026-05-10\n" {
+		t.Errorf("c.md no se toca tras el corte: %q", b)
 	}
 }

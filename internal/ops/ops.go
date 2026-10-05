@@ -542,6 +542,8 @@ type MigrationDTO struct {
 	Notes   int             `json:"notes"` // notas que cambian
 	Lines   int             `json:"lines"` // líneas que cambian
 	Changes []DateChangeDTO `json:"changes"`
+	// Error está si la migración se cortó: Changes son las líneas que sí se escribieron antes de ese error.
+	Error string `json:"error,omitempty"`
 }
 
 // MigrateDates pasa las fechas de las tareas al formato to ("dataview" o "emoji"); con dryRun solo cuenta y muestra el cambio, sin escribir.
@@ -563,8 +565,11 @@ func (s *Service) MigrateDates(to string, dryRun bool) (MigrationDTO, error) {
 		seen[c.Path] = true
 	}
 	out.Lines, out.Notes = len(changes), len(seen)
-	if err == nil && !dryRun {
+	if !dryRun && len(changes) > 0 {
 		s.Store.ResetDateFormat() // el vault cambió de formato
+	}
+	if err != nil {
+		out.Error = err.Error()
 	}
 	return out, err
 }

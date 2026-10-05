@@ -24,7 +24,7 @@ func TestReadBothDateFormats(t *testing.T) {
 		{"mezcla de formatos", "t 📅 2026-05-10 [start:: 2026-05-01]", Dates{Start: "2026-05-01", Due: "2026-05-10"}, "t"},
 		{"emoji con selector", "t 📅️ 2026-05-10 ⏳️2026-05-09", Dates{Due: "2026-05-10", Scheduled: "2026-05-09"}, "t"},
 		{"fecha inválida no es un campo", "t [due:: 2026-02-30] ⏳ 2026-13-01", Dates{}, "t [due:: 2026-02-30] ⏳ 2026-13-01"},
-		{"primero válido", "t [due:: 2026-02-30] [due:: 2026-05-10] 📅 2026-06-01", Dates{Due: "2026-05-10"}, "t [due:: 2026-02-30] 📅 2026-06-01"},
+		{"primero válido", "t [due:: 2026-02-30] [due:: 2026-05-10] 📅 2026-06-01", Dates{Due: "2026-05-10"}, "t [due:: 2026-02-30]"},
 		{"mayúsculas no valen", "t [Due:: 2026-05-10] [DUE:: 2026-05-11]", Dates{}, "t [Due:: 2026-05-10] [DUE:: 2026-05-11]"},
 		{"corchetes que no son campos", "ver [x](http://a.b) y [nota] 2026-05-10", Dates{}, "ver [x](http://a.b) y [nota] 2026-05-10"},
 		{"sin cerrar", "t [due:: 2026-05-10", Dates{}, "t [due:: 2026-05-10"},
@@ -188,16 +188,6 @@ func TestDateFormatsAgainstOracle(t *testing.T) {
 		if got != want {
 			t.Errorf("%q: fechas %+v, el oráculo dice %+v", c.Line, got, want)
 		}
-		// desacuerdo revisado (4 casos): con un campo repetido el oráculo quita todos los marcadores válidos; lazymark quita solo el primero y deja los
-		// repetidos a la vista (decisión de ORD-012: así el usuario ve que hay dos). Las reglas que se le dieron al apoyo no lo decían.
-		seen, dup := map[DateField]bool{}, false
-		for _, h := range scanDates(c.Line) {
-			dup = dup || seen[h.field]
-			seen[h.field] = true
-		}
-		if dup {
-			continue
-		}
 		if clean := CleanTaskText(strings.TrimSuffix(c.Line, "\r")); clean != c.Clean {
 			t.Errorf("%q: texto limpio %q, el oráculo dice %q", c.Line, clean, c.Clean)
 		}
@@ -224,5 +214,88 @@ func TestMigrateKeepsTextAndWikilinks(t *testing.T) {
 	}
 	if conv := convertDates(wl, FormatEmoji); conv != "- [ ] ver [[due:: 2026-05-10]] y [[nota]] 📅 2026-06-01" {
 		t.Errorf("el wikilink no se toca: %q", conv)
+	}
+}
+
+// TestDataviewLikeTextThatIsNotAField (ORD-017 rev 2, R2-1): `[due:: 2026-05-10](https://…)` es el texto de un link Markdown y lo que está dentro de código en línea
+// no es un campo: ni se lee ni se migra (el archivo no cambia en esas líneas).
+func TestDataviewLikeTextThatIsNotAField(t *testing.T) {
+	for _, line := range []string{
+		"- [ ] Leer [due:: 2026-05-10](https://example.com)",
+		"- [ ] Inline `[due:: 2026-05-11]` en código",
+		"- [ ] Inline `📅 2026-05-11` con emoji",
+		"- [ ] Doble ``[due:: 2026-05-12] y ` backtick`` aquí",
+	} {
+		if d := ParseDates(line); d != (Dates{}) {
+			t.Errorf("%q: no hay campos, se leyó %+v", line, d)
+		}
+		if got := CleanTaskText(line); got != strings.TrimPrefix(line, "- [ ] ") && got != line {
+			// el texto limpio es la línea tal cual (nada se quita)
+			if !strings.Contains(got, "2026") {
+				t.Errorf("%q: se quitó algo que no era un campo: %q", line, got)
+			}
+		}
+		for _, to := range []DateFormat{FormatEmoji, FormatDataview} {
+			if conv := convertDates(line, to); conv != line {
+				t.Errorf("%q → %d: la línea no debía cambiar: %q", line, to, conv)
+			}
+		}
+	}
+	// fuera del código sí cuenta: una línea con las dos cosas migra solo el campo de verdad
+	mixed := "- [ ] `[due:: 2026-05-11]` y [due:: 2026-05-12]"
+	if conv := convertDates(mixed, FormatEmoji); conv != "- [ ] `[due:: 2026-05-11]` y 📅 2026-05-12" {
+		t.Errorf("mixta: %q", conv)
+	}
+}
+
+// TestRepeatedAndNonDateFields (ORD-017 rev 2, R2-2): con campos repetidos gana el primero válido y los demás no se muestran (ni en pantalla, ni en la CLI ni en el
+// MCP: el texto limpio no lleva ningún [campo:: fecha] reconocido); `[due:: tomorrow]` no es una fecha (no se lee) pero cuenta como el campo `due` de la línea:
+// editar lo reemplaza y nunca quedan dos `due`; editar no borra texto que no sea ese campo.
+func TestRepeatedAndNonDateFields(t *testing.T) {
+	line := "Dos [due:: 2026-05-01] y [due:: 2026-05-10] fin"
+	if d := ParseDates(line); d.Due != "2026-05-01" {
+		t.Errorf("gana el primero: %+v", d)
+	}
+	if got := CleanTaskText(line); got != "Dos y fin" || strings.Contains(got, "::") {
+		t.Errorf("sin sintaxis en el texto limpio: %q", got)
+	}
+	if got := CleanTaskText("t 📅 2026-05-01 📅 2026-05-10 [start:: 2026-01-01] (start:: 2026-02-02)"); got != "t" {
+		t.Errorf("también con emojis y mezclados: %q", got)
+	}
+	// editar el campo repetido: queda uno solo, el nuevo, y el texto de alrededor intacto
+	if got := setDateIn("- [ ] "+line, DateDue, "2026-06-01", FormatDataview); got != "- [ ] Dos [due:: 2026-06-01] y fin" {
+		t.Errorf("editar: %q", got)
+	}
+	if got := setDateIn("- [ ] "+line, DateDue, "", FormatDataview); got != "- [ ] Dos y fin" {
+		t.Errorf("quitar: %q", got)
+	}
+	// un valor que no es fecha
+	nd := "- [ ] Algo [due:: tomorrow] más"
+	if d := ParseDates(nd); d.Due != "" {
+		t.Errorf("no es una fecha: %+v", d)
+	}
+	if got := setDateIn(nd, DateDue, "2026-06-01", FormatDataview); got != "- [ ] Algo [due:: 2026-06-01] más" || strings.Count(got, "due::") != 1 {
+		t.Errorf("editar reemplaza el valor que no era fecha y no deja dos due: %q", got)
+	}
+	if got := setDateIn(nd, DateStart, "2026-06-01", FormatDataview); got != "- [ ] Algo [due:: tomorrow] más [start:: 2026-06-01]" {
+		t.Errorf("otro campo no toca el due crudo: %q", got)
+	}
+	if got := CleanTaskText(nd); got != nd {
+		t.Errorf("lo que no es una fecha se queda como texto: %q", got)
+	}
+	// ida y vuelta con paréntesis: vuelve con corchetes (así escribe Obsidian Tasks) y el contenido es equivalente
+	p := "- [ ] t (due:: 2026-05-10) (start:: 2026-05-01)"
+	e := convertDates(p, FormatEmoji)
+	back := convertDates(e, FormatDataview)
+	if ParseDates(back) != ParseDates(p) || back != "- [ ] t [due:: 2026-05-10] [start:: 2026-05-01]" && back != "- [ ] t [start:: 2026-05-01] [due:: 2026-05-10]" {
+		t.Errorf("ida y vuelta con paréntesis: %q → %q → %q", p, e, back)
+	}
+}
+
+// TestEditRemovesRepeatedField (ORD-017 rev 2): editar un campo repetido deja uno solo (lo que documenta docs/cli.md).
+func TestEditRemovesRepeatedField(t *testing.T) {
+	got := setDateIn("- [ ] Dos [due:: 2026-05-01] y [due:: 2026-05-10] fin", DateDue, "2026-06-01", FormatDataview)
+	if strings.Count(got, "due::") != 1 {
+		t.Errorf("queda un solo due: %q", got)
 	}
 }

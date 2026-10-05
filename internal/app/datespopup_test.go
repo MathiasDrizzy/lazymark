@@ -308,6 +308,15 @@ func TestNoTasksEmojiOrDataviewSyntaxOnScreen(t *testing.T) {
 		t.Fatalf("la búsqueda debe mostrar el resultado de mix.md línea 3:\n%s", plain(m))
 	}
 	bad("resultados de la búsqueda")
+	// R2-5 (ORD-017 rev 2): buscar el nombre del campo o parte de la fecha tampoco deja la sintaxis cruda en los fragmentos
+	for _, q := range []string{"due", "2026", "start"} {
+		press(m, "esc", "/")
+		typeSearch(m, q)
+		if !strings.Contains(plain(m), ".md:") {
+			t.Fatalf("la búsqueda %q debe dar resultados:\n%s", q, plain(m))
+		}
+		bad("búsqueda de " + q)
+	}
 }
 
 // TestDateFormatNoticeOnce (ORD-017 F2): en un vault que solo tiene fechas con emojis, el popup escribe con emojis y avisa una sola vez cómo cambiarlo (y lo

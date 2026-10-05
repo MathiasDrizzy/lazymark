@@ -230,14 +230,13 @@ func (p *searchPopup) render(l Layout) string {
 		m := p.matches[i]
 		where := dim(fmt.Sprintf("%s:%d", m.Rel, m.Line))
 		room := w - 3 - 4 - textwidth.Width(fmt.Sprintf("%s:%d", m.Rel, m.Line))
-		text, s, e := m.Text, m.Start, m.End
-		if textwidth.Width(text) > room { // el contexto se corta por la derecha; lo hallado se ve si cabe
+		text, s, e := glyphDates(m.Text, m.Start, m.End) // sin emojis de fecha ni sintaxis Dataview en pantalla (antes de cortar: un corte no deja medio campo)
+		if textwidth.Width(text) > room {                // el contexto se corta por la derecha; lo hallado se ve si cabe
 			text = textwidth.Truncate(text, max(8, room), "…")
 			if e > len(text) {
 				s, e = -1, -1
 			}
 		}
-		text, s, e = glyphDates(text, s, e) // sin emojis de fecha ni sintaxis Dataview en pantalla
 		return where + "  " + highlight(text, s, e)
 	})...)
 	return theme.RenderPopup(i18n.T("Buscar", "Search"), "[Enter] "+i18n.T("ir", "go")+" · "+escHint, lines, w)
@@ -323,9 +322,16 @@ func renderedLineOf(lines []string, note *storage.Note, line int) int {
 
 // glyphDates cambia los emojis de fecha y los campos Dataview de text por glifos (views.ReplaceDateEmoji) y devuelve dónde queda lo hallado [s, e): se
 // reemplaza por tramos (antes, lo hallado y después) para que las posiciones sigan siendo exactas.
+var dateSpanRe = regexp.MustCompile(`[\[(][ \t]*[A-Za-z]+[ \t]*::[^\])\n]*[\])]|[🛫📅✅⏳➕]\x{FE0F}?[ \t]*\d{4}-\d{2}-\d{2}`)
+
 func glyphDates(text string, s, e int) (string, int, int) {
 	if s < 0 || e < s || e > len(text) {
 		return views.ReplaceDateEmoji(text), -1, -1
+	}
+	for _, m := range dateSpanRe.FindAllStringIndex(text, -1) { // lo hallado dentro de un marcador (buscar "due") abarca el marcador entero: así se reemplaza completo
+		if m[0] < e && m[1] > s {
+			s, e = min(s, m[0]), max(e, m[1])
+		}
 	}
 	before, hit, after := views.ReplaceDateEmoji(text[:s]), views.ReplaceDateEmoji(text[s:e]), views.ReplaceDateEmoji(text[e:])
 	return before + hit + after, len(before), len(before) + len(hit)

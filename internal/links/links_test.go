@@ -353,3 +353,18 @@ func TestFolderRenameEditsWindowsSeparators(t *testing.T) {
 		t.Errorf("nota: %+v", e)
 	}
 }
+
+// TestFolderRenameHomonymsAndCode (ORD-017 rev 2, R2-4): con dos carpetas homónimas (a/docs y b/docs), renombrar a/docs no toca los links a b/docs; y los wikilinks
+// dentro de bloques de código (o código en línea) no se reescriben.
+func TestFolderRenameHomonymsAndCode(t *testing.T) {
+	base := filepath.FromSlash("/n")
+	ix := NewIndex(base, notes(base, map[string]string{
+		"a/docs/x.md": "# x\n",
+		"b/docs/y.md": "# y\n",
+		"hub.md":      "[[a/docs/x]] y [[b/docs/y]]\n```\n[[a/docs/x]]\n```\ncódigo `[[a/docs/x]]` aquí\n",
+	}))
+	e := ix.FolderRenameEdits(filepath.Join(base, "a", "docs"), "guias")
+	if len(e) != 1 || e[0].After != "[[a/guias/x]] y [[b/docs/y]]" {
+		t.Errorf("solo el link a a/docs cambia: %+v", e)
+	}
+}

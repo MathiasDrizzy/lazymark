@@ -79,6 +79,7 @@
  "Left column: %d%%": "Linke Spalte: %d%%",
  "Links to this note (%d)": "Links auf diese Notiz (%d)",
  "Mascot": "Maskottchen",
+ "Migration interrupted: %d line(s) in %d note(s) were already written:": "Migration unterbrochen: %d Zeile(n) in %d Notiz(en) wurden schon geschrieben:",
  "Minimum %dx%d": "Mindestens %dx%d",
  "Move": "Verschieben",
  "Move %d notes to trash?": "%d Notizen in den Papierkorb verschieben?",

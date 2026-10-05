@@ -50,8 +50,10 @@ func (f DateField) Key() string { return dateKey[f] }
 // emojiDateRe encuentra un emoji de fecha con su fecha (el selector de variación U+FE0F y los espacios son opcionales); la fecha debe terminar ahí
 // (\b: no sigue otro dígito). dataviewDateRe, un campo Dataview entre corchetes o paréntesis, con espacios opcionales alrededor de "::" y dentro.
 var (
-	emojiDateRe    = regexp.MustCompile(`(🛫|📅|✅|⏳|➕)\x{FE0F}?[ \t]*(\d{4}-\d{2}-\d{2})\b`)
-	dataviewDateRe = regexp.MustCompile(`\[[ \t]*(start|due|completion|scheduled|created)[ \t]*::[ \t]*(\d{4}-\d{2}-\d{2})[ \t]*\]|\([ \t]*(start|due|completion|scheduled|created)[ \t]*::[ \t]*(\d{4}-\d{2}-\d{2})[ \t]*\)`)
+	emojiDateRe = regexp.MustCompile(`(🛫|📅|✅|⏳|➕)\x{FE0F}?[ \t]*(\d{4}-\d{2}-\d{2})\b`)
+	// el valor es lo que haya hasta el cierre: una fecha válida es un campo; cualquier otra cosa ([due:: tomorrow]) es un marcador inválido del mismo campo
+	// (no se lee, pero editar ese campo lo reemplaza: nunca quedan dos)
+	dataviewDateRe = regexp.MustCompile(`\[[ \t]*(start|due|completion|scheduled|created)[ \t]*::[ \t]*([^\[\]()\n]*?)[ \t]*\]|\([ \t]*(start|due|completion|scheduled|created)[ \t]*::[ \t]*([^\[\]()\n]*?)[ \t]*\)`)
 )
 
 // ValidDate indica si s es una fecha real del calendario con la forma AAAA-MM-DD.
@@ -113,8 +115,8 @@ func scanMarkers(text string) []dateHit {
 		k, d, paren := 2, 4, false // [clave:: fecha] o (clave:: fecha)
 		if m[2] >= 0 {
 			k, d = 2, 4
-			// `[[due:: 2026-05-10]]` es un wikilink, no un campo
-			if (m[0] > 0 && text[m[0]-1] == '[') || (m[1] < len(text) && text[m[1]] == ']') {
+			// `[[due:: 2026-05-10]]` es un wikilink y `[due:: 2026-05-10](https://…)` el texto de un link Markdown: no son campos
+			if (m[0] > 0 && text[m[0]-1] == '[') || (m[1] < len(text) && (text[m[1]] == ']' || text[m[1]] == '(')) {
 				continue
 			}
 		} else {
@@ -126,11 +128,63 @@ func scanMarkers(text string) []dateHit {
 				f = DateField(i)
 			}
 		}
-		date := text[m[d]:m[d+1]]
+		date := strings.TrimSpace(text[m[d]:m[d+1]])
 		hits = append(hits, dateHit{field: f, format: FormatDataview, paren: paren, start: m[0], end: m[1], date: date, valid: ValidDate(date)})
 	}
 	sort.Slice(hits, func(i, j int) bool { return hits[i].start < hits[j].start })
+	if strings.Contains(text, "`") { // lo que está dentro de código en línea no es un campo
+		mask := inlineCodeMask(text)
+		kept := hits[:0]
+		for _, h := range hits {
+			if !mask[h.start] {
+				kept = append(kept, h)
+			}
+		}
+		hits = kept
+	}
 	return hits
+}
+
+// inlineCodeMask marca los bytes de text que están dentro de código en línea (entre dos rachas de acentos graves del mismo largo, también “con ` dentro“),
+// con sus acentos graves.
+func inlineCodeMask(text string) []bool {
+	mask := make([]bool, len(text))
+	for i := 0; i < len(text); {
+		if text[i] != '`' {
+			i++
+			continue
+		}
+		j := i
+		for j < len(text) && text[j] == '`' {
+			j++
+		}
+		n := j - i
+		closed := -1
+		for k := j; k < len(text); {
+			if text[k] != '`' {
+				k++
+				continue
+			}
+			e := k
+			for e < len(text) && text[e] == '`' {
+				e++
+			}
+			if e-k == n {
+				closed = e
+				break
+			}
+			k = e
+		}
+		if closed < 0 { // sin cierre: los acentos graves son texto
+			i = j
+			continue
+		}
+		for x := i; x < closed; x++ {
+			mask[x] = true
+		}
+		i = closed
+	}
+	return mask
 }
 
 // ParseDates lee las fechas de un texto de tarea: de cada campo vale la primera fecha válida.
@@ -375,6 +429,7 @@ func (s *Storage) MigrateDates(to DateFormat, dryRun bool) ([]DateChange, error)
 	if err != nil {
 		return nil, err
 	}
+	sort.Slice(notes, func(i, j int) bool { return notes[i].Path < notes[j].Path }) // orden fijo: si se corta a mitad, lo migrado es predecible
 	var out []DateChange
 	for _, n := range notes {
 		if n.TooLarge || len(n.Tasks) == 0 {
@@ -397,9 +452,12 @@ func (s *Storage) MigrateDates(to DateFormat, dryRun bool) ([]DateChange, error)
 		if len(changes) == 0 {
 			continue
 		}
-		out = append(out, changes...)
 		if dryRun {
+			out = append(out, changes...)
 			continue
+		}
+		if migrateBeforeWrite != nil {
+			migrateBeforeWrite(n.Path)
 		}
 		err := rewriteLines(n.Path, n.ModTime, func(ls []string) ([]string, error) {
 			for _, c := range changes {
@@ -417,12 +475,16 @@ func (s *Storage) MigrateDates(to DateFormat, dryRun bool) ([]DateChange, error)
 			}
 			return ls, nil
 		})
-		if err != nil {
-			return out, err
+		if err != nil { // una nota falló (p. ej. cambió afuera): se devuelve lo ya migrado y el error con el nombre de esa nota; las siguientes no se tocan
+			return out, fmt.Errorf("%s: %w", s.relPath(n.Path), err)
 		}
+		out = append(out, changes...) // solo cuenta lo que se escribió de verdad
 	}
 	return out, nil
 }
+
+// migrateBeforeWrite es un gancho de las pruebas: corre justo antes de escribir cada nota (para simular que cambió afuera).
+var migrateBeforeWrite func(path string)
 
 // convertDates reescribe cada marcador de fecha válido de la línea en el formato to (los corchetes de Dataview; sin paréntesis), sin tocar nada más.
 func convertDates(line string, to DateFormat) string {

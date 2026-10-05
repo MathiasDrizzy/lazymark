@@ -79,6 +79,7 @@
  "Left column: %d%%": "Colonna sinistra: %d%%",
  "Links to this note (%d)": "Link a questa nota (%d)",
  "Mascot": "Mascotte",
+ "Migration interrupted: %d line(s) in %d note(s) were already written:": "Migrazione interrotta: %d riga/righe in %d nota/e già scritte:",
  "Minimum %dx%d": "Minimo %dx%d",
  "Move": "Sposta",
  "Move %d notes to trash?": "Spostare %d note nel cestino?",

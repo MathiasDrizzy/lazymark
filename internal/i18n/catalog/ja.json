@@ -79,6 +79,7 @@
  "Left column: %d%%": "左カラム: %d%%",
  "Links to this note (%d)": "このノートへのリンク (%d)",
  "Mascot": "マスコット",
+ "Migration interrupted: %d line(s) in %d note(s) were already written:": "移行が中断されました: %d 行（%d ノート）は書き込み済みです:",
  "Minimum %dx%d": "最小 %dx%d",
  "Move": "移動",
  "Move %d notes to trash?": "%d 件のノートをゴミ箱に移動しますか？",

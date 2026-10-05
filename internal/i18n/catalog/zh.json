@@ -79,6 +79,7 @@
  "Left column: %d%%": "左栏: %d%%",
  "Links to this note (%d)": "指向本笔记的链接 (%d)",
  "Mascot": "吉祥物",
+ "Migration interrupted: %d line(s) in %d note(s) were already written:": "迁移已中断：已写入 %d 行（%d 个笔记）：",
  "Minimum %dx%d": "最小 %dx%d",
  "Move": "移动",
  "Move %d notes to trash?": "将 %d 篇笔记移至回收站？",

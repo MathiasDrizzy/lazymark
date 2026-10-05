@@ -145,6 +145,8 @@ lazymark dates migrate --to dataview|emoji [--dry-run] [--json] [--dir <folder>]
 
 Moves the dates of every task to the chosen format. It is never automatic. It only touches task lines (not paragraphs or code blocks), keeps the rest of the line and the line endings, leaves invalid dates alone and writes each note atomically (a note that changed while migrating is not written: exit code 4). `--dry-run` prints the change (`-` before, `+` after) without writing anything; `--json` gives `{to, dry_run, notes, lines, changes: [{note, line, before, after}]}`. It is idempotent: a second run changes nothing. After migrating to Dataview, set **Task format: Dataview** in Obsidian Tasks.
 
+Rules for edge cases: a field written as `(due:: …)` is kept with parentheses while you edit the line, but migrating normalises it to square brackets (what Obsidian Tasks writes), so `(due:: …)` → emoji → Dataview comes back as `[due:: …]` with the same dates. `[due:: 2026-05-10](https://…)` (a Markdown link), `[[due:: …]]` (a wikilink) and anything inside inline code are text, not fields. If a field is repeated the first valid one wins; the others are also hidden from the task text, and editing that field replaces the first and removes the repeats. A value that is not a date (`[due:: tomorrow]`) is not read as a date, stays in the text, and editing that field replaces it (a line never ends up with two `due`). If a note cannot be written, the command lists the notes already migrated and exits with a non-zero code; running it again continues where it stopped.
+
 `task start` and `task due` warn on stderr (exit code 0) when the start ends up after the due date.
 
 ## Kanban format

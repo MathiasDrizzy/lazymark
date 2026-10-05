@@ -55,7 +55,7 @@ func TestCleanTaskTextWithDates(t *testing.T) {
 		"tarea 📅 2026-05-10": "tarea",
 		"tarea #kb/doing 🛫 2026-05-01 📅 2026-05-10 #urgente": "tarea #urgente",
 		"tarea 📅 2026-02-30":              "tarea 📅 2026-02-30", // una fecha inválida se queda
-		"tarea 📅 2026-05-10 📅 2026-06-01": "tarea 📅 2026-06-01", // la repetida se queda
+		"tarea 📅 2026-05-10 📅 2026-06-01": "tarea",              // la repetida también se quita (ORD-017 rev 2: ninguna fecha reconocida queda en el texto)
 		"tarea📅2026-05-10":                "tarea",
 		"📅 2026-05-10 tarea":              "tarea",
 	} {
@@ -234,6 +234,17 @@ func TestDatesAgainstOracleFixtures(t *testing.T) {
 		got := tasks[0].Dates
 		if got.Start != c.Start || got.Due != c.Due || got.Done != c.Completed {
 			t.Errorf("%q: fechas %+v, el oráculo dice start=%q due=%q done=%q", c.Line, got, c.Start, c.Due, c.Completed)
+		}
+		// desacuerdo declarado (ORD-017 rev 2): este oráculo es de ORD-010, cuando los campos repetidos se dejaban a la vista en el texto limpio; ahora se quitan
+		// todos los marcadores válidos (gana la primera fecha de cada campo) para que ninguna fecha reconocida quede como sintaxis en pantalla
+		if seen, dup := map[DateField]bool{}, false; true {
+			for _, h := range scanDates(tasks[0].Text) {
+				dup = dup || seen[h.field]
+				seen[h.field] = true
+			}
+			if dup {
+				continue
+			}
 		}
 		if clean := CleanTaskText(tasks[0].Text); clean != c.Clean {
 			t.Errorf("%q: texto limpio %q, el oráculo dice %q", c.Line, clean, c.Clean)
