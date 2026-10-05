@@ -1,6 +1,8 @@
 package storage
 
 import (
+	"encoding/hex"
+	"encoding/json"
 	"errors"
 	"os"
 	"path/filepath"
@@ -258,5 +260,47 @@ func TestTemplateSizeLimit(t *testing.T) {
 	}
 	if _, err := s.RenderTemplate("pasada", "T", tplNow); !errors.Is(err, ErrTemplateInvalid) {
 		t.Errorf("256 KB + 1 debe rechazarse: %v", err)
+	}
+}
+
+// TestTemplatesAgainstOracleFixtures (ORD-014): 23 plantillas raras (UTF-16, BOM, NUL, UTF-8 truncado o sobrelargo, variables anidadas, con
+// espacios o saltos de línea, de 40 y 41 caracteres, con otras mayúsculas…) con su resultado esperado, calculadas por el agente de apoyo
+// (otro modelo) solo a partir de las reglas, sin ver el código. Los desacuerdos se revisaron a mano (ver ESTADO).
+func TestTemplatesAgainstOracleFixtures(t *testing.T) {
+	data, err := os.ReadFile("testdata/templates-oracle.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var cases []struct {
+		Name     string `json:"name"`
+		BytesHex string `json:"bytes_hex"`
+		Expect   string `json:"expect"`
+	}
+	if err := json.Unmarshal(data, &cases); err != nil {
+		t.Fatal(err)
+	}
+	if len(cases) < 20 {
+		t.Fatalf("solo %d casos", len(cases))
+	}
+	s := tplStore(t, nil)
+	os.MkdirAll(filepath.Join(s.BaseDir, "templates"), 0o755)
+	for _, c := range cases {
+		raw, err := hex.DecodeString(c.BytesHex)
+		if err != nil {
+			t.Fatalf("%s: %v", c.Name, err)
+		}
+		if err := os.WriteFile(filepath.Join(s.BaseDir, "templates", c.Name+".md"), raw, 0o644); err != nil {
+			t.Fatal(err)
+		}
+		got, err := s.RenderTemplate(c.Name, "T", tplNow)
+		if c.Expect == "rejected" {
+			if !errors.Is(err, ErrTemplateInvalid) {
+				t.Errorf("%s: se esperaba rechazo, dio %q %v", c.Name, got, err)
+			}
+			continue
+		}
+		if err != nil || got != strings.TrimPrefix(c.Expect, "ok:") {
+			t.Errorf("%s: dio %q (%v), el oráculo dice %q", c.Name, got, err, strings.TrimPrefix(c.Expect, "ok:"))
+		}
 	}
 }

@@ -1,0 +1,117 @@
+[
+ {
+  "name": "utf16_le_bom",
+  "bytes_hex": "fffe230020007b007b007400690074006c0065007d007d000a00",
+  "expect": "rejected"
+ },
+ {
+  "name": "utf16_le_nobom",
+  "bytes_hex": "230020007b007b007400690074006c0065007d007d000a00",
+  "expect": "rejected"
+ },
+ {
+  "name": "utf16_be_bom",
+  "bytes_hex": "feff00230020007b007b007400690074006c0065007d007d000a",
+  "expect": "rejected"
+ },
+ {
+  "name": "utf16_be_nobom",
+  "bytes_hex": "00230020007b007b007400690074006c0065007d007d000a",
+  "expect": "rejected"
+ },
+ {
+  "name": "utf8_bom",
+  "bytes_hex": "efbbbf23207b7b7469746c657d7d0a",
+  "expect": "ok:# T\n"
+ },
+ {
+  "name": "bom_in_middle",
+  "bytes_hex": "23207b7b7469746c657d7defbbbf0a",
+  "expect": "ok:# T﻿\n"
+ },
+ {
+  "name": "nul_at_end",
+  "bytes_hex": "23207b7b7469746c657d7d00",
+  "expect": "rejected"
+ },
+ {
+  "name": "utf8_truncated",
+  "bytes_hex": "2320c3",
+  "expect": "rejected"
+ },
+ {
+  "name": "utf8_overlong",
+  "bytes_hex": "2320c0af",
+  "expect": "rejected"
+ },
+ {
+  "name": "nested_vars_title",
+  "bytes_hex": "7b7b7b7b7469746c657d7d7d7d",
+  "expect": "ok:{{T}}"
+ },
+ {
+  "name": "nested_vars_date",
+  "bytes_hex": "7b7b7b646174657d7d7d",
+  "expect": "ok:{2026-10-03}"
+ },
+ {
+  "name": "var_with_spaces",
+  "bytes_hex": "7b7b207469746c65207d7d",
+  "expect": "ok:{{ title }}"
+ },
+ {
+  "name": "var_40_chars",
+  "bytes_hex": "7b7b787878787878787878787878787878787878787878787878787878787878787878787878787878787d7d",
+  "expect": "ok:{{xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx}}"
+ },
+ {
+  "name": "var_41_chars",
+  "bytes_hex": "7b7b78787878787878787878787878787878787878787878787878787878787878787878787878787878787d7d",
+  "expect": "ok:{{xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx}}"
+ },
+ {
+  "name": "var_with_newline",
+  "bytes_hex": "7b7b0a7469746c657d7d",
+  "expect": "ok:{{\ntitle}}"
+ },
+ {
+  "name": "var_date_case",
+  "bytes_hex": "7b7b446174657d7d",
+  "expect": "ok:2026-10-03"
+ },
+ {
+  "name": "var_title_case",
+  "bytes_hex": "7b7b5449544c457d7d",
+  "expect": "ok:T"
+ },
+ {
+  "name": "var_title_repeated",
+  "bytes_hex": "7b7b7469746c657d7d207b7b7469746c657d7d",
+  "expect": "ok:T T"
+ },
+ {
+  "name": "markdown_title_contains_date",
+  "bytes_hex": "23207b7b646174657d7d0a7b7b7469746c657d7d",
+  "expect": "ok:# 2026-10-03\nT"
+ },
+ {
+  "name": "var_time_case",
+  "bytes_hex": "7b7b54494d457d7d",
+  "expect": "ok:09:05"
+ },
+ {
+  "name": "nul_in_middle",
+  "bytes_hex": "23207b7b7469746c657d7d006578747261",
+  "expect": "rejected"
+ },
+ {
+  "name": "latin1_invalid_utf8",
+  "bytes_hex": "636166e9",
+  "expect": "rejected"
+ },
+ {
+  "name": "all_standard_vars",
+  "bytes_hex": "7b7b7469746c657d7d202d207b7b646174657d7d207b7b74696d657d7d",
+  "expect": "ok:T - 2026-10-03 09:05"
+ }
+]
