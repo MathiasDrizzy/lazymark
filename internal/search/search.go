@@ -27,7 +27,7 @@ const (
 	DefaultMaxFileBytes = 2 << 20 // las notas más grandes no se leen (se cuentan en Result.Skipped)
 	DefaultMaxResults   = 500
 	DefaultTimeout      = 10 * time.Second
-	// maxRegexCost es el costo máximo de una expresión regular (ver regexCost): una de 100 000 tarda unos 3 s en una línea de 2 MB, una de 778 000 más de 15 s.
+	// maxRegexCost es el costo máximo de una expresión regular (ver regexCost): una de 100 000 tarda unos 4 s en 2 MB de letras, una de 300 000 más de 15 s.
 	maxRegexCost = 100000
 	// longLine es el largo (bytes) desde el cual una línea se compara con un lector que mira la cancelación: así el corte por tiempo detiene la coincidencia.
 	longLine   = 64 << 10
@@ -211,7 +211,7 @@ func searchFile(ctx context.Context, path, base string, re *regexp.Regexp, prefi
 		} else {
 			l, data = data, nil
 		}
-		if line%2000 == 0 && ctx.Err() != nil {
+		if (len(l) > 1024 || line%256 == 0) && ctx.Err() != nil { // las líneas largas cuestan: se mira la cancelación en cada una
 			return matches, false, false
 		}
 		l = bytes.TrimSuffix(l, []byte("\r"))
@@ -345,21 +345,23 @@ func dedupe(paths []string) []string {
 	return out
 }
 
-// regexCost estima lo que cuesta ejecutar la expresión: la suma, sobre las instrucciones de su programa compilado (con las repeticiones {n} ya
-// expandidas), de cuántos rangos de runas mira cada una (una clase como \p{L} tiene unos 650; una letra suelta, 1). El tiempo de la búsqueda crece
-// con ese número: es el de las repeticiones anidadas ([\p{L}\p{N}]{50}){20}, que el tope de una sola repetición no veía.
+// regexCost estima lo que cuesta ejecutar la expresión en el peor texto: cada instrucción del programa compilado que puede quedarse viva sobre muchas
+// letras (una clase, un cualquiera, una bifurcación de ? * + |) cuesta 300, y una clase con muchos rangos (\p{L}: unos 650) cuesta algo más. Una letra
+// suelta cuesta 0 (un hilo que no coincide muere al instante). Lo que decide el tiempo es cuántas de esas instrucciones hay y no la expresión escrita:
+// \w{1000}x tarda 18 s en 2 MB, ([\p{L}\p{N}]{50}){20}x más de 60 s y (a?){1000}b 30 s, pero (a|b){500}c solo milisegundos. Una expresión que no compila se
+// trata como cara (se rechaza).
 func regexCost(re *syntax.Regexp) int {
 	prog, err := syntax.Compile(re.Simplify())
 	if err != nil {
-		return 0
+		return maxRegexCost + 1
 	}
 	cost := 0
 	for _, in := range prog.Inst {
 		switch in.Op {
 		case syntax.InstRune:
-			cost += max(1, len(in.Rune)/2)
-		case syntax.InstRune1, syntax.InstRuneAny, syntax.InstRuneAnyNotNL:
-			cost++
+			cost += 300 + len(in.Rune)/4
+		case syntax.InstRuneAny, syntax.InstRuneAnyNotNL, syntax.InstAlt, syntax.InstAltMatch:
+			cost += 300
 		}
 	}
 	return cost

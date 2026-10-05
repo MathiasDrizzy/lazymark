@@ -5,19 +5,14 @@ package image
 import (
 	"fmt"
 	"os"
-	"path/filepath"
-	"strings"
+
+	"github.com/MathiasDrizzy/lazymark/internal/safeio"
 )
 
 // openRegular abre path solo si es un archivo regular de hasta MaxFileBytes. En Windows no hay O_NONBLOCK: se descartan antes los nombres de
 // dispositivo reservados (CON, NUL, COM1…) y lo que Stat dice que no es regular, y se vuelve a comprobar con el archivo ya abierto.
 func openRegular(path string) (*os.File, error) {
-	base := strings.ToUpper(filepath.Base(path))
-	if i := strings.IndexByte(base, '.'); i >= 0 {
-		base = base[:i]
-	}
-	switch base {
-	case "CON", "PRN", "AUX", "NUL", "COM1", "COM2", "COM3", "COM4", "COM5", "COM6", "COM7", "COM8", "COM9", "LPT1", "LPT2", "LPT3", "LPT4", "LPT5", "LPT6", "LPT7", "LPT8", "LPT9":
+	if safeio.ReservedWindowsName(path) {
 		return nil, fmt.Errorf("%s es un nombre de dispositivo de Windows", path)
 	}
 	if fi, err := os.Stat(path); err != nil || !fi.Mode().IsRegular() || fi.Size() > MaxFileBytes {

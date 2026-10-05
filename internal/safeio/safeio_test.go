@@ -155,13 +155,13 @@ func TestWriteFileAtomicRejectsBrokenSymlink(t *testing.T) {
 
 // TestReservedWindowsNames (ORD-016 L2): los nombres reservados de Windows (CON, NUL, COM1…, con o sin extensión) son dispositivos: no se abren.
 func TestReservedWindowsNames(t *testing.T) {
-	for _, n := range []string{"CON", "con", "NUL.md", "aux.txt", "COM1", "lpt9.png", `C:\notas\PRN`, "COM¹"} {
-		if !reservedWindowsName(n) {
+	for _, n := range []string{"CON", "con", "NUL.md", "aux.txt", "COM1", "lpt9.png", `C:\notas\PRN`, "COM¹", "con .png", "NUL .", `\\.\pipe\miserver`, `\\.\COM1`} {
+		if !ReservedWindowsName(n) {
 			t.Errorf("%q es un nombre reservado", n)
 		}
 	}
-	for _, n := range []string{"nota.md", "console.md", "COM10", "comunidad", "null.md.bak", "a/con.d/x.md"} {
-		if reservedWindowsName(n) {
+	for _, n := range []string{"nota.md", "console.md", "COM10", "comunidad", "null.md.bak", "a/con.d/x.md", `\\?\C:\notas\NUL`} {
+		if ReservedWindowsName(n) {
 			t.Errorf("%q no es un nombre reservado", n)
 		}
 	}

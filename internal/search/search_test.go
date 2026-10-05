@@ -321,7 +321,7 @@ func TestSearchTimeout(t *testing.T) {
 // TestRegexCostCap (ORD-016 L1): el costo de una expresión (su programa compilado, con las clases Unicode pesadas) se calcula antes de ejecutarla: una
 // repetición anidada que pasaba el tope de {100} se rechaza al instante con el mismo mensaje; las expresiones de uso corriente se aceptan.
 func TestRegexCostCap(t *testing.T) {
-	for _, bad := range []string{`([\p{L}\p{N}]{50}){20}x`, `(\p{L}{10}){10}[\p{L}\p{N}]{100}`, `(\w{50}){20}(\p{L}{100}){2}`, `[\p{L}\p{N}]{1000}x`, `(\p{L}{100}){3}`} {
+	for _, bad := range []string{`([\p{L}\p{N}]{50}){20}x`, `(\p{L}{10}){10}[\p{L}\p{N}]{100}`, `(\w{50}){20}(\p{L}{100}){2}`, `[\p{L}\p{N}]{1000}x`, `(\p{L}{100}){3}`, `(a?){1000}b`, `\w{1000}x`, `(\w{50}){20}x`, `[a-z]{1000}x`, `.{1000}x`, `((a|b)?){500}c`} {
 		start := time.Now()
 		_, err := Compile(bad, Options{Regex: true})
 		if err == nil || !strings.Contains(err.Error(), "demasiado costosa") {
@@ -363,10 +363,8 @@ func TestCutoffFreesTheCPU(t *testing.T) {
 	}
 }
 
-// TestRegexCostAgainstOracle (ORD-016 L1): 30 patrones (útiles, con clases Unicode grandes, anidados y justo a ambos lados del tope) con su veredicto,
-// calculados por el agente de apoyo a partir de las reglas del costo y de tamaños aproximados de las clases Unicode. Los patrones cuyo costo cae a ±3 %
-// del tope dependen del número exacto de rangos de la clase en la versión de Unicode de Go: ahí el oráculo no es concluyente y solo se exige que no
-// haya diferencias lejos del tope.
+// TestRegexCostAgainstOracle (ORD-016 L1): 30 patrones (útiles, con clases Unicode grandes, anidados y cerca del tope) con su veredicto, calculados por el
+// agente de apoyo con una métrica de solo rangos de runas. Se exigen los claros (≤ 300 o ≥ 200 000 en esa métrica); los intermedios dependen de la métrica.
 func TestRegexCostAgainstOracle(t *testing.T) {
 	data, err := os.ReadFile("testdata/regex-oracle.json")
 	if err != nil {
@@ -391,9 +389,30 @@ func TestRegexCostAgainstOracle(t *testing.T) {
 		}
 		_, err := Compile(c.Pattern, Options{Regex: true})
 		rejected := err != nil
-		near := c.Peso > maxRegexCost*97/100 && c.Peso < maxRegexCost*103/100
-		if rejected != (c.Veredict == "rechaza") && !near {
+		// el oráculo pesaba solo los rangos de runas; el costo real también cuenta los estados vivos (\w{1000} tarda 4,5 s por 500 KB con "peso" 4001):
+		// solo se exigen los veredictos que no dependen de la métrica (muy baratos y muy caros)
+		clear := c.Peso <= 300 || c.Peso >= 200000
+		if clear && rejected != (c.Veredict == "rechaza") {
 			t.Errorf("%s: el oráculo dice %s (peso ≈ %d) y Compile dio error=%v", c.Pattern, c.Veredict, c.Peso, err)
 		}
+	}
+}
+
+// TestSlowLinesDoNotDelayTheCut (ORD-016, segunda opinión): con muchas líneas de tamaño medio (por debajo de los 64 KB del lector con cancelación) cada
+// una cuesta, pero el corte por tiempo se nota entre líneas, no cada 2000: la búsqueda vuelve cerca del tiempo máximo.
+func TestSlowLinesDoNotDelayTheCut(t *testing.T) {
+	store, dir := corpus(t)
+	var b strings.Builder
+	for i := 0; i < 60; i++ { // 1,8 MB: bajo el tope de 2 MiB por nota
+		b.WriteString(strings.Repeat("abcdefghij", 3000) + "\n") // 30 KB
+	}
+	os.WriteFile(filepath.Join(dir, "muchas.md"), []byte(b.String()), 0o644)
+	start := time.Now()
+	res, err := Run(context.Background(), store, `\w{300}x`, Options{Regex: true, Timeout: 300 * time.Millisecond})
+	if err != nil || !res.TimedOut {
+		t.Fatalf("debía cortarse por tiempo: %v %+v", err, res.TimedOut)
+	}
+	if d := time.Since(start); d > 2*time.Second {
+		t.Errorf("la búsqueda tardó %v con un máximo de 300 ms: el corte no se nota entre líneas", d)
 	}
 }
