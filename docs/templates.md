@@ -29,7 +29,7 @@ A template is still a note, so you see and edit it like any other, but its check
 # Daily {{date}}
 
 ## Plan
-- [ ] 
+- [ ] The one thing that matters today
 
 ## Notes
 ```

@@ -181,7 +181,7 @@ func (p *datesPopup) resolved(i int) string {
 }
 
 func (p *datesPopup) render(l Layout) string {
-	w := popupWidth(l, 56)
+	w := popupWidth(l, 62)
 	label := func(i int, name string) string {
 		marker := "  "
 		if p.focus == i {

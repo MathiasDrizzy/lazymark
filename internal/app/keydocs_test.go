@@ -120,10 +120,10 @@ var essentialRows = []struct {
 	{ctxGlobal, []Action{actPanelNotes, actPanelTasks, actPanelTags, actPanelPreview}, "Jump to a panel"},
 	{ctxNotes, []Action{actNewNote, actNewFolder}, ""},
 	{ctxNotes, []Action{actRename, actMove, actDelete}, ""},
-	{ctxTasks, []Action{actToggleTask}, "Toggle a task (Tasks panel)"},
+	{ctxTasks, []Action{actToggleTask, actDates}, "Toggle a task / Dates (Tasks panel and Kanban)"},
 	{ctxGlobal, []Action{actKanban}, ""},
-	{ctxGlobal, []Action{actTrash}, ""},
-	{ctxGlobal, []Action{actCheatsheet, actSettings}, ""},
+	{ctxGlobal, []Action{actSearch, actDaily}, ""},
+	{ctxGlobal, []Action{actCheatsheet, actSettings, actTrash}, ""},
 	{ctxGlobal, []Action{actQuit}, ""},
 }
 

@@ -30,15 +30,33 @@ Plain markdown files. Keyboard and mouse. Inline images.
 
 ### Notes and folders
 
-One tree for folders and notes. Create, rename, move and delete with a single key; the cursor lands on what you just created. Put notes in a `templates/` folder to start new ones from them (`C`), and press `T` for today's note, `journal/YYYY-MM-DD.md`, made from `templates/daily.md`; `lazymark daily` does the same from the shell. See [docs/templates.md](docs/templates.md).
+One tree for folders and notes. Create, rename, move and delete with a single key; the cursor lands on what you just created.
 
 <img src="assets/readme/feature-notes.gif" alt="Creating a folder, a note inside it and renaming the note" width="100%">
+
+### Templates and the daily note
+
+Put notes in a `templates/` folder and start new ones from them with `C`; `{{date}}`, `{{time}}` and `{{title}}` are filled in. `T` opens today's note, `journal/YYYY-MM-DD.md`, made from `templates/daily.md` the first time; `lazymark daily` does the same from the shell. See [docs/templates.md](docs/templates.md).
+
+<img src="assets/readme/feature-templates.gif" alt="Starting a note from the meeting template and opening today's daily note" width="100%">
 
 ### Tasks
 
 Every `- [ ]` and `- [x]` in your notes, in one list. `Space` ticks a task and rewrites only its line; `H` hides the finished ones. The preview shows the note at the task's line.
 
 <img src="assets/readme/feature-tasks.gif" alt="Ticking tasks in the Tasks panel and hiding the finished ones" width="100%">
+
+### Dates
+
+Select a task, in the Tasks panel or on the board, and press `d`. A small popup asks for **Start** and **Due**: type a date the way you say it (`2026-10-09`, `today`, `tomorrow`, `+3d`, `+1w` or a weekday such as `friday`, in your interface language) and the resolved date appears next to the field before you save. Leave a field empty to remove that date, `Esc` cancels. On the board, clicking the dates of a card opens the same popup. From the shell, `lazymark task due <id> 2026-10-09` and `lazymark task start <id> …` do the same.
+
+<img src="assets/readme/feature-dates.gif" alt="Pressing d on a task, typing +3d and friday, and seeing the dates on the task's card on the Kanban board" width="100%">
+
+The completion date is added by itself when you tick a task. On screen the dates are monochrome glyphs in the theme's colors (an overdue due date in the error color). In the file they are kept in the [Obsidian Tasks](https://publish.obsidian.md/tasks/Introduction) format, so other tools read them too:
+
+```markdown
+- [ ] write the report 🛫 2026-05-01 📅 2026-05-10
+```
 
 ### Categories
 
@@ -48,13 +66,7 @@ Every `#tag` in your notes. `Enter` on a tag shows only the notes that have it.
 
 ### Kanban board
 
-Each task is a card with a rounded border: its text (up to 2 lines), its note and its dates. Put dates at the end of the task line in the Obsidian Tasks format (start and due; the completion date is added when you tick the task):
-
-```markdown
-- [ ] write the report 🛫 2026-05-01 📅 2026-05-10
-```
-
-On screen the dates are drawn with the same monochrome Nerd Font glyphs as the folder and note icons, in the theme's colors (overdue in the error color), never as color emoji; the file keeps the emoji. `lazymark task due <id> 2026-05-10` sets a date without opening the app, and Settings has "Cards: rectangles | compact" for the one-row view.
+Each task is a card with a rounded border: its text (up to 2 lines), its note and its dates (set them with `d`, see Dates). Settings has "Cards: rectangles | compact" for the one-row view.
 
 The same tasks as columns: To Do, In Progress and Done by default. Move a card with `H` and `L` or `Shift+←` and `Shift+→`, or drag it with the mouse to another column: the card and the target column are highlighted while you drag, `Esc` cancels. Inside a column, `K` and `J` (or `Shift+↑` and `Shift+↓`) move a card up and down, and dragging it over another card of the same column does the same: it swaps the two tasks (each with its subtasks) in the note, so it works between sibling tasks of the same note; across different notes the cards always follow the order of the notes. The change is written back to the note, on that line only, and never over a note that changed outside lazymark (it reloads and tells you). `Kanban (W)` opens the board, `Notes (W)` and `← Notes (Esc)` go back, and the bottom bar lists what the selected card can do.
 
@@ -160,10 +172,10 @@ The essentials. `?` shows the keys of the panel you are in, and [docs/keybinding
 | `1` `2` `3` `4` | Jump to a panel |
 | `c` `F` | New note / New folder |
 | `r` `m` `d` | Rename / Move / Delete |
-| `Space` | Toggle a task (Tasks panel) |
+| `Space` `d` | Toggle a task / Dates (Tasks panel and Kanban) |
 | `W` | Kanban board |
-| `x` | Trash |
-| `?` `,` | Keybindings / Settings |
+| `/` `T` | Search / Daily note |
+| `?` `,` `x` | Keybindings / Settings / Trash |
 | `q` | Quit |
 <!-- keys:end -->
 
@@ -199,7 +211,7 @@ See [docs/configuration.md](docs/configuration.md) for every setting, the comman
 Limitations:
 
 - Tasks are the list items that start with `- [ ]` or `- [x]` (also `*`, `+` and numbered), nested at any depth; code blocks are ignored.
-- The Kanban board has 2 to 6 columns, in the order of your config; cards are not reordered inside a column.
+- The Kanban board has 2 to 6 columns, in the order of your config; cards can be reordered only among tasks of the same note.
 - Pasting an image from the clipboard (`Ctrl+V`, or `lazymark paste` from an editor) needs `osascript` or `pngpaste` (macOS), `wl-paste` or `xclip` (Linux) or PowerShell (Windows).
 - The editor plugins need micro, vim or GNU nano; nano also needs the note to be opened from lazymark.
 - The terminal must be at least 60 columns by 20 rows.
