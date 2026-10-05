@@ -500,3 +500,24 @@ func TestSwapTasksRefusesDifferentParents(t *testing.T) {
 		t.Errorf("Hijo 1 e Hijo 1b comparten padre: %v", err)
 	}
 }
+
+// TestLegacyTagsColumn (ORD-015 C.4, SA4004): las etiquetas del formato anterior (#doing, #wip, #progreso, #in-progress) son todas "doing";
+// una tarea con varias cae en esa columna si existe y en la primera si no, y una #kb/<col> válida gana sobre ellas.
+func TestLegacyTagsColumn(t *testing.T) {
+	cols := Columns{"todo", "doing", "done"}
+	noDoing := Columns{"todo", "review", "done"}
+	for text, want := range map[string]int{
+		"x #wip":                1,
+		"x #wip #progreso":      1,
+		"x #in-progress #doing": 1,
+		"x #wip #kb/todo":       0, // la etiqueta nueva gana
+		"x":                     0,
+	} {
+		if got := cols.Of(Task{Text: text}); got != want {
+			t.Errorf("%q: columna %d, se esperaba %d", text, got, want)
+		}
+	}
+	if got := noDoing.Of(Task{Text: "x #wip #doing"}); got != 0 {
+		t.Errorf("sin columna doing cae en la primera: %d", got)
+	}
+}

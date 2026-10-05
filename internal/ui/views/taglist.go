@@ -59,7 +59,7 @@ func RenderTagPreview(notes []storage.Note, tag string, width, height int, activ
 	badge := ""
 
 	if tag == "" {
-		empty := theme.NormalItem.Copy().Italic(true).Render(i18n.T("Selecciona un tag para ver sus notas...", "Select a tag to view its notes..."))
+		empty := theme.NormalItem.Italic(true).Render(i18n.T("Selecciona un tag para ver sus notas...", "Select a tag to view its notes..."))
 		return theme.RenderBoxWithTitle(title, badge, empty, width, height, active)
 	}
 
@@ -67,7 +67,7 @@ func RenderTagPreview(notes []storage.Note, tag string, width, height int, activ
 
 	filtered := NotesForTag(notes, tag)
 
-	headerStyle := theme.SelectedItem.Copy()
+	headerStyle := theme.SelectedItem
 	header := headerStyle.Render(fmt.Sprintf("  #%s — %d %s", tag, len(filtered), i18n.T("nota(s)", "note(s)")))
 
 	var rows []string
@@ -86,7 +86,7 @@ func RenderTagPreview(notes []storage.Note, tag string, width, height int, activ
 
 		noteRow := fmt.Sprintf("    %s  %s",
 			theme.NormalItem.Render(title),
-			theme.NormalItem.Copy().Foreground(theme.ColorOverlay0).Render(timeStr),
+			theme.NormalItem.Foreground(theme.ColorOverlay0).Render(timeStr),
 		)
 		rows = append(rows, noteRow)
 

@@ -64,7 +64,7 @@ type mascotTickMsg struct{ gen int }
 // mascotRequestSequence pide a la terminal el tamaño de la celda en píxeles (CSI 16 t), con el que se
 // escala la imagen en múltiplos enteros del sprite: https://invisible-island.net/xterm/ctlseqs/ctlseqs.html
 // ("CSI 1 6 t: report xterm char cell size in pixels").
-func mascotRequestSequence() string { return ansi.WindowOp(ansi.RequestCellSizeWinOp) }
+func mascotRequestSequence() string { return ansi.WindowOp(16) } // 16: pedir el tamaño de la celda en píxeles
 
 // cellSize devuelve el tamaño de celda en píxeles (el que contestó la terminal, o uno típico).
 func (m *AppModel) cellSize() (w, h int) {

@@ -195,19 +195,6 @@ func editorEnv(env []string, note, exe string) []string {
 	return out
 }
 
-// appendLine agrega text al final de la nota sin reescribir el resto (X10).
-func appendLine(path, text string) error {
-	f, err := os.OpenFile(path, os.O_APPEND|os.O_WRONLY, 0o644)
-	if err != nil {
-		return err
-	}
-	if _, err := f.WriteString(text); err != nil {
-		_ = f.Close()
-		return err
-	}
-	return f.Close()
-}
-
 func (c *core) errStatus(es, en string, err error) {
 	c.setStatus("%s: %v", i18n.T(es, en), err)
 }

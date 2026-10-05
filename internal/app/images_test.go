@@ -102,10 +102,7 @@ func TestImageInlineAligned(t *testing.T) {
 	}
 
 	// posición: entre el texto de antes y el de después, y alineada con el texto
-	var rowsText []string
-	for _, l := range screen(r.AppModel) {
-		rowsText = append(rowsText, l)
-	}
+	rowsText := append([]string(nil), screen(r.AppModel)...)
 	before, firstImg, after, textX, imgX := -1, -1, -1, -1, -1
 	for y, l := range rowsText {
 		s := ansi.Strip(l)

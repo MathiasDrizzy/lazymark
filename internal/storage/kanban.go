@@ -84,11 +84,10 @@ func (c Columns) Of(t Task) int {
 			return 0
 		}
 	}
-	for _, h := range hits {
-		if i := c.Index(h.id); i >= 0 {
+	if len(hits) > 0 { // solo quedan las del formato anterior, y todas son "doing": basta mirar la primera
+		if i := c.Index(hits[0].id); i >= 0 {
 			return i
 		}
-		return 0
 	}
 	return 0
 }

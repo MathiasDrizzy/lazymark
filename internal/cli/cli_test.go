@@ -718,6 +718,9 @@ func TestTemplateErrorsAndWarningsCLI(t *testing.T) {
 			t.Errorf("--template %s: código %d, salida %q, error %v; se esperaba 2 sin salida", name, ExitCode(err), out, err)
 		}
 	}
+	if after := snapshot(t, dir); !reflect.DeepEqual(before, after) {
+		t.Error("note new con una plantilla inválida no debe crear nada")
+	}
 	os.WriteFile(filepath.Join(tpl, "daily.md"), []byte("# x\x00"), 0o644)
 	before = snapshot(t, dir)
 	if out, err := run(t, dir, "daily"); err == nil || ExitCode(err) != 2 || out != "" {

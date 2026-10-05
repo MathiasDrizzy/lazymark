@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"errors"
 	"os"
-	"regexp"
 	"sort"
 	"strings"
 	"testing"
@@ -13,8 +12,6 @@ import (
 	"github.com/yuin/goldmark"
 	"github.com/yuin/goldmark/extension"
 )
-
-var liRe = regexp.MustCompile(`(?s)<li>.*?</li>`)
 
 // itemsHTML devuelve, ordenado, el HTML de cada ítem de lista de src según goldmark (el analizador de la vista previa): una huella de
 // "qué contiene cada ítem". Intercambiar dos ítems hermanos no debe cambiar este conjunto.
