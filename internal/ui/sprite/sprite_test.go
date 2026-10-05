@@ -126,12 +126,12 @@ func TestImageIsIntegerNearestNeighbor(t *testing.T) {
 			}
 		}
 	}
-	for _, c := range []struct{ w, h, k int }{{144, 144, 4}, {72, 72, 2}, {80, 84, 2}, {160, 168, 4}} {
+	for _, c := range []struct{ w, h, k int }{{160, 160, 4}, {80, 80, 2}, {90, 100, 2}, {180, 180, 4}} {
 		img, k := g.Image(c.w, c.h)
 		if k != c.k || img.Bounds().Dx() != c.w || img.Bounds().Dy() != c.h {
 			t.Fatalf("%dx%d debía dar factor %d: k=%d %v", c.w, c.h, c.k, k, img.Bounds())
 		}
-		ox, oy := (c.w-36*k)/2, c.h-36*k
+		ox, oy := (c.w-40*k)/2, c.h-40*k
 		for y := 0; y < c.h; y++ {
 			for x := 0; x < c.w; x++ {
 				p := img.NRGBAAt(x, y)
@@ -176,25 +176,25 @@ func TestParseFramesErrors(t *testing.T) {
 	}
 }
 
-// TestSprites (C.2): los dos sprites (36x36 para Kitty y 16x8 para cuadrantes) tienen los mismos cuadros, animaciones y
-// secuencias; el cuadro dormido de Kitty es el logo (reposo/lazymark.svg) píxel por píxel, corrido (2,4); y las
+// TestSprites (C.2): los dos sprites (40x40 para Kitty y 20x10 para cuadrantes) tienen los mismos cuadros, animaciones y
+// secuencias; el cuadro dormido de Kitty es el logo (reposo/lazymark.svg) píxel por píxel, corrido (4,8); y las
 // animaciones se mueven: cada una cambia el cuadro casi en cada paso y todas terminan dormidas.
 func TestSprites(t *testing.T) {
 	f8, f36 := loadBoth(t)
 	for name, g := range f36.Grids {
-		if w, h := g.Size(); w != 36 || h != 36 {
+		if w, h := g.Size(); w != 40 || h != 40 {
 			t.Errorf("%s mide %dx%d", name, w, h)
 		}
 		if _, ok := f8.Grids[name]; !ok {
-			t.Errorf("el cuadro %s está en 36x36 y no en 16x8", name)
+			t.Errorf("el cuadro %s está en 40x40 y no en 20x10", name)
 		}
 	}
 	for name, g := range f8.Grids {
-		if w, h := g.Size(); w != 16 || h != 8 {
+		if w, h := g.Size(); w != 20 || h != 10 {
 			t.Errorf("%s mide %dx%d", name, w, h)
 		}
 		if _, ok := f36.Grids[name]; !ok {
-			t.Errorf("el cuadro %s está en 16x8 y no en 36x36", name)
+			t.Errorf("el cuadro %s está en 20x10 y no en 40x40", name)
 		}
 	}
 	if len(f36.Anims) != 5 || len(f8.Anims) != 5 {
@@ -225,7 +225,7 @@ func TestSprites(t *testing.T) {
 	for y := range sleep {
 		for x := range sleep[y] {
 			var want Pixel
-			if lx, ly := x-2, y-4; lx >= 0 && ly >= 0 && lx < 32 && ly < 32 {
+			if lx, ly := x-4, y-8; lx >= 0 && ly >= 0 && lx < 32 && ly < 32 {
 				want = logo[ly][lx]
 			}
 			if sleep[y][x] != want {
@@ -233,11 +233,11 @@ func TestSprites(t *testing.T) {
 			}
 		}
 	}
-	if _, k := sleep.Image(8*18, 4*36); k != 4 {
-		t.Errorf("a 144x144 px el factor debe ser 4: %d", k)
+	if _, k := sleep.Image(10*18, 5*36); k != 4 {
+		t.Errorf("a 180x180 px el factor debe ser 4: %d", k)
 	}
-	if _, k := sleep.Image(8*9, 4*18); k != 2 {
-		t.Errorf("a 72x72 px el factor debe ser 2: %d", k)
+	if _, k := sleep.Image(10*9, 5*18); k != 2 {
+		t.Errorf("a 90x90 px el factor debe ser 2: %d", k)
 	}
 }
 

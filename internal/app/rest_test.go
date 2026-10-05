@@ -53,7 +53,7 @@ func mascotMatches(t *testing.T, r *imageRig, name string) bool {
 }
 
 // TestMascotBottomRight (M1): a 120x35 y 80x24, con la carpeta vacía, una carpeta sin notas, una nota vacía
-// y sin selección, la mascota (8x4 celdas, sin Kitty en bloques de cuadrante con los colores exactos del
+// y sin selección, la mascota (10x5 celdas, sin Kitty en bloques de cuadrante con los colores exactos del
 // cuadro) está abajo a la derecha del panel de la vista previa y el texto queda arriba, sin tapar.
 func TestMascotBottomRight(t *testing.T) {
 	for _, sz := range []struct{ w, h int }{{120, 35}, {80, 24}} {
@@ -65,7 +65,7 @@ func TestMascotBottomRight(t *testing.T) {
 				t.Fatalf("%dx%d %s: falta %q:\n%s", sz.w, sz.h, state, wantText, out)
 			}
 			rect, pv := r.mascotRect(), r.layout.Preview
-			if rect.X+rect.W != pv.X+pv.W-2 || rect.Y+rect.H != pv.Y+pv.H-1 || rect.W != 8 || rect.H != 4 {
+			if rect.X+rect.W != pv.X+pv.W-2 || rect.Y+rect.H != pv.Y+pv.H-1 || rect.W != mascotCols || rect.H != mascotRows {
 				t.Errorf("%dx%d %s: la mascota %+v no está abajo a la derecha de %+v", sz.w, sz.h, state, rect, pv)
 			}
 			if !mascotMatches(t, r, "sleep") {
@@ -102,7 +102,7 @@ func TestMascotBottomRight(t *testing.T) {
 			t.Errorf("%dx%d: con una nota con contenido no debe verse la mascota", sz.w, sz.h)
 		}
 	}
-	// a 60x20 (el mínimo) la mascota de 8x4 cabe debajo del texto, sin romper el layout ni taparlo
+	// a 60x20 (el mínimo) la mascota de 10x5 cabe debajo del texto, sin romper el layout ni taparlo
 	small := newEmptyRig(t, 60, 20, false)
 	if !strings.Contains(plain(small.AppModel), "carpeta de notas está vacía") {
 		t.Errorf("a 60x20 debe verse el texto:\n%s", plain(small.AppModel))
@@ -117,7 +117,7 @@ func TestMascotBottomRight(t *testing.T) {
 	}
 }
 
-// TestMascotKitty (M1, M2): con Kitty la mascota son 8x4 celdas de placeholders de una imagen cuyo tamaño
+// TestMascotKitty (M1, M2): con Kitty la mascota son 10x5 celdas de placeholders de una imagen cuyo tamaño
 // en píxeles es el de esas celdas (con el tamaño de celda que contestó la terminal), una sola transmisión por cuadro.
 func TestMascotKitty(t *testing.T) {
 	r := newEmptyRig(t, 120, 35, true)
@@ -126,8 +126,8 @@ func TestMascotKitty(t *testing.T) {
 	if r.cellW != 10 || r.cellH != 21 {
 		t.Fatalf("el tamaño de celda no se guardó: %dx%d", r.cellW, r.cellH)
 	}
-	if n := placeholderCells(r.AppModel); n != 8*4 {
-		t.Errorf("celdas de la mascota = %d, se esperaban 32", n)
+	if n := placeholderCells(r.AppModel); n != mascotCols*mascotRows {
+		t.Errorf("celdas de la mascota = %d, se esperaban %d", n, mascotCols*mascotRows)
 	}
 	got := r.take()
 	if transmits(got) != 1 {
@@ -139,9 +139,9 @@ func TestMascotKitty(t *testing.T) {
 		t.Errorf("repintar no debe emitir nada: %q", again)
 	}
 	// la imagen tiene el tamaño exacto de las celdas, con el sprite en múltiplos enteros (nitidez)
-	img, k := frames36().Grids["sleep"].Image(8*10, 4*21)
-	if b := img.Bounds(); b.Dx() != 80 || b.Dy() != 84 || k != 2 {
-		t.Errorf("imagen %dx%d con factor %d, se esperaba 80x84 con 2 (el cuadro de 36x36)", b.Dx(), b.Dy(), k)
+	img, k := frames36().Grids["sleep"].Image(mascotCols*10, mascotRows*21)
+	if b := img.Bounds(); b.Dx() != 100 || b.Dy() != 105 || k != 2 {
+		t.Errorf("imagen %dx%d con factor %d, se esperaba 100x105 con 2 (el cuadro de 40x40)", b.Dx(), b.Dy(), k)
 	}
 }
 

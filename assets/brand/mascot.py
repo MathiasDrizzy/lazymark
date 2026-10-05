@@ -2,17 +2,19 @@
 """Generates the resting mascot and its animations (ORD-012 C.2).
 
 Two sprites share one set of animations:
-  * 36x36 (with Kitty): the 32x32 logo (variant c2, built from the layers of generate.py) on a canvas with a
-    margin of 2 px at the sides and 4 px on top, so it can hop, stretch and step aside. The app draws it on 8x4
-    cells at an integer scale factor, nearest neighbor: x4 with 18x36-pixel cells (144x144), x2 with 9x18.
-  * 16x8 (no Kitty): a hand-drawn 14x7 sloth on 8x4 cells of quadrant blocks (2x2 pixels per cell).
+  * 40x40 (with Kitty): the 32x32 logo (variant c2, built from the layers of generate.py) on a canvas with a
+    margin of 4 px at the sides and 8 px on top, so it can hop, stretch and step aside without any frame
+    touching the canvas edge (ORD-015: the old 36x36 canvas clipped the jump by 3 px and the dance by 1 px; the
+    sprite is the same size, only the canvas grew). The app draws it on 10x5 cells at an integer scale factor,
+    nearest neighbor: x4 with 18x36-pixel cells (180x180), x2 with 9x18 (90x90).
+  * 20x10 (no Kitty): a hand-drawn 14x7 sloth on 10x5 cells of quadrant blocks (2x2 pixels per cell).
     Its pixels are twice as tall as wide, so it is drawn for that aspect.
 Every frame of an animation is the same pose moved, squashed or stretched around the feet (nearest neighbor),
 with easing, at ~16 fps; the arm and the eyes change pose where the animation needs it.
 
     python3 assets/brand/mascot.py
 
-It writes reposo/sprite36.txt and reposo/sprite8.txt (embedded in the binary), the contact sheets
+It writes reposo/sprite36.txt and reposo/sprite8.txt (the file names keep the old sizes) (embedded in the binary), the contact sheets
 reposo/hoja-animaciones.png and reposo/hoja-animaciones-8.png, one GIF per animation
 (reposo/anim-<name>.gif, on the app's dark background) and reposo/hero.gif (transparent, all of them in a loop).
 The GIFs need ffmpeg.
@@ -31,8 +33,10 @@ sys.path.insert(0, HERE)
 import generate as g  # noqa: E402
 
 OUT = os.path.join(HERE, "reposo")
-W = H = 36  # canvas of the Kitty sprite
-OX, OY = 2, 4  # where the 32x32 logo sits on it
+W = H = 40  # canvas of the Kitty sprite
+OX, OY = 4, 8  # where the 32x32 logo sits on it
+W8, H8 = 20, 10  # canvas of the quadrant sprite (10x5 cells of 2x2 pixels)
+OX8, OY8 = 3, 3  # where the 14x7 sloth sits on it
 FPS = 16
 BG = "#1e1e2e"
 
@@ -113,7 +117,7 @@ S8 = {
 
 def poses8():
     def parse(rows):
-        return {(x + 1, y + 1): PAL8[ch] for y, r in enumerate(rows) for x, ch in enumerate(r) if ch != "."}
+        return {(x + OX8, y + OY8): PAL8[ch] for y, r in enumerate(rows) for x, ch in enumerate(r) if ch != "."}
     p = {k: parse(v) for k, v in S8.items()}
     b = dict(p["awake"])
     for (x, y), v in p["awake"].items():
@@ -121,7 +125,7 @@ def poses8():
             interior = all((x + dx, y + dy) in p["awake"] for dx, dy in ((1, 0), (-1, 0), (0, 1), (0, -1)))
             if interior and v != PAL8["K"] or (v == PAL8["K"] and interior and y in (4, 5)):
                 b[(x, y)] = PAL8["F"]
-    p["back"] = {(15 - x, y): v for (x, y), v in b.items()}  # mirrored: from behind the pencil is on the other side
+    p["back"] = {(W8 - 1 - x, y): v for (x, y), v in b.items()}  # mirrored: from behind the pencil is on the other side
     return p
 
 
@@ -237,14 +241,14 @@ def render(poses, w, h, ax, ay, spec, sxdiv=1.0, sydiv=1.0, arm_map=None):
 def both(spec):
     """The frames of one animation in the two sprites: [(grid36, grid8)]."""
     f36 = render(P36, W, H, W // 2, H - 2, spec)
-    f8 = render(P8, 16, 8, 8, 7, spec, 2.0, 6.0, lambda p: "arm" if p.startswith("arm") else p)
+    f8 = render(P8, W8, H8, W8 // 2, H8 - 1, spec, 2.0, 6.0, lambda p: "arm" if p.startswith("arm") else p)
     return list(zip(f36, f8))
 
 
 def build():
     """Named, de-duplicated frames shared by both sprites ({name: grid}) and the sequences."""
     f36, f8, seen, anims = {}, {}, {}, []
-    sleep = (xf(P36["sleep"], W, H, W // 2, H - 2), xf(P8["sleep"], 16, 8, 8, 7))
+    sleep = (xf(P36["sleep"], W, H, W // 2, H - 2), xf(P8["sleep"], W8, H8, W8 // 2, H8 - 1))
     seen[(frozenset(sleep[0].items()), frozenset(sleep[1].items()))] = "sleep"
     f36["sleep"], f8["sleep"] = sleep
     for name, spec in ANIMS:
@@ -337,17 +341,17 @@ def main():
     os.makedirs(OUT, exist_ok=True)
     f36, f8, a36 = build()
     a8 = a36
-    write_txt(os.path.join(OUT, "sprite36.txt"), f36, a36, W, H, "Resting mascot: 36x36 frames (the 32x32 logo on a canvas with room to move).")
-    write_txt(os.path.join(OUT, "sprite8.txt"), f8, a8, 16, 8, "Resting mascot for quadrant blocks: 16x8 pixels (2x2 per cell, 8x4 cells; pixels twice as tall as wide).")
+    write_txt(os.path.join(OUT, "sprite36.txt"), f36, a36, W, H, "Resting mascot: 40x40 frames (the 32x32 logo on a canvas with room to move).")
+    write_txt(os.path.join(OUT, "sprite8.txt"), f8, a8, W8, H8, "Resting mascot for quadrant blocks: 20x10 pixels (2x2 per cell, 10x5 cells; pixels twice as tall as wide).")
     sheet(os.path.join(OUT, "hoja-animaciones.png"), f36, a36, W, H, 2)
-    sheet(os.path.join(OUT, "hoja-animaciones-8.png"), f8, a8, 16, 8, 8, px_h=2)
+    sheet(os.path.join(OUT, "hoja-animaciones-8.png"), f8, a8, W8, H8, 8, px_h=2)
     for name, names in a36:
         gif(os.path.join(OUT, f"anim-{name}.gif"), [f36[n] for n in names], W, H, 5, BG)
     loop = []
     for _, names in a36:
         loop += [f36[n] for n in names] + [f36["sleep"]] * 6
     gif(os.path.join(OUT, "hero.gif"), loop, W, H, 4, None)
-    print("ok", len(f36), "frames (36x36),", len(f8), "frames (16x8)")
+    print("ok", len(f36), "frames (40x40),", len(f8), "frames (20x10)")
 
 
 if __name__ == "__main__":

@@ -10,15 +10,17 @@ import (
 	"github.com/charmbracelet/x/ansi"
 )
 
-// La mascota: con Kitty, el logo de 32x32 (variante c2) sobre un lienzo de 36x36 con sitio para saltar, y sus
+// La mascota: con Kitty, el logo de 32x32 (variante c2) sobre un lienzo de 40x40 con sitio para saltar y moverse
+// (ningún cuadro de ninguna animación toca el borde: ORD-015; el de 36x36 cortaba el salto y el baile), y sus
 // animaciones, hechas desde sus capas, escalados en un factor entero; sin Kitty, un perezoso de 14x7 dibujado
-// a mano sobre bloques de cuadrante (2x2 píxeles por celda). Ocupa 8 columnas x 4 filas y duerme abajo a la
+// a mano sobre bloques de cuadrante (2x2 píxeles por celda, lienzo de 20x10). El sprite mide lo mismo que antes:
+// solo creció el lienzo. Ocupa 10 columnas x 5 filas y duerme abajo a la
 // derecha de los estados de reposo. Un clic en ella lanza una animación corta (despertar, saludar con el lápiz,
 // bailar, saltar, dar una vuelta), una distinta en cada clic y en orden, y vuelve a dormir sola. Cada animación
 // dura de 1 a 1,7 s a unos 16 cuadros por segundo, con cuadros intermedios (aplastar, estirar, giro).
 const (
-	mascotCols = 8
-	mascotRows = 4
+	mascotCols = 10
+	mascotRows = 5
 	// mascotInterval es lo que dura cada cuadro de la animación (~16 fps).
 	mascotInterval = 60 * time.Millisecond
 	// Tamaño de celda que se supone mientras la terminal no contesta a CSI 16 t.
@@ -32,7 +34,7 @@ var (
 	mascot8, mascot36 *sprite.Frames
 )
 
-// frames devuelve los cuadros de cuadrantes (16x8) y frames36 los de Kitty (36x36), leídos una vez. Tienen los
+// frames devuelve los cuadros de cuadrantes (20x10) y frames36 los de Kitty (40x40), leídos una vez. Tienen los
 // mismos nombres de cuadro y las mismas animaciones.
 func loadMascot() {
 	mascotOnce.Do(func() {
@@ -106,9 +108,9 @@ func (m *AppModel) frameName() string {
 	return "sleep"
 }
 
-// mascotLines devuelve las 4 filas de la mascota: con Kitty, la imagen (el cuadro de 36x36 escalado en un
+// mascotLines devuelve las 5 filas de la mascota: con Kitty, la imagen (el cuadro de 40x40 escalado en un
 // factor entero, con vecino más cercano, sobre un lienzo del tamaño exacto en píxeles de las celdas: la
-// terminal no tiene que reescalarla ni suavizarla); sin Kitty, bloques de cuadrante del cuadro de 16x8.
+// terminal no tiene que reescalarla ni suavizarla); sin Kitty, bloques de cuadrante del cuadro de 20x10.
 func (m *AppModel) mascotLines() []string {
 	name := m.frameName()
 	cw, ch := m.cellSize()
