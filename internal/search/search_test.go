@@ -317,17 +317,47 @@ func TestSearchTimeout(t *testing.T) {
 	}
 }
 
-// TestTooManyAbandonedSearches (ORD-015 segunda opinión): si ya hay muchas coincidencias lentas abandonadas corriendo, una búsqueda nueva con regex
-// no lanza más: avisa que se cortó en vez de acumular goroutines.
-func TestTooManyAbandonedSearches(t *testing.T) {
-	store, _ := corpus(t)
-	abandoned.Store(10000)
-	defer abandoned.Store(0)
-	res, err := Run(context.Background(), store, `a.*b`, Options{Regex: true})
-	if err != nil || !res.TimedOut || len(res.Matches) != 0 {
-		t.Errorf("con búsquedas lentas pendientes debe cortarse: %v %+v", err, res)
+// TestRegexCostCap (ORD-016 L1): el costo de una expresión (su programa compilado, con las clases Unicode pesadas) se calcula antes de ejecutarla: una
+// repetición anidada que pasaba el tope de {100} se rechaza al instante con el mismo mensaje; las expresiones de uso corriente se aceptan.
+func TestRegexCostCap(t *testing.T) {
+	for _, bad := range []string{`([\p{L}\p{N}]{50}){20}x`, `(\p{L}{10}){10}[\p{L}\p{N}]{100}`, `(\w{50}){20}(\p{L}{100}){2}`, `[\p{L}\p{N}]{1000}x`, `(\p{L}{100}){3}`} {
+		start := time.Now()
+		_, err := Compile(bad, Options{Regex: true})
+		if err == nil || !strings.Contains(err.Error(), "demasiado costosa") {
+			t.Errorf("%s debe rechazarse como demasiado costosa: %v", bad, err)
+		}
+		if d := time.Since(start); d > 200*time.Millisecond {
+			t.Errorf("%s: el rechazo tardó %v", bad, d)
+		}
 	}
-	if res, err := Run(context.Background(), store, "a", Options{}); err != nil || res.TimedOut {
-		t.Errorf("el texto literal no se ve afectado: %v %v", err, res.TimedOut)
+	for _, good := range []string{`[\p{L}\p{N}]{20}x`, `[\p{L}\p{N}]{100}x`, `(a|b|c){100}x`, `\w+@\w+\.\w{2,6}`, `(\p{L}+\s*){5}x`, `\bTODO\b`, `^#+ `, `\d{4}-\d{2}-\d{2}`, `(?i)error|warning|fatal`, `https?://[^\s)]+`} {
+		if _, err := Compile(good, Options{Regex: true}); err != nil {
+			t.Errorf("%s debe aceptarse: %v", good, err)
+		}
+	}
+}
+
+// TestCutoffFreesTheCPU (ORD-016 L1): después del corte por tiempo no queda ninguna goroutine de la búsqueda ni CPU gastándose: la coincidencia sobre
+// una línea enorme se detiene sola al cancelarse (antes seguía hasta 3 s después del corte).
+func TestCutoffFreesTheCPU(t *testing.T) {
+	store, dir := corpus(t)
+	os.WriteFile(filepath.Join(dir, "larga.md"), []byte(strings.Repeat("abcdefghij", 200000)+"\n"), 0o644)
+	runtime.GC()
+	time.Sleep(100 * time.Millisecond)
+	goBefore := runtime.NumGoroutine()
+	res, err := Run(context.Background(), store, `[\p{L}\p{N}]{60}x`, Options{Regex: true, Timeout: 150 * time.Millisecond})
+	if err != nil || !res.TimedOut {
+		t.Fatalf("debía cortarse por tiempo: %v %+v", err, res.TimedOut)
+	}
+	time.Sleep(300 * time.Millisecond) // lo que tarde en notar la cancelación
+	if after := runtime.NumGoroutine(); after > goBefore {
+		t.Errorf("quedan goroutines tras el corte: %d antes, %d después", goBefore, after)
+	}
+	if c0, ok := cpuTime(); ok {
+		time.Sleep(600 * time.Millisecond)
+		c1, _ := cpuTime()
+		if used := c1 - c0; used > 150*time.Millisecond {
+			t.Errorf("la CPU sigue gastándose tras el corte: %v en 600 ms de espera", used)
+		}
 	}
 }

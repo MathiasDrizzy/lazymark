@@ -7,6 +7,7 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -15,7 +16,6 @@ import (
 	"sort"
 	"strings"
 	"sync"
-	"sync/atomic"
 	"time"
 	"unicode/utf8"
 
@@ -27,8 +27,10 @@ const (
 	DefaultMaxFileBytes = 2 << 20 // las notas más grandes no se leen (se cuentan en Result.Skipped)
 	DefaultMaxResults   = 500
 	DefaultTimeout      = 10 * time.Second
-	// maxRepeat es la mayor repetición ({n}) que acepta una expresión regular: una como [\p{L}\p{N}]{1000} tarda decenas de segundos en 2 MB.
-	maxRepeat  = 100
+	// maxRegexCost es el costo máximo de una expresión regular (ver regexCost): una de 100 000 tarda unos 3 s en una línea de 2 MB, una de 778 000 más de 15 s.
+	maxRegexCost = 100000
+	// longLine es el largo (bytes) desde el cual una línea se compara con un lector que mira la cancelación: así el corte por tiempo detiene la coincidencia.
+	longLine   = 64 << 10
 	maxPerFile = 50
 	// ContextWidth es el ancho (en caracteres) de la línea que se devuelve alrededor de la coincidencia.
 	ContextWidth = 140
@@ -79,8 +81,8 @@ func Compile(query string, opts Options) (*regexp.Regexp, error) {
 		expr = "(?i)" + expr
 	}
 	if opts.Regex {
-		if tree, err := syntax.Parse(expr, syntax.Perl); err == nil && repeatTooBig(tree) {
-			return nil, fmt.Errorf("expresión regular demasiado costosa: una repetición pasa de %d", maxRepeat)
+		if tree, err := syntax.Parse(expr, syntax.Perl); err == nil && regexCost(tree) > maxRegexCost {
+			return nil, fmt.Errorf("expresión regular demasiado costosa: reduce las repeticiones ({n}) o las clases Unicode")
 		}
 	}
 	re, err := regexp.Compile(expr)
@@ -105,9 +107,6 @@ func Run(ctx context.Context, store *storage.Storage, query string, opts Options
 	var cancelTimeout context.CancelFunc
 	ctx, cancelTimeout = context.WithTimeout(ctx, timeout)
 	defer cancelTimeout()
-	if opts.Regex && abandoned.Load() >= int32(2*runtime.NumCPU()) { // ya hay demasiadas búsquedas lentas sin terminar: no se lanza otra
-		return Result{TimedOut: true, Elapsed: time.Since(start)}, nil
-	}
 	maxBytes, maxResults := opts.MaxFileBytes, opts.MaxResults
 	if maxBytes <= 0 {
 		maxBytes = DefaultMaxFileBytes
@@ -132,7 +131,7 @@ func Run(ctx context.Context, store *storage.Storage, query string, opts Options
 		go func() {
 			defer wg.Done()
 			for p := range jobs {
-				matches, skipped, capped := searchFileCtx(cctx, p, base, re, !opts.Regex, maxBytes)
+				matches, skipped, capped := searchFile(cctx, p, base, re, !opts.Regex, maxBytes)
 				mu.Lock()
 				res.Files++
 				if skipped {
@@ -216,7 +215,15 @@ func searchFile(ctx context.Context, path, base string, re *regexp.Regexp, prefi
 			return matches, false, false
 		}
 		l = bytes.TrimSuffix(l, []byte("\r"))
-		loc := re.FindIndex(l)
+		var loc []int
+		if !prefilter && len(l) > longLine { // regex sobre una línea enorme: con un lector que mira la cancelación, para poder cortarla
+			loc = re.FindReaderIndex(&ctxRuneReader{ctx: ctx, b: l})
+			if ctx.Err() != nil {
+				return matches, false, false
+			}
+		} else {
+			loc = re.FindIndex(l)
+		}
 		if loc == nil || loc[0] == loc[1] { // sin coincidencia, o una expresión que solo coincide vacía
 			continue
 		}
@@ -338,45 +345,43 @@ func dedupe(paths []string) []string {
 	return out
 }
 
-// repeatTooBig dice si la expresión tiene una repetición {n,m} con n o m mayores que maxRepeat.
-func repeatTooBig(re *syntax.Regexp) bool {
-	if re.Op == syntax.OpRepeat && (re.Min > maxRepeat || re.Max > maxRepeat) {
-		return true
+// regexCost estima lo que cuesta ejecutar la expresión: la suma, sobre las instrucciones de su programa compilado (con las repeticiones {n} ya
+// expandidas), de cuántos rangos de runas mira cada una (una clase como \p{L} tiene unos 650; una letra suelta, 1). El tiempo de la búsqueda crece
+// con ese número: es el de las repeticiones anidadas ([\p{L}\p{N}]{50}){20}, que el tope de una sola repetición no veía.
+func regexCost(re *syntax.Regexp) int {
+	prog, err := syntax.Compile(re.Simplify())
+	if err != nil {
+		return 0
 	}
-	for _, sub := range re.Sub {
-		if repeatTooBig(sub) {
-			return true
+	cost := 0
+	for _, in := range prog.Inst {
+		switch in.Op {
+		case syntax.InstRune:
+			cost += max(1, len(in.Rune)/2)
+		case syntax.InstRune1, syntax.InstRuneAny, syntax.InstRuneAnyNotNL:
+			cost++
 		}
 	}
-	return false
+	return cost
 }
 
-// abandoned cuenta las coincidencias de regex abandonadas por tiempo que todavía no terminaron.
-var abandoned atomic.Int32
+// ctxRuneReader lee la línea runa a runa y deja de leer (como si acabara el texto) cuando se cancela el contexto: así una coincidencia sobre una línea
+// enorme se detiene sola en vez de seguir gastando CPU después del corte.
+type ctxRuneReader struct {
+	ctx context.Context
+	b   []byte
+	i   int
+	n   int
+}
 
-// searchFileCtx es searchFile que se abandona al cancelarse ctx: una coincidencia de regex sobre una línea enorme no se puede interrumpir por dentro,
-// así que se corre aparte y, si ctx termina antes, se deja de esperarla (acaba sola y su resultado se descarta).
-func searchFileCtx(ctx context.Context, path, base string, re *regexp.Regexp, prefilter bool, maxBytes int64) (matches []Match, skipped, capped bool) {
-	type out struct {
-		m       []Match
-		sk, cap bool
+func (r *ctxRuneReader) ReadRune() (rune, int, error) {
+	if r.i >= len(r.b) {
+		return 0, 0, io.EOF
 	}
-	ch := make(chan out, 1)
-	go func() {
-		m, sk, cp := searchFile(ctx, path, base, re, prefilter, maxBytes)
-		ch <- out{m, sk, cp}
-	}()
-	select {
-	case o := <-ch:
-		return o.m, o.sk, o.cap
-	case <-ctx.Done():
-		select {
-		case o := <-ch: // terminó justo ahora
-			return o.m, o.sk, o.cap
-		default:
-		}
-		abandoned.Add(1) // sigue corriendo: se cuenta hasta que acabe, para no acumular búsquedas lentas
-		go func() { <-ch; abandoned.Add(-1) }()
-		return nil, false, false
+	if r.n++; r.n&4095 == 0 && r.ctx.Err() != nil {
+		return 0, 0, r.ctx.Err()
 	}
+	c, size := utf8.DecodeRune(r.b[r.i:])
+	r.i += size
+	return c, size, nil
 }
