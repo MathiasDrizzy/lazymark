@@ -1,0 +1,182 @@
+[
+ {
+  "pattern": "\\bTODO\\b",
+  "peso_aprox": 4,
+  "veredicto": "acepta",
+  "motivo": "\\bTODO\\b = 4 literales (4 × 1) + 2 límites de palabra (0) = 4 <= 100000 -> acepta"
+ },
+ {
+  "pattern": "^#+ ",
+  "peso_aprox": 2,
+  "veredicto": "acepta",
+  "motivo": "^#+  = 1 ancla '^' (0) + 1 '#' (InstRune1: 1) + 1 espacio (InstRune1: 1) = 2 <= 100000 -> acepta"
+ },
+ {
+  "pattern": "^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$",
+  "peso_aprox": 20,
+  "veredicto": "acepta",
+  "motivo": "Clases ASCII compuestas (≈ 8 + 4 + 2 rangos) y literales '@', '.' (2 × 1), peso total ≈ 20 <= 100000 -> acepta"
+ },
+ {
+  "pattern": "https?://[a-zA-Z0-9.-]+(/[a-zA-Z0-9_.~!$&'()*+,;=:@%/-]*)?",
+  "peso_aprox": 35,
+  "veredicto": "acepta",
+  "motivo": "Literales 'https://' (≈ 7) + clases ASCII en bucles NFA (≈ 28), peso total ≈ 35 <= 100000 -> acepta"
+ },
+ {
+  "pattern": "\\b\\d{4}-\\d{2}-\\d{2}\\b",
+  "peso_aprox": 10,
+  "veredicto": "acepta",
+  "motivo": "\\b\\d{4}-\\d{2}-\\d{2}\\b = (4 × 1) + 1 + (2 × 1) + 1 + (2 × 1) = 10 <= 100000 -> acepta"
+ },
+ {
+  "pattern": "\\b(SELECT|INSERT|UPDATE|DELETE|FROM|WHERE)\\b",
+  "peso_aprox": 33,
+  "veredicto": "acepta",
+  "motivo": "Alternancia de 6 palabras clave con 33 caracteres literales (33 × 1) = 33 <= 100000 -> acepta"
+ },
+ {
+  "pattern": "\\p{L}{200}",
+  "peso_aprox": 130000,
+  "veredicto": "rechaza",
+  "motivo": "\\p{L}{200} = 200 × 650 = 130000 > 100000 -> rechaza"
+ },
+ {
+  "pattern": "\\p{L}{50}\\p{N}{50}",
+  "peso_aprox": 39500,
+  "veredicto": "acepta",
+  "motivo": "\\p{L}{50}\\p{N}{50} = (50 × 650) + (50 × 140) = 32500 + 7000 = 39500 <= 100000 -> acepta"
+ },
+ {
+  "pattern": "[\\p{L}\\p{N}]{100}",
+  "peso_aprox": 77800,
+  "veredicto": "acepta",
+  "motivo": "[\\p{L}\\p{N}]{100} = 100 × 778 ≈ 77800 <= 100000 -> acepta"
+ },
+ {
+  "pattern": "\\p{N}{800}",
+  "peso_aprox": 112000,
+  "veredicto": "rechaza",
+  "motivo": "\\p{N}{800} = 800 × 140 = 112000 > 100000 -> rechaza"
+ },
+ {
+  "pattern": "\\p{Han}{3000}",
+  "peso_aprox": 120000,
+  "veredicto": "rechaza",
+  "motivo": "\\p{Han}{3000} = 3000 × 40 = 120000 > 100000 -> rechaza"
+ },
+ {
+  "pattern": "(\\p{L}{10}){10}",
+  "peso_aprox": 65000,
+  "veredicto": "acepta",
+  "motivo": "(\\p{L}{10}){10} = 10 × 10 × 650 = 65000 <= 100000 -> acepta"
+ },
+ {
+  "pattern": "(\\w{50}){20}",
+  "peso_aprox": 4000,
+  "veredicto": "acepta",
+  "motivo": "(\\w{50}){20} = 50 × 20 × 4 = 4000 <= 100000 -> acepta"
+ },
+ {
+  "pattern": "((a|b){10}){10}",
+  "peso_aprox": 200,
+  "veredicto": "acepta",
+  "motivo": "((a|b){10}){10} = 10 × 10 × (1 + 1) = 200 <= 100000 -> acepta"
+ },
+ {
+  "pattern": "([\\p{L}\\p{N}]{50}){20}x",
+  "peso_aprox": 778001,
+  "veredicto": "rechaza",
+  "motivo": "([\\p{L}\\p{N}]{50}){20}x = (50 × 20 × 778) + 1 ≈ 778000 > 100000 -> rechaza"
+ },
+ {
+  "pattern": "((\\p{L}){20}){10}",
+  "peso_aprox": 130000,
+  "veredicto": "rechaza",
+  "motivo": "((\\p{L}){20}){10} = 20 × 10 × 650 = 130000 > 100000 -> rechaza"
+ },
+ {
+  "pattern": "\\p{L}{60}|\\p{N}{300}",
+  "peso_aprox": 81000,
+  "veredicto": "acepta",
+  "motivo": "\\p{L}{60}|\\p{N}{300} = (60 × 650) + (300 × 140) = 39000 + 42000 = 81000 <= 100000 -> acepta"
+ },
+ {
+  "pattern": "\\p{L}{80}|\\p{L}{80}",
+  "peso_aprox": 104000,
+  "veredicto": "rechaza",
+  "motivo": "\\p{L}{80}|\\p{L}{80} = (80 × 650) + (80 × 650) = 52000 + 52000 = 104000 > 100000 -> rechaza"
+ },
+ {
+  "pattern": "\\p{L}{50}|\\p{L}{50}|\\p{L}{50}",
+  "peso_aprox": 97500,
+  "veredicto": "acepta",
+  "motivo": "\\p{L}{50}|\\p{L}{50}|\\p{L}{50} = 3 × (50 × 650) = 97500 <= 100000 -> acepta"
+ },
+ {
+  "pattern": "(\\p{L}\\p{N}){60}",
+  "peso_aprox": 47400,
+  "veredicto": "acepta",
+  "motivo": "(\\p{L}\\p{N}){60} = 60 × (650 + 140) = 60 × 790 = 47400 <= 100000 -> acepta"
+ },
+ {
+  "pattern": "(\\p{L}\\p{N}){150}",
+  "peso_aprox": 118500,
+  "veredicto": "rechaza",
+  "motivo": "(\\p{L}\\p{N}){150} = 150 × (650 + 140) = 150 × 790 = 118500 > 100000 -> rechaza"
+ },
+ {
+  "pattern": "(\\p{Han}\\p{L}){80}",
+  "peso_aprox": 55200,
+  "veredicto": "acepta",
+  "motivo": "(\\p{Han}\\p{L}){80} = 80 × (40 + 650) = 80 × 690 = 55200 <= 100000 -> acepta"
+ },
+ {
+  "pattern": "(\\p{Han}\\p{L}){160}",
+  "peso_aprox": 110400,
+  "veredicto": "rechaza",
+  "motivo": "(\\p{Han}\\p{L}){160} = 160 × (40 + 650) = 160 × 690 = 110400 > 100000 -> rechaza"
+ },
+ {
+  "pattern": "(\\p{L}{2}\\d){50}",
+  "peso_aprox": 65050,
+  "veredicto": "acepta",
+  "motivo": "(\\p{L}{2}\\d){50} = 50 × (2 × 650 + 1) = 50 × 1301 = 65050 <= 100000 -> acepta"
+ },
+ {
+  "pattern": "\\p{L}{153}",
+  "peso_aprox": 99450,
+  "veredicto": "acepta",
+  "motivo": "\\p{L}{153} = 153 × 650 = 99450 <= 100000 (borde inferior) -> acepta"
+ },
+ {
+  "pattern": "\\p{L}{154}",
+  "peso_aprox": 100100,
+  "veredicto": "rechaza",
+  "motivo": "\\p{L}{154} = 154 × 650 = 100100 > 100000 (borde superior) -> rechaza"
+ },
+ {
+  "pattern": "\\p{N}{714}",
+  "peso_aprox": 99960,
+  "veredicto": "acepta",
+  "motivo": "\\p{N}{714} = 714 × 140 = 99960 <= 100000 (borde inferior) -> acepta"
+ },
+ {
+  "pattern": "\\p{N}{715}",
+  "peso_aprox": 100100,
+  "veredicto": "rechaza",
+  "motivo": "\\p{N}{715} = 715 × 140 = 100100 > 100000 (borde superior) -> rechaza"
+ },
+ {
+  "pattern": "[\\p{L}\\p{N}]{128}",
+  "peso_aprox": 99584,
+  "veredicto": "acepta",
+  "motivo": "[\\p{L}\\p{N}]{128} = 128 × 778 = 99584 <= 100000 (borde inferior) -> acepta"
+ },
+ {
+  "pattern": "[\\p{L}\\p{N}]{129}",
+  "peso_aprox": 100362,
+  "veredicto": "rechaza",
+  "motivo": "[\\p{L}\\p{N}]{129} = 129 × 778 = 100362 > 100000 (borde superior) -> rechaza"
+ }
+]

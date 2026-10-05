@@ -2,6 +2,7 @@ package search
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -358,6 +359,41 @@ func TestCutoffFreesTheCPU(t *testing.T) {
 		c1, _ := cpuTime()
 		if used := c1 - c0; used > 150*time.Millisecond {
 			t.Errorf("la CPU sigue gastándose tras el corte: %v en 600 ms de espera", used)
+		}
+	}
+}
+
+// TestRegexCostAgainstOracle (ORD-016 L1): 30 patrones (útiles, con clases Unicode grandes, anidados y justo a ambos lados del tope) con su veredicto,
+// calculados por el agente de apoyo a partir de las reglas del costo y de tamaños aproximados de las clases Unicode. Los patrones cuyo costo cae a ±3 %
+// del tope dependen del número exacto de rangos de la clase en la versión de Unicode de Go: ahí el oráculo no es concluyente y solo se exige que no
+// haya diferencias lejos del tope.
+func TestRegexCostAgainstOracle(t *testing.T) {
+	data, err := os.ReadFile("testdata/regex-oracle.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var cases []struct {
+		Pattern  string `json:"pattern"`
+		Peso     int    `json:"peso_aprox"`
+		Veredict string `json:"veredicto"`
+	}
+	if err := json.Unmarshal(data, &cases); err != nil {
+		t.Fatal(err)
+	}
+	if len(cases) < 25 {
+		t.Fatalf("solo %d casos", len(cases))
+	}
+	// desacuerdos revisados a mano: el oráculo suma las dos ramas, pero Go factoriza las alternativas idénticas (peso real 54 720 = una sola rama)
+	reviewed := map[string]bool{`\p{L}{80}|\p{L}{80}`: true}
+	for _, c := range cases {
+		if reviewed[c.Pattern] {
+			continue
+		}
+		_, err := Compile(c.Pattern, Options{Regex: true})
+		rejected := err != nil
+		near := c.Peso > maxRegexCost*97/100 && c.Peso < maxRegexCost*103/100
+		if rejected != (c.Veredict == "rechaza") && !near {
+			t.Errorf("%s: el oráculo dice %s (peso ≈ %d) y Compile dio error=%v", c.Pattern, c.Veredict, c.Peso, err)
 		}
 	}
 }
