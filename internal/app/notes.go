@@ -241,7 +241,7 @@ func (p *notesPanel) promptCreate(folder bool) tea.Cmd {
 			p.selectPath(path)
 			p.c.setStatus(i18n.T("Carpeta creada: %s", "Folder created: %s"), filepath.Base(path))
 			return nil
-		}))
+		}).suggested())
 		return nil
 	}
 	suggest := fmt.Sprintf("%s %d", i18n.T("Nueva nota", "New note"), len(p.c.notes)+1)
@@ -255,7 +255,7 @@ func (p *notesPanel) promptCreate(folder bool) tea.Cmd {
 		p.selectPath(note.Path)
 		p.c.setStatus(i18n.T("Nota creada: %s", "Note created: %s"), note.ID)
 		return nil
-	}))
+	}).suggested())
 	return nil
 }
 
@@ -291,17 +291,25 @@ func (p *notesPanel) promptRename() tea.Cmd {
 			p.selectPath(newPath)
 			p.c.setStatus("%s", status)
 		}
-		// si otras notas enlazan a esta con [[wikilinks]], se ofrece actualizarlos (con el detalle de lo que cambia)
-		if isNote && p.c.links != nil {
-			if edits := p.c.links.RenameEdits(path, storage.Slug(name)); len(edits) > 0 && storage.Slug(name) != strings.ToLower(old) {
-				p.c.push(newRenameLinksPopup(p.c.store.BaseDir, edits, func(update bool) tea.Cmd {
+		// si otras notas enlazan a esta (o, con una carpeta, a notas de dentro con [[carpeta/nota]]), se ofrece actualizar los wikilinks (con el detalle)
+		if p.c.links != nil && storage.Slug(name) != strings.ToLower(old) {
+			var edits []links.Edit
+			if isNote {
+				edits = p.c.links.RenameEdits(path, storage.Slug(name))
+			} else {
+				edits = p.c.links.FolderRenameEdits(path, storage.Slug(name))
+			}
+			if len(edits) > 0 {
+				pop := newRenameLinksPopup(p.c.store.BaseDir, edits, func(update bool) tea.Cmd {
 					if update {
 						rename(edits)
 					} else {
 						rename(nil)
 					}
 					return nil
-				}))
+				})
+				pop.folder = !isNote
+				p.c.push(pop)
 				return nil
 			}
 		}
@@ -522,7 +530,7 @@ func (p *notesPanel) promptFromTemplate() tea.Cmd {
 				p.c.setStatus(i18n.T("Nota creada: %s", "Note created: %s"), note.ID)
 			}
 			return nil
-		}))
+		}).suggested())
 		return nil
 	}))
 	return nil

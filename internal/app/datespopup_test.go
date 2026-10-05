@@ -18,6 +18,7 @@ func datesRig(t *testing.T) (*AppModel, string, int) {
 	storage.Today = func() string { return "2026-10-05" }
 	t.Cleanup(func() { storage.Today = old })
 	m := newTestModel(t, 120, 35)
+	m.c.store.DateFormatPref = "emoji" // estas pruebas miran el archivo en formato de emojis; la de Dataview lo dice aparte
 	path := filepath.Join(m.c.store.BaseDir, "compras.md")
 	line := 0
 	for _, tk := range m.c.tasks {
@@ -242,4 +243,147 @@ func TestNoDateEmojiOnScreen(t *testing.T) {
 	noEmoji("Kanban")
 	m.c.setStatus("%s", "cualquier aviso con 📅 2026-10-05 y 🛫 y ✅")
 	noEmoji("un aviso cualquiera con emojis de fecha")
+}
+
+// TestDatesPopupWritesDataviewByDefault (ORD-017 F2): sin date_format el popup escribe el formato Dataview (sin emojis en el archivo) y la pantalla lo dibuja con glifos.
+func TestDatesPopupWritesDataviewByDefault(t *testing.T) {
+	m, path, line := datesRig(t)
+	m.c.store.DateFormatPref = "" // el valor por defecto
+	press(m, "d")
+	typeText(m, "+1w")
+	press(m, "tab")
+	typeText(m, "viernes")
+	press(m, "enter")
+	if got := fileLines(t, path)[line-1]; got != "- [ ] Pan [start:: 2026-10-12] [due:: 2026-10-09]" {
+		t.Fatalf("en el archivo: %q", got)
+	}
+	m.c.reload()
+	m.afterChange()
+	press(m, "W")
+	scr := plain(m)
+	if strings.Contains(scr, "::") || strings.ContainsAny(scr, "🛫📅✅⏳➕") || !strings.Contains(scr, "2026-10-09") {
+		t.Errorf("la pantalla dibuja las fechas Dataview con glifos, sin su sintaxis:\n%s", scr)
+	}
+}
+
+// TestNoTasksEmojiOrDataviewSyntaxOnScreen (ORD-017 F4 / L9): ⏳ (programada) y ➕ (creada) y los campos Dataview llegan a la pantalla como glifos, en
+// todas partes: Tareas, Kanban, vista previa, avisos y resultados de búsqueda; nunca el emoji ni la sintaxis [clave:: fecha].
+func TestNoTasksEmojiOrDataviewSyntaxOnScreen(t *testing.T) {
+	m := newTestModel(t, 200, 40)
+	dir := m.c.store.BaseDir
+	for _, n := range m.c.notes {
+		os.Remove(n.Path)
+	}
+	body := "# Mix\n\n- [ ] Programada ⏳ 2026-10-09 ➕ 2026-10-01\n- [ ] Dataview [scheduled:: 2026-10-09] [created:: 2026-10-01] [due:: 2026-10-12] [start:: 2026-10-05]\n- [ ] Paréntesis (due:: 2026-10-20)\n"
+	path := filepath.Join(dir, "mix.md")
+	os.WriteFile(path, []byte(body), 0o644)
+	m.c.reload()
+	m.afterChange()
+	m.notes.selectPath(path)
+	bad := func(where string) {
+		t.Helper()
+		for i, l := range screen(m) {
+			p := ansi.Strip(l)
+			if strings.ContainsAny(p, "🛫📅✅⏳➕") || strings.Contains(p, "::") {
+				t.Errorf("%s: emoji o sintaxis Dataview en la fila %d: %q", where, i, p)
+			}
+		}
+	}
+	bad("notas (vista previa)")
+	press(m, "2")
+	bad("Tareas")
+	press(m, "space")
+	bad("aviso al marcar")
+	press(m, "space")
+	press(m, "d")
+	bad("popup de fechas")
+	press(m, "esc", "W")
+	bad("Kanban")
+	if scr := plain(m); !strings.Contains(scr, "2026-10-09") || !strings.Contains(scr, "2026-10-12") {
+		t.Errorf("las fechas Dataview y las de emoji se ven igual en el tablero:\n%s", scr)
+	}
+	press(m, "W", "/")
+	typeSearch(m, "Programada")
+	if !strings.Contains(plain(m), "mix.md:3") {
+		t.Fatalf("la búsqueda debe mostrar el resultado de mix.md línea 3:\n%s", plain(m))
+	}
+	bad("resultados de la búsqueda")
+}
+
+// TestDateFormatNoticeOnce (ORD-017 F2): en un vault que solo tiene fechas con emojis, el popup escribe con emojis y avisa una sola vez cómo cambiarlo (y lo
+// recuerda en la config); el ajuste "Formato de fechas" cambia el formato que se escribe.
+func TestDateFormatNoticeOnce(t *testing.T) {
+	old := storage.Today
+	storage.Today = func() string { return "2026-10-05" }
+	t.Cleanup(func() { storage.Today = old })
+	m := newTestModel(t, 120, 35)
+	dir := m.c.store.BaseDir
+	for _, n := range m.c.notes {
+		os.Remove(n.Path)
+	}
+	path := filepath.Join(dir, "n.md")
+	os.WriteFile(path, []byte("# N\n- [ ] a 📅 2026-01-01\n- [ ] b\n- [ ] c\n"), 0o644)
+	m.c.reload()
+	m.afterChange()
+	press(m, "2")
+	edit := func(line int, keys string) {
+		m.tasks.selectTask(path, line)
+		press(m, "d")
+		typeText(m, keys)
+		press(m, "enter")
+	}
+	edit(3, "+1d")
+	if got := fileLines(t, path)[2]; got != "- [ ] b 🛫 2026-10-06" {
+		t.Fatalf("en un vault solo con emojis se escribe con emojis: %q", got)
+	}
+	if !strings.Contains(lastRow(m), "emojis") || !m.c.cfg.DateFormatNoticeShown {
+		t.Errorf("avisa una vez cómo cambiarlo y lo recuerda: %q (visto=%v)", lastRow(m), m.c.cfg.DateFormatNoticeShown)
+	}
+	edit(4, "+2d")
+	if strings.Contains(lastRow(m), "emojis") {
+		t.Errorf("el aviso no se repite: %q", lastRow(m))
+	}
+	// el ajuste: dataview fijo → una tarea sin fechas se escribe en Dataview aunque el vault tenga emojis
+	b, _ := os.ReadFile(path)
+	os.WriteFile(path, append(b, []byte("- [ ] d\n")...), 0o644)
+	m.c.reload()
+	m.afterChange()
+	press(m, ",")
+	sp := m.c.top().(*settingsPopup)
+	sp.list.set(int(setDateFormat), sp.n)
+	press(m, "right") // "" → dataview
+	press(m, "esc")
+	if m.c.cfg.DateFormat != "dataview" {
+		t.Fatalf("el ajuste debe quedar en dataview: %q", m.c.cfg.DateFormat)
+	}
+	edit(5, "+1d")
+	if got := fileLines(t, path)[4]; got != "- [ ] d [start:: 2026-10-06]" {
+		t.Errorf("con dataview fijo se escribe Dataview: %q", got)
+	}
+}
+
+// TestDatesPopupWarnsStartAfterDue (ORD-017 F5 / L8): si el inicio queda después del vencimiento el popup avisa (con lo escrito, antes de guardar) y guarda igual.
+func TestDatesPopupWarnsStartAfterDue(t *testing.T) {
+	m, path, line := datesRig(t)
+	press(m, "d")
+	typeText(m, "2026-10-08")
+	if strings.Contains(plain(m), "posterior al vencimiento") {
+		t.Error("sin vencimiento no hay nada que avisar")
+	}
+	press(m, "tab")
+	typeText(m, "2026-10-05")
+	if out := plain(m); !strings.Contains(out, "posterior al vencimiento") {
+		t.Errorf("debe avisar que el inicio es posterior al vencimiento:\n%s", out)
+	}
+	press(m, "enter")
+	if got := fileLines(t, path)[line-1]; got != "- [ ] Pan 🛫 2026-10-08 📅 2026-10-05" {
+		t.Errorf("el aviso no impide guardar: %q", got)
+	}
+	// corregido: el aviso desaparece
+	press(m, "d")
+	press(m, "ctrl+u")
+	typeText(m, "2026-10-01")
+	if strings.Contains(plain(m), "posterior al vencimiento") {
+		t.Error("con el inicio antes del vencimiento no hay aviso")
+	}
 }

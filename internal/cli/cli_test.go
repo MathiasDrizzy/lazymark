@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"flag"
+	"github.com/MathiasDrizzy/lazymark/internal/config"
 	"io/fs"
 	"os"
 	"path/filepath"
@@ -31,6 +32,7 @@ func fixture(t *testing.T) string {
 	t.Setenv("XDG_CONFIG_HOME", filepath.Join(home, ".config"))
 	t.Setenv("AppData", filepath.Join(home, "AppData"))
 	dst := filepath.Join(t.TempDir(), "notas")
+	setDateFormat(t, dst, "emoji") // estas pruebas ejercitan el formato de emojis; las de Dataview lo cambian
 	err := filepath.WalkDir("testdata/notas", func(p string, d fs.DirEntry, err error) error {
 		if err != nil {
 			return err
@@ -99,6 +101,8 @@ func run(t *testing.T, dir string, args ...string) (string, error) {
 		err = RunTaskWithWriter(&buf, args[1:], dir)
 	case "daily":
 		err = RunDailyWithWriter(&buf, args[1:], dir)
+	case "dates":
+		err = RunDatesWithWriter(&buf, args[1:], dir)
 	default:
 		t.Fatalf("comando %q", args[0])
 	}
@@ -790,5 +794,110 @@ func TestHostileFilesCLI(t *testing.T) {
 	}
 	if r := call("note", "show", big); r.err == nil || ExitCode(r.err) != 2 {
 		t.Errorf("note show de una nota enorme: código %d, error %v", ExitCode(r.err), r.err)
+	}
+}
+
+// setDateFormat escribe date_format en la configuración de la prueba (HOME aislado) para la carpeta de notas dir.
+func setDateFormat(t *testing.T, dir, format string) {
+	t.Helper()
+	c, err := config.Load(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	c.DateFormat = format
+	if err := c.Save(); err != nil {
+		t.Fatal(err)
+	}
+}
+
+// TestDatesMigrateCLI (ORD-017 F3): `dates migrate --dry-run` muestra el diff sin escribir; `migrate` pasa las fechas al otro formato; la segunda corrida no cambia
+// nada; sin --to o con un valor inválido sale con 2 sin tocar nada.
+func TestDatesMigrateCLI(t *testing.T) {
+	dir := fixture(t)
+	p := filepath.Join(dir, "fechas.md")
+	orig := "# Fechas\n- [ ] uno 🛫 2026-05-01 📅 2026-05-10\n- [x] dos ✅ 2026-05-09\ntexto 📅 2026-05-10 suelto\n"
+	os.WriteFile(p, []byte(orig), 0o644)
+	before := snapshot(t, dir)
+	out, err := run(t, dir, "dates", "migrate", "--to", "dataview", "--dry-run")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, want := range []string{"fechas.md:2", "- - [ ] uno 🛫 2026-05-01 📅 2026-05-10", "+ - [ ] uno [start:: 2026-05-01] [due:: 2026-05-10]", "+ - [x] dos [completion:: 2026-05-09]"} {
+		if !strings.Contains(out, want) {
+			t.Errorf("el dry-run debe mostrar %q:\n%s", want, out)
+		}
+	}
+	if !strings.Contains(out, "simulación") && !strings.Contains(out, "dry run") {
+		t.Errorf("el dry-run lo dice: %s", out)
+	}
+	if strings.Contains(out, "suelto") {
+		t.Error("un párrafo no es una tarea: no se toca")
+	}
+	if after := snapshot(t, dir); !reflect.DeepEqual(before, after) {
+		t.Error("--dry-run no debe escribir nada")
+	}
+	if _, err := run(t, dir, "dates", "migrate", "--to", "dataview"); err != nil {
+		t.Fatal(err)
+	}
+	b, _ := os.ReadFile(p)
+	if string(b) != "# Fechas\n- [ ] uno [start:: 2026-05-01] [due:: 2026-05-10]\n- [x] dos [completion:: 2026-05-09]\ntexto 📅 2026-05-10 suelto\n" {
+		t.Errorf("migrado:\n%s", b)
+	}
+	snap := snapshot(t, dir)
+	again, err := run(t, dir, "dates", "migrate", "--to", "dataview")
+	if err != nil || !(strings.Contains(again, "0 línea(s)") || strings.Contains(again, "0 line(s)")) || !reflect.DeepEqual(snap, snapshot(t, dir)) {
+		t.Errorf("la segunda corrida no cambia nada: %v %q", err, again)
+	}
+	var js struct {
+		To      string                         `json:"to"`
+		DryRun  bool                           `json:"dry_run"`
+		Lines   int                            `json:"lines"`
+		Changes []struct{ Note, After string } `json:"changes"`
+	}
+	o2, err := run(t, dir, "dates", "migrate", "--to", "emoji", "--dry-run", "--json")
+	if err != nil || json.Unmarshal([]byte(o2), &js) != nil || js.To != "emoji" || !js.DryRun || js.Lines != 2 {
+		t.Errorf("--json: %v %q %+v", err, o2, js)
+	}
+	for _, args := range [][]string{{"dates", "migrate"}, {"dates", "migrate", "--to", "xml"}, {"dates", "otra"}} {
+		snap := snapshot(t, dir)
+		if _, err := run(t, dir, args...); err == nil || ExitCode(err) != 2 {
+			t.Errorf("%v: se esperaba exit 2, dio %v", args, err)
+		}
+		if !reflect.DeepEqual(snap, snapshot(t, dir)) {
+			t.Errorf("%v: no debe tocar nada", args)
+		}
+	}
+}
+
+// TestStartAfterDueWarningCLI (ORD-017 F5 / L8): `task start` / `task due` que dejan el inicio después del vencimiento avisan por stderr, sin cambiar el código de
+// salida (0) ni la escritura; con el orden correcto no avisa.
+func TestStartAfterDueWarningCLI(t *testing.T) {
+	dir := fixture(t)
+	id := taskID(t, dir, "Escribir informe", "proyecto.md")
+	var errBuf bytes.Buffer
+	old := Stderr
+	Stderr = &errBuf
+	defer func() { Stderr = old }()
+	if _, err := run(t, dir, "task", "due", id, "2026-10-05"); err != nil {
+		t.Fatal(err)
+	}
+	if errBuf.Len() != 0 {
+		t.Errorf("solo con vencimiento no hay aviso: %q", errBuf.String())
+	}
+	id = taskID(t, dir, "Escribir informe", "proyecto.md")
+	if _, err := run(t, dir, "task", "start", id, "2026-10-08"); err != nil {
+		t.Fatalf("avisa pero sale con 0: %v", err)
+	}
+	if e := errBuf.String(); !strings.Contains(e, "2026-10-08") || !strings.Contains(e, "2026-10-05") {
+		t.Errorf("debe avisar con las dos fechas: %q", e)
+	}
+	b, _ := os.ReadFile(filepath.Join(dir, "proyecto.md"))
+	if !strings.Contains(string(b), "2026-10-08") {
+		t.Errorf("el aviso no impide escribir: %s", b)
+	}
+	errBuf.Reset()
+	id = taskID(t, dir, "Escribir informe", "proyecto.md")
+	if _, err := run(t, dir, "task", "start", id, "2026-10-01"); err != nil || errBuf.Len() != 0 {
+		t.Errorf("con el orden correcto no avisa: %v %q", err, errBuf.String())
 	}
 }

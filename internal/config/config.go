@@ -130,6 +130,11 @@ type Config struct {
 	Mascot bool `json:"mascot"`
 	// MaxNoteMB es el tamaño máximo, en MB, de una nota que lazymark lee (listado, vista previa, CLI y MCP). Una más grande se muestra como "demasiado grande" y no se carga. Por defecto 10.
 	MaxNoteMB int `json:"max_note_mb"`
+	// DateFormat es el formato en que se escriben las fechas de las tareas en el archivo: "dataview" (`[due:: 2026-05-10]`), "emoji" (el formato por
+	// defecto de Obsidian Tasks) o "" (por defecto: dataview, salvo en un vault que ya solo tiene fechas con emojis). Se leen siempre los dos.
+	DateFormat string `json:"date_format"`
+	// DateFormatNoticeShown: ya se avisó (una sola vez) que el vault tiene fechas con emojis y se escriben así.
+	DateFormatNoticeShown bool `json:"date_format_notice_shown"`
 	// ScreenBackground: "theme" (por defecto) o "terminal". Ver ScreenBackgroundTheme.
 	ScreenBackground string `json:"screen_background"`
 	configPath       string `json:"-"`
@@ -266,6 +271,9 @@ func load(customDir string, create bool) (*Config, error) {
 				disk.ScreenBackground = ScreenBackgroundTheme // valor ausente o desconocido
 			}
 			disk.Language = normalizeLanguage(disk.Language)
+			if disk.DateFormat != "dataview" && disk.DateFormat != "emoji" {
+				disk.DateFormat = "" // ausente o desconocido: el de por defecto
+			}
 			if disk.KanbanCards != KanbanCardsCompact {
 				disk.KanbanCards = KanbanCardsRects // ausente o desconocido
 			}

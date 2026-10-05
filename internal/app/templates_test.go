@@ -203,3 +203,91 @@ func TestNewFromTemplateNeverLandsInTemplates(t *testing.T) {
 		t.Error("c dentro de templates/ crea una plantilla a propósito")
 	}
 }
+
+// TestNewNoteSuggestedNameIsReplacedByTyping (ORD-017 F7 / L10): el nombre sugerido ("Nueva nota 4") se reemplaza al escribir (antes quedaba "nueva-nota-4dentro.md");
+// Backspace o las flechas lo dejan editable, y Enter sin escribir lo acepta. Vale para c, C y la carpeta nueva; renombrar sigue editando el nombre actual.
+func TestNewNoteSuggestedNameIsReplacedByTyping(t *testing.T) {
+	m, dir := tplModel(t)
+	exists := func(rel string) bool { _, err := os.Stat(filepath.Join(dir, rel)); return err == nil }
+	typeRaw := func(s string) {
+		for _, r := range s {
+			press(m, string(r))
+		}
+	}
+	// c: escribir reemplaza la sugerencia
+	m.notes.selectPath(filepath.Join(dir, "compras.md"))
+	press(m, "c")
+	typeRaw("Dentro")
+	press(m, "enter")
+	if !exists("dentro.md") {
+		entries, _ := os.ReadDir(dir)
+		var names []string
+		for _, e := range entries {
+			names = append(names, e.Name())
+		}
+		t.Errorf("c: escribir reemplaza la sugerencia; archivos: %v", names)
+	}
+	// C: igual
+	m.notes.selectPath(filepath.Join(dir, "compras.md"))
+	press(m, "C")
+	pickTemplate(m, "reunion")
+	typeRaw("Sync")
+	press(m, "enter")
+	if !exists("sync.md") {
+		t.Error("C: escribir reemplaza la sugerencia")
+	}
+	// Backspace deja editar la sugerencia (quita su último carácter y lo escrito se agrega)
+	m.notes.selectPath(filepath.Join(dir, "compras.md"))
+	press(m, "c")
+	press(m, "backspace")
+	typeRaw("ab")
+	press(m, "enter")
+	found := false
+	entries, _ := os.ReadDir(dir)
+	for _, e := range entries {
+		if strings.HasPrefix(e.Name(), "nueva-nota-") && strings.HasSuffix(e.Name(), "ab.md") {
+			found = true
+		}
+	}
+	if !found {
+		t.Errorf("Backspace deja editar la sugerencia (nueva-nota-…ab.md): %v", entries)
+	}
+	// una flecha también la deja editable
+	m.notes.selectPath(filepath.Join(dir, "compras.md"))
+	press(m, "c")
+	press(m, "left")
+	typeRaw("Z")
+	press(m, "enter")
+	found = false
+	entries, _ = os.ReadDir(dir)
+	for _, e := range entries {
+		if strings.HasPrefix(e.Name(), "nueva-nota-") && strings.Contains(e.Name(), "z") && !strings.HasSuffix(e.Name(), "ab.md") {
+			found = true
+		}
+	}
+	if !found {
+		t.Errorf("las flechas dejan editar la sugerencia: %v", entries)
+	}
+	// Enter sin escribir acepta la sugerencia
+	before := len(entries)
+	m.notes.selectPath(filepath.Join(dir, "compras.md"))
+	press(m, "c", "enter")
+	if after, _ := os.ReadDir(dir); len(after) != before+1 {
+		t.Error("Enter acepta la sugerencia")
+	}
+	// carpeta nueva: igual
+	press(m, "F")
+	typeRaw("viajes")
+	press(m, "enter")
+	if !exists("viajes") {
+		t.Error("F: escribir reemplaza el nombre sugerido de la carpeta")
+	}
+	// renombrar: sigue editando el nombre actual (no se reemplaza)
+	m.notes.selectPath(filepath.Join(dir, "dentro.md"))
+	press(m, "r")
+	typeRaw("2")
+	press(m, "enter")
+	if !exists("dentro2.md") {
+		t.Error("renombrar edita el nombre actual: escribir lo agrega")
+	}
+}

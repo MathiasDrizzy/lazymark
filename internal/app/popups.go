@@ -30,6 +30,7 @@ const (
 	setPopupBg
 	setMascot
 	setKanbanCards
+	setDateFormat
 	setNotesDir
 	settingCount
 )
@@ -95,6 +96,8 @@ func (p *settingsPopup) label(id settingID) string {
 		return i18n.T("Mascota", "Mascot")
 	case setKanbanCards:
 		return i18n.T("Tarjetas", "Cards")
+	case setDateFormat:
+		return i18n.T("Formato de fechas", "Date format")
 	case setNotesDir:
 		return i18n.T("Carpeta de notas", "Notes folder")
 	}
@@ -145,6 +148,14 @@ func (p *settingsPopup) value(id settingID) string {
 			return i18n.T("tema", "theme")
 		}
 		return "terminal"
+	case setDateFormat:
+		switch cfg.DateFormat {
+		case "emoji":
+			return "emoji"
+		case "dataview":
+			return "dataview"
+		}
+		return "dataview (" + i18n.T("auto", "auto") + ")"
 	case setNotesDir:
 		return leftTruncate(shortPath(cfg.NotesDir), 24)
 	}
@@ -200,6 +211,11 @@ func (p *settingsPopup) change(id settingID, dir int) {
 	case setMascot:
 		cfg.Mascot = !cfg.Mascot
 		p.c.kitty.Reset() // si se apaga, sus placeholders ya no se piden: se borra lo transmitido
+	case setDateFormat:
+		// por defecto (dataview, o emoji si el vault solo tiene emojis), después dataview y emoji fijos
+		cfg.DateFormat = cycle([]string{"", "dataview", "emoji"}, cfg.DateFormat, dir)
+		p.c.store.DateFormatPref = cfg.DateFormat
+		p.c.store.ResetDateFormat()
 	case setPopupBg:
 		if cfg.PopupBackground == config.PopupBackgroundTheme {
 			cfg.PopupBackground = config.PopupBackgroundTerminal

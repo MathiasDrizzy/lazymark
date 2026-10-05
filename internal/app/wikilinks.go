@@ -290,8 +290,10 @@ func (m *AppModel) moveLink(d int) {
 func (c *core) applyLinkEdits(edits []links.Edit, old, renamed string) (done, failed int) {
 	for _, e := range edits {
 		path := e.Path
-		if path == old {
+		if path == old { // la nota renombrada
 			path = renamed
+		} else if strings.HasPrefix(path, old+string(filepath.Separator)) { // una nota de dentro de la carpeta renombrada
+			path = renamed + path[len(old):]
 		}
 		if err := c.store.ReplaceLineIf(path, e.Line, e.Before, e.After, time.Time{}); err != nil {
 			failed++
@@ -308,6 +310,7 @@ type renameLinksPopup struct {
 	base   string
 	edits  []links.Edit
 	choose func(update bool) tea.Cmd
+	folder bool // se renombra una carpeta: los enlaces apuntan a notas de dentro de ella
 }
 
 func newRenameLinksPopup(base string, edits []links.Edit, choose func(bool) tea.Cmd) *renameLinksPopup {
@@ -334,7 +337,11 @@ func (p *renameLinksPopup) render(l Layout) string {
 	for _, e := range p.edits {
 		files[e.Path] = true
 	}
-	lines := []string{lipgloss.NewStyle().Foreground(theme.ColorText).Render(fmt.Sprintf(i18n.T("%d línea(s) de %d nota(s) enlazan a esta nota:", "%d line(s) in %d note(s) link to this note:"), len(p.edits), len(files))), ""}
+	head := fmt.Sprintf(i18n.T("%d línea(s) de %d nota(s) enlazan a esta nota:", "%d line(s) in %d note(s) link to this note:"), len(p.edits), len(files))
+	if p.folder {
+		head = fmt.Sprintf(i18n.T("%d línea(s) de %d nota(s) enlazan a notas de esta carpeta:", "%d line(s) in %d note(s) link to notes in this folder:"), len(p.edits), len(files))
+	}
+	lines := []string{lipgloss.NewStyle().Foreground(theme.ColorText).Render(head), ""}
 	room := max(4, l.H-12)
 	shown := 0
 	red, green := lipgloss.NewStyle().Foreground(theme.ColorRed), lipgloss.NewStyle().Foreground(theme.ColorGreen)

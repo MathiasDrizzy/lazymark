@@ -248,6 +248,7 @@ func TestToggleTaskAtomic(t *testing.T) {
 func TestMoveTaskRoundTrip(t *testing.T) {
 	tempDir := t.TempDir()
 	s := New(tempDir)
+	s.DateFormatPref = "emoji"
 	if _, err := s.CreateNote("Kanban Stage Note"); err != nil {
 		t.Fatalf("Error al crear nota: %v", err)
 	}

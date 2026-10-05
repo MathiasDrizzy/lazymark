@@ -322,7 +322,7 @@ func TestSearchTimeout(t *testing.T) {
 // TestRegexCostCap (ORD-016 L1): el costo de una expresión (su programa compilado, con las clases Unicode pesadas) se calcula antes de ejecutarla: una
 // repetición anidada que pasaba el tope de {100} se rechaza al instante con el mismo mensaje; las expresiones de uso corriente se aceptan.
 func TestRegexCostCap(t *testing.T) {
-	for _, bad := range []string{`([\p{L}\p{N}]{50}){20}x`, `(\p{L}{10}){10}[\p{L}\p{N}]{100}`, `(\w{50}){20}(\p{L}{100}){2}`, `[\p{L}\p{N}]{1000}x`, `(\p{L}{100}){3}`, `(a?){1000}b`, `\w{1000}x`, `(\w{50}){20}x`, `[a-z]{1000}x`, `.{1000}x`, `((a|b)?){500}c`} {
+	for _, bad := range []string{`([\p{L}\p{N}]{50}){20}x`, `(\p{L}{10}){10}[\p{L}\p{N}]{100}`, `(\w{50}){20}(\p{L}{100}){2}`, `[\p{L}\p{N}]{1000}x`, `(\p{L}{100}){3}`, `(a?){1000}b`, `(a?){110}b`, `\w{330}x`, `(?i)\w{330}x`, `\w{1000}x`, `(\w{50}){20}x`, `[a-z]{1000}x`, `.{1000}x`, `((a|b)?){500}c`} {
 		start := time.Now()
 		_, err := Compile(bad, Options{Regex: true})
 		if err == nil || !strings.Contains(err.Error(), "demasiado costosa") {
@@ -332,7 +332,7 @@ func TestRegexCostCap(t *testing.T) {
 			t.Errorf("%s: el rechazo tardó %v", bad, d)
 		}
 	}
-	for _, good := range []string{`[\p{L}\p{N}]{20}x`, `[\p{L}\p{N}]{100}x`, `(a|b|c){100}x`, `\w+@\w+\.\w{2,6}`, `(\p{L}+\s*){5}x`, `\bTODO\b`, `^#+ `, `\d{4}-\d{2}-\d{2}`, `(?i)error|warning|fatal`, `https?://[^\s)]+`} {
+	for _, good := range []string{`[\p{L}\p{N}]{20}x`, `[\p{L}\p{N}]{100}x`, `\w{160}x`, `(a|b|c){40}x`, `\w+@\w+\.\w{2,6}`, `(\p{L}+\s*){5}x`, `\bTODO\b`, `^#+ `, `\d{4}-\d{2}-\d{2}`, `(?i)error|warning|fatal`, `https?://[^\s)]+`} {
 		if _, err := Compile(good, Options{Regex: true}); err != nil {
 			t.Errorf("%s debe aceptarse: %v", good, err)
 		}
@@ -411,14 +411,40 @@ func TestSlowLinesDoNotDelayTheCut(t *testing.T) {
 	// lo que cuesta una línea en esta máquina (con -race o sin él): el corte puede tardar a lo sumo en terminar las que están en curso
 	oneLine := []byte(strings.Repeat("abcdefghij", 3000))
 	t0 := time.Now()
-	regexp.MustCompile(`\w{300}x`).Find(oneLine)
+	regexp.MustCompile(`\w{150}x`).Find(oneLine)
 	lineCost := time.Since(t0)
 	start := time.Now()
-	res, err := Run(context.Background(), store, `\w{300}x`, Options{Regex: true, Timeout: 300 * time.Millisecond})
+	res, err := Run(context.Background(), store, `\w{150}x`, Options{Regex: true, Timeout: 300 * time.Millisecond})
 	if err != nil || !res.TimedOut {
 		t.Fatalf("debía cortarse por tiempo: %v %+v", err, res.TimedOut)
 	}
 	if d, limit := time.Since(start), 300*time.Millisecond+8*lineCost+500*time.Millisecond; d > limit {
 		t.Errorf("la búsqueda tardó %v con un máximo de 300 ms (una línea cuesta %v; límite %v): el corte no se nota entre líneas", d, lineCost, limit)
+	}
+}
+
+// TestAcceptedRegexIsFast (ORD-017 F8 / L11): lo que el tope acepta tarda como mucho unos 3 s sobre una línea de 2 MB (letras o "aaaa…"), y \w{330}x, que
+// tardaba 5,9 s, ya no se acepta. Mide tiempo: se salta con -race y con -short.
+func TestAcceptedRegexIsFast(t *testing.T) {
+	if raceEnabled || testing.Short() {
+		t.Skip("mide tiempo: no corre con -race ni con -short")
+	}
+	if _, err := Compile(`\w{330}x`, Options{Regex: true, CaseSensitive: true}); err == nil {
+		t.Error(`\w{330}x --case tardaba 5,8 s y debe rechazarse`)
+	}
+	texts := map[string]string{"aaaa": strings.Repeat("a", 2000000)} // el peor texto para los patrones de arriba (con letras variadas tardan igual o menos)
+	for _, expr := range []string{`\w{160}x`, `[\p{L}\p{N}]{100}x`, `(a?){90}b`, `(a|b|c){40}x`} {
+		re, err := Compile(expr, Options{Regex: true})
+		if err != nil {
+			t.Errorf("%s debe aceptarse: %v", expr, err)
+			continue
+		}
+		for name, text := range texts {
+			start := time.Now()
+			re.MatchString(text)
+			if d := time.Since(start); d > 4*time.Second { // 3 s medidos + margen de la máquina
+				t.Errorf("%s sobre %s tardó %v: lo aceptado debe tardar ≈3 s o menos", expr, name, d)
+			}
+		}
 	}
 }

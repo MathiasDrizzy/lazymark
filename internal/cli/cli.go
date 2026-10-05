@@ -63,7 +63,12 @@ func (p *parser) service() (*ops.Service, error) {
 	if dir == "" {
 		dir = config.DefaultNotesDir()
 	}
-	return ops.New(dir)
+	svc, err := ops.New(dir)
+	if err != nil {
+		return nil, err
+	}
+	svc.Notice = func(msg string) { fmt.Fprintln(Stderr, plain(i18n.T("aviso: ", "note: ")+msg)) }
+	return svc, nil
 }
 
 // plain quita de un texto los caracteres de control (ESC, BEL, C1, \r…) menos el salto de línea y el tabulador: el
@@ -237,6 +242,9 @@ func finishMove(w io.Writer, p *parser, _ *ops.Service, do func() (ops.TaskDTO, 
 	if err != nil {
 		return err
 	}
+	if t.Start != "" && t.Due != "" && t.Start > t.Due { // el inicio después del vencimiento: se avisa por stderr, no bloquea
+		fmt.Fprintln(Stderr, plain(fmt.Sprintf(i18n.T("aviso: el inicio (%s) es posterior al vencimiento (%s)", "warning: the start (%s) is after the due date (%s)"), t.Start, t.Due)))
+	}
 	if p.json {
 		return printJSON(w, t)
 	}
@@ -248,7 +256,7 @@ func finishMove(w io.Writer, p *parser, _ *ops.Service, do func() (ops.TaskDTO, 
 // los emojis del archivo: "  ▸ 2026-05-01 ◷ 2026-05-10 (vencida)". `--json` lleva las fechas en sus campos.
 func datesSuffix(t ops.TaskDTO) string {
 	var parts []string
-	for _, d := range [][2]string{{"▸", t.Start}, {"◷", t.Due}, {"✓", t.Completed}} {
+	for _, d := range [][2]string{{"▸", t.Start}, {"◑", t.Scheduled}, {"◷", t.Due}, {"✓", t.Completed}, {"+", t.Created}} {
 		if d[1] != "" {
 			parts = append(parts, d[0]+" "+d[1])
 		}
@@ -477,5 +485,78 @@ func RunDailyWithWriter(w io.Writer, args []string, defaultNotesDir string) erro
 		return printJSON(w, d)
 	}
 	fmt.Fprintf(w, "%s\n", d.Path)
+	return nil
+}
+
+const datesUsageES = `uso: lazymark dates migrate --to dataview|emoji [--dry-run] [--json] [--dir <carpeta>]
+Pasa las fechas de todas las tareas al formato elegido (Dataview: [due:: 2026-05-10]; emoji: el de Obsidian Tasks). Nunca es automático.
+Solo toca líneas de tarea (no párrafos ni bloques de código), conserva el resto de la línea y escribe cada nota de forma atómica.
+Con --dry-run muestra el cambio sin escribir nada. Es idempotente: una segunda corrida no cambia nada.
+códigos de salida: 0 ok · 1 falló · 2 argumentos inválidos · 4 una nota cambió mientras se migraba (esa no se escribió)
+`
+
+const datesUsageEN = `usage: lazymark dates migrate --to dataview|emoji [--dry-run] [--json] [--dir <folder>]
+Moves the dates of every task to the chosen format (Dataview: [due:: 2026-05-10]; emoji: the Obsidian Tasks one). It is never automatic.
+It only touches task lines (not paragraphs or code blocks), keeps the rest of the line and writes each note atomically.
+With --dry-run it shows the change without writing anything. It is idempotent: a second run changes nothing.
+exit codes: 0 ok · 1 failed · 2 invalid arguments · 4 a note changed while migrating (that one was not written)
+`
+
+// RunDates ejecuta `lazymark dates …` (migrate).
+func RunDates(args []string, defaultNotesDir string) error {
+	return RunDatesWithWriter(os.Stdout, args, defaultNotesDir)
+}
+
+// RunDatesWithWriter ejecuta `lazymark dates migrate` escribiendo la salida en w.
+func RunDatesWithWriter(w io.Writer, args []string, defaultNotesDir string) error {
+	help := usageText(datesUsageES, datesUsageEN)
+	if len(args) == 0 {
+		return &ops.Error{Code: ExitUsage, Err: errors.New("falta el subcomando (migrate)\n" + help)}
+	}
+	if args[0] == "-h" || args[0] == "--help" {
+		fmt.Fprint(w, help)
+		return nil
+	}
+	if args[0] != "migrate" {
+		return &ops.Error{Code: ExitUsage, Err: fmt.Errorf("subcomando desconocido: %q (migrate)", args[0])}
+	}
+	p := newParser("dates migrate", defaultNotesDir)
+	var to string
+	var dry bool
+	p.fs.StringVar(&to, "to", "", "")
+	p.fs.BoolVar(&dry, "dry-run", false, "")
+	if err := p.parse(args[1:]); err != nil {
+		return err
+	}
+	if p.help {
+		fmt.Fprint(w, help)
+		return nil
+	}
+	if err := p.need(0, "lazymark dates migrate --to dataview|emoji [--dry-run]"); err != nil {
+		return err
+	}
+	if to != "dataview" && to != "emoji" {
+		return &ops.Error{Code: ExitUsage, Err: errors.New("uso: lazymark dates migrate --to dataview|emoji [--dry-run] (falta --to)")}
+	}
+	svc, err := p.service()
+	if err != nil {
+		return err
+	}
+	res, err := svc.MigrateDates(to, dry)
+	if err != nil {
+		return err
+	}
+	if p.json {
+		return printJSON(w, res)
+	}
+	for _, c := range res.Changes {
+		fmt.Fprintf(w, "%s\n", plain(fmt.Sprintf("%s:%d", c.Note, c.Line)))
+		fmt.Fprintf(w, "- %s\n+ %s\n", plain(c.Before), plain(c.After))
+	}
+	msg := i18n.T("%d línea(s) en %d nota(s) pasan a %s", "%d line(s) in %d note(s) move to %s")
+	if dry {
+		msg += " (" + i18n.T("simulación: no se escribió nada", "dry run: nothing was written") + ")"
+	}
+	fmt.Fprintf(w, msg+"\n", res.Lines, res.Notes, to)
 	return nil
 }

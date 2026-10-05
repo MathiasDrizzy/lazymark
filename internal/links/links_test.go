@@ -293,3 +293,48 @@ func TestRenameEditsOnCRLFNote(t *testing.T) {
 		t.Errorf("%+v", e)
 	}
 }
+
+// TestFolderRenameEdits (ORD-017 F6 / L5): al renombrar una carpeta se actualizan los wikilinks de ruta que pasan por ella (con su alias, anchor y .md);
+// los de solo nombre no cambian porque siguen resolviendo; los que apuntan a notas de fuera tampoco.
+func TestFolderRenameEdits(t *testing.T) {
+	base := filepath.FromSlash("/n")
+	files := map[string]string{
+		"proyectos/plan.md":      "# plan\n",
+		"proyectos/sub/deep.md":  "# deep\n",
+		"fuera/plan.md":          "otra con el mismo nombre\n",
+		"otra.md":                "a [[proyectos/plan]] b [[proyectos/plan|el alias]] c [[proyectos/plan.md#Meta]]\nname [[plan]]  [[sub/deep]]  [[proyectos/sub/deep#h|x]]\nfuera [[fuera/plan]]\n",
+		"proyectos/interno.md":   "dentro [[proyectos/plan]] y [[sub/deep]] y [[../fuera/plan]]\r\n",
+		"dos/proyectos/otra2.md": "[[proyectos/otra2]] es otra carpeta\n",
+	}
+	ix := NewIndex(base, notes(base, files))
+	apply := func(edits []Edit) map[string]string {
+		out := map[string]string{}
+		for _, e := range edits {
+			out[relOf(base, e.Path)+":"+itoa(e.Line)] = e.After
+		}
+		return out
+	}
+	got := apply(ix.FolderRenameEdits(filepath.Join(base, "proyectos"), "trabajos"))
+	want := map[string]string{
+		"otra.md:1":              "a [[trabajos/plan]] b [[trabajos/plan|el alias]] c [[trabajos/plan.md#Meta]]",
+		"otra.md:2":              "name [[plan]]  [[sub/deep]]  [[trabajos/sub/deep#h|x]]",
+		"proyectos/interno.md:1": "dentro [[trabajos/plan]] y [[sub/deep]] y [[../fuera/plan]]\r",
+	}
+	for k, w := range want {
+		if got[k] != w {
+			t.Errorf("%s:\n got %q\nwant %q", k, got[k], w)
+		}
+	}
+	if len(got) != len(want) {
+		t.Errorf("solo deben cambiar %d líneas, cambian %d: %v", len(want), len(got), got)
+	}
+	// una subcarpeta: el tramo del medio
+	got = apply(ix.FolderRenameEdits(filepath.Join(base, "proyectos", "sub"), "hijo"))
+	if g := got["otra.md:2"]; g != "name [[plan]]  [[hijo/deep]]  [[proyectos/hijo/deep#h|x]]" || got["proyectos/interno.md:1"] != "dentro [[proyectos/plan]] y [[hijo/deep]] y [[../fuera/plan]]\r" || len(got) != 2 {
+		t.Errorf("subcarpeta: %v", got)
+	}
+	// una carpeta sin enlaces de ruta: nada que actualizar
+	if e := ix.FolderRenameEdits(filepath.Join(base, "fuera"), "otro"); len(e) != 1 || !strings.Contains(e[0].After, "[[otro/plan]]") {
+		t.Errorf("fuera/: %v", e)
+	}
+}

@@ -11,6 +11,7 @@ import (
 	"regexp"
 	"sort"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/MathiasDrizzy/lazymark/internal/i18n"
@@ -75,6 +76,17 @@ var ErrNoteTooLarge = safeio.ErrTooLarge
 type Storage struct {
 	BaseDir       string
 	CurrentSubDir string
+	// DateFormatPref es la configuración date_format: "dataview" o "emoji" fijan el formato en que se escriben las fechas; "" (por defecto) es dataview,
+	// salvo en un vault que ya tiene tareas con emojis y ninguna con Dataview (ahí se escribe en emoji para no mezclar formatos y se avisa una vez).
+	DateFormatPref string
+	// DateNoticeSeen indica que el aviso del formato ya se mostró alguna vez (se guarda en la configuración).
+	DateNoticeSeen bool
+
+	fmtMu     sync.Mutex
+	fmtKnown  bool
+	fmtVault  DateFormat
+	fmtExcept bool   // el formato salió de la excepción del vault (solo emojis)
+	notice    string // aviso pendiente de mostrar (TakeDateFormatNotice)
 
 	trashIssues []string // entradas de trash.json que se ignoraron por inválidas (TrashIssues)
 }
@@ -564,7 +576,7 @@ func (s *Storage) ToggleTaskIfUnchanged(notePath string, lineNum int, expected t
 		if newDone {
 			mark = "x"
 		}
-		return withCompletion(m[1]+mark+m[3], newDone), nil
+		return withCompletionIn(m[1]+mark+m[3], newDone, s.WriteDateFormat()), nil
 	})
 	return newDone, err
 }

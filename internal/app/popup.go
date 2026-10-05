@@ -153,6 +153,15 @@ type inputPopup struct {
 	title    string
 	input    textinput.Model
 	onSubmit func(string) tea.Cmd
+	// fresh: el texto del campo es una sugerencia (p. ej. "Nueva nota 4"): lo primero que se escribe la reemplaza; Backspace, Suprimir, las flechas,
+	// Inicio/Fin o un atajo de edición la dejan editable. Enter sin escribir la acepta.
+	fresh bool
+}
+
+// suggested marca el texto inicial del popup como una sugerencia que se reemplaza al escribir.
+func (p *inputPopup) suggested() *inputPopup {
+	p.fresh = true
+	return p
 }
 
 // themedInputStyles pinta el campo de texto con la paleta del tema activo (por
@@ -181,6 +190,12 @@ func (p *inputPopup) contexts() []Context { return nil }
 func (p *inputPopup) bottomRight() bool   { return false }
 
 func (p *inputPopup) handle(_ Action, msg tea.KeyPressMsg) (tea.Cmd, bool) {
+	if p.fresh && msg.String() != "enter" {
+		p.fresh = false
+		if msg.Text != "" && msg.Mod == 0 { // un carácter normal: reemplaza la sugerencia
+			p.input.SetValue("")
+		}
+	}
 	if msg.String() == "enter" {
 		name := strings.TrimSpace(p.input.Value())
 		if name == "" {
@@ -195,6 +210,10 @@ func (p *inputPopup) handle(_ Action, msg tea.KeyPressMsg) (tea.Cmd, bool) {
 
 // paste inserta en el campo el texto pegado.
 func (p *inputPopup) paste(msg tea.PasteMsg) tea.Cmd {
+	if p.fresh { // lo pegado reemplaza la sugerencia
+		p.fresh = false
+		p.input.SetValue("")
+	}
 	var cmd tea.Cmd
 	p.input, cmd = p.input.Update(msg)
 	return cmd

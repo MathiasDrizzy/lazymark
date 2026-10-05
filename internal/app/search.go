@@ -3,6 +3,7 @@ package app
 import (
 	"context"
 	"fmt"
+	"github.com/MathiasDrizzy/lazymark/internal/ui/views"
 	"path/filepath"
 	"regexp"
 	"strings"
@@ -236,6 +237,7 @@ func (p *searchPopup) render(l Layout) string {
 				s, e = -1, -1
 			}
 		}
+		text, s, e = glyphDates(text, s, e) // sin emojis de fecha ni sintaxis Dataview en pantalla
 		return where + "  " + highlight(text, s, e)
 	})...)
 	return theme.RenderPopup(i18n.T("Buscar", "Search"), "[Enter] "+i18n.T("ir", "go")+" · "+escHint, lines, w)
@@ -317,4 +319,14 @@ func renderedLineOf(lines []string, note *storage.Note, line int) int {
 		}
 	}
 	return (line - 1) * len(lines) / max(1, len(raws))
+}
+
+// glyphDates cambia los emojis de fecha y los campos Dataview de text por glifos (views.ReplaceDateEmoji) y devuelve dónde queda lo hallado [s, e): se
+// reemplaza por tramos (antes, lo hallado y después) para que las posiciones sigan siendo exactas.
+func glyphDates(text string, s, e int) (string, int, int) {
+	if s < 0 || e < s || e > len(text) {
+		return views.ReplaceDateEmoji(text), -1, -1
+	}
+	before, hit, after := views.ReplaceDateEmoji(text[:s]), views.ReplaceDateEmoji(text[s:e]), views.ReplaceDateEmoji(text[e:])
+	return before + hit + after, len(before), len(before) + len(hit)
 }

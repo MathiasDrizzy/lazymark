@@ -367,3 +367,61 @@ func TestHeadingJumpIgnoresCode(t *testing.T) {
 		t.Errorf("el bloque real está en la línea 16, salta a %d", got)
 	}
 }
+
+// TestRenameFolderOffersToUpdateLinks (ORD-017 F6 / L5): renombrar una carpeta ofrece actualizar los wikilinks de ruta que pasan por ella ([[carpeta/nota]]),
+// con el detalle de lo que cambia; y escribe solo esas líneas, incluidas las de notas que están dentro de la carpeta (que cambia de ruta).
+func TestRenameFolderOffersToUpdateLinks(t *testing.T) {
+	m := newTestModel(t, 120, 35)
+	dir := m.c.store.BaseDir
+	for _, n := range m.c.notes {
+		os.Remove(n.Path)
+	}
+	os.RemoveAll(filepath.Join(dir, "proyectos"))
+	os.MkdirAll(filepath.Join(dir, "proy"), 0o755)
+	w := func(rel, body string) { os.WriteFile(filepath.Join(dir, rel), []byte(body), 0o644) }
+	w("proy/plan.md", "# Plan\n\nver [[proy/otra]] aquí\n")
+	w("proy/otra.md", "# Otra\n")
+	w("hub.md", "# Hub\n\n[[proy/plan]] y [[proy/plan|alias]] y [[otra]] y [[proy/otra#X]]\n")
+	m.c.reload()
+	m.afterChange()
+	m.notes.selectPath(filepath.Join(dir, "proy"))
+	hubBefore := fileText(t, filepath.Join(dir, "hub.md"))
+	press(m, "1", "r")
+	for i := 0; i < 20; i++ {
+		press(m, "backspace")
+	}
+	for _, r := range "trabajo" {
+		press(m, string(r))
+	}
+	press(m, "enter")
+	out := plain(m)
+	for _, want := range []string{"hub.md:3", "+ [[trabajo/plan]] y [[trabajo/plan|alias]] y [[otra]] y [[trabajo/otra#X]]", "proy/plan.md:3", "[y] Actualizar los enlaces"} {
+		if !strings.Contains(out, want) {
+			t.Errorf("falta %q:\n%s", want, out)
+		}
+	}
+	press(m, "esc")
+	if _, err := os.Stat(filepath.Join(dir, "proy")); err != nil || fileText(t, filepath.Join(dir, "hub.md")) != hubBefore {
+		t.Fatal("Esc no debe renombrar ni tocar nada")
+	}
+	press(m, "r")
+	for i := 0; i < 20; i++ {
+		press(m, "backspace")
+	}
+	for _, r := range "trabajo" {
+		press(m, string(r))
+	}
+	press(m, "enter", "y")
+	if _, err := os.Stat(filepath.Join(dir, "trabajo", "plan.md")); err != nil {
+		t.Fatalf("la carpeta se renombró: %v", err)
+	}
+	if got := fileText(t, filepath.Join(dir, "hub.md")); got != "# Hub\n\n[[trabajo/plan]] y [[trabajo/plan|alias]] y [[otra]] y [[trabajo/otra#X]]\n" {
+		t.Errorf("hub.md: %q", got)
+	}
+	if got := fileText(t, filepath.Join(dir, "trabajo", "plan.md")); got != "# Plan\n\nver [[trabajo/otra]] aquí\n" {
+		t.Errorf("una nota de dentro de la carpeta (ya en su ruta nueva): %q", got)
+	}
+	if !strings.Contains(lastRow(m), "enlaces") {
+		t.Errorf("aviso: %q", lastRow(m))
+	}
+}

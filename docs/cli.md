@@ -15,6 +15,7 @@ lazymark task toggle <id> [--json]
 lazymark task move   <id> <column> [--json]
 lazymark task due    <id> <YYYY-MM-DD|none> [--json]
 lazymark task start  <id> <YYYY-MM-DD|none> [--json]
+lazymark dates migrate --to dataview|emoji [--dry-run] [--json]
 ```
 
 `note new --template <name>` fills the note from `templates/<name>.md` (see [templates.md](templates.md)); a template that does not exist exits with 3 and one that is not valid text (binary, UTF-16, over 256 KB) exits with 2; neither creates anything. An unknown `{{variable}}` stays as written, is reported on stderr (`warning: unknown variable: {{x}}`) and in a `warnings` array of the JSON, and does not change the exit code. `daily` creates today's note `journal/YYYY-MM-DD.md` from `templates/daily.md`, or opens it if it exists, and prints its path (`--json`: the note plus `"created": true|false`); it never modifies an existing one.
@@ -49,7 +50,7 @@ The text output (without `--json`) drops control characters from the notes (esca
 
 A task id is `<note path relative to the notes folder>#<8 hex>`, and `.2`, `.3`… for the second and later tasks with the same text in the same note: `projects/plan.md#16de6420`. The hash is of the task text without its Kanban tag, lowercased, so the id survives editing or inserting other lines, moving the task to another column and ticking it. It changes if you edit the task's own text.
 
-`due` and `start` set (or, with `none`, remove) the due and start dates of a task. Setting replaces the first marker of that emoji in the line, even one with an invalid date, and drops any other marker of the same emoji, so a line never ends up with two; `none` removes all of them and tidies the spaces around. The `id` that `task due`, `task start`, `task move` and `task toggle` print (and put in `--json`) is read again after writing, so it is the task's current id: if the edit changed the text that the id is made of (for example by removing a repeated marker) it differs from the one you passed; an invalid date (not `YYYY-MM-DD`, or one that does not exist like `2026-02-30`) exits with 2 and touches nothing. The completion date is not set by hand: moving a task to the done column (or ticking it) adds `✅ today` unless it already had one, and moving it out removes it. In the text output the dates follow the column, drawn with symbols (`▸` start, `◷` due, `✓` completed), not with the emoji of the file: `… (todo)  ▸ 2026-05-01 ◷ 2026-05-10 (overdue)`.
+`due` and `start` set (or, with `none`, remove) the due and start dates of a task. Setting replaces the first marker of that emoji in the line, even one with an invalid date, and drops any other marker of the same emoji, so a line never ends up with two; `none` removes all of them and tidies the spaces around. The `id` that `task due`, `task start`, `task move` and `task toggle` print (and put in `--json`) is read again after writing, so it is the task's current id: if the edit changed the text that the id is made of (for example by removing a repeated marker) it differs from the one you passed; an invalid date (not `YYYY-MM-DD`, or one that does not exist like `2026-02-30`) exits with 2 and touches nothing. The completion date is not set by hand: moving a task to the done column (or ticking it) adds the completion date (today) unless it already had one, and moving it out removes it. In the text output the dates follow the column, drawn with symbols (`▸` start, `◑` scheduled, `◷` due, `✓` completed, `+` created), never the emoji or the Dataview syntax of the file; `--json` has `start`, `due`, `completed` and, when the task has them, `scheduled` and `created`: `… (todo)  ▸ 2026-05-01 ◷ 2026-05-10 (overdue)`.
 
 `<column>` is a column id (`todo`, `doing`, `done`, or your own) or its visible title.
 
@@ -122,7 +123,29 @@ Add `--scope user` to have it in all your projects, or `--scope project` to shar
 
 ## Dates
 
-A task can carry three dates at the end of its line, in the [Obsidian Tasks](https://publish.obsidian.md/tasks/Reference/Task+Formats/Tasks+Emoji+Format) emoji format (plain markdown, GitHub shows them as text): start `🛫 2026-05-01`, due `📅 2026-05-10` and completed `✅ 2026-05-09`. Only a real calendar date counts; an invalid one stays in the text. If a field repeats, the first valid date is the one that counts. The id of a task does not change when its dates change.
+A task can carry up to five dates at the end of its line, in one of the two formats of [Obsidian Tasks](https://publish.obsidian.md/tasks/Reference/Task+Formats/About+Task+Formats) (plain markdown; GitHub shows them as text). lazymark **always reads both**, also mixed in one line:
+
+| Field | Emoji format | Dataview format |
+|---|---|---|
+| start | `🛫 2026-05-01` | `[start:: 2026-05-01]` |
+| due | `📅 2026-05-10` | `[due:: 2026-05-10]` |
+| completed | `✅ 2026-05-09` | `[completion:: 2026-05-09]` |
+| scheduled | `⏳ 2026-05-02` | `[scheduled:: 2026-05-02]` |
+| created | `➕ 2026-04-30` | `[created:: 2026-04-30]` |
+
+In the Dataview format parentheses (`(due:: 2026-05-10)`) and spaces around `::` are also read (field names are lowercase). Only a real calendar date counts; an invalid one stays in the text. If a field repeats, the first valid date is the one that counts. The id of a task does not change when its dates change. Obsidian Tasks reads and writes one format at a time ([its documentation](https://publish.obsidian.md/tasks/Reference/Task+Formats/About+Task+Formats): "Tasks only supports reading and writing one format at a time"): choose **Task format: Dataview** in its settings if you use the default format of lazymark.
+
+**Which format lazymark writes** (`date_format` in the config, or Settings → Date format): `"dataview"` or `"emoji"`; by default Dataview, except in a vault that already has tasks with emoji dates and none with Dataview, where it writes emoji and says so once (`date_format_notice_shown` remembers it). A line you edit keeps the format its dates already have (a new field uses the format of the other dates of that line); the completion date added when you tick a task follows the same rule.
+
+### `lazymark dates migrate`
+
+```
+lazymark dates migrate --to dataview|emoji [--dry-run] [--json] [--dir <folder>]
+```
+
+Moves the dates of every task to the chosen format. It is never automatic. It only touches task lines (not paragraphs or code blocks), keeps the rest of the line and the line endings, leaves invalid dates alone and writes each note atomically (a note that changed while migrating is not written: exit code 4). `--dry-run` prints the change (`-` before, `+` after) without writing anything; `--json` gives `{to, dry_run, notes, lines, changes: [{note, line, before, after}]}`. It is idempotent: a second run changes nothing. After migrating to Dataview, set **Task format: Dataview** in Obsidian Tasks.
+
+`task start` and `task due` warn on stderr (exit code 0) when the start ends up after the due date.
 
 ## Kanban format
 

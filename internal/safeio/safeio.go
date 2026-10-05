@@ -105,14 +105,16 @@ func WriteFileAtomicIf(path string, data []byte, perm os.FileMode, check func() 
 // ReservedWindowsName dice si el último tramo de path es un nombre reservado de Windows (CON, PRN, AUX, NUL, COM1-9, LPT1-9, con o sin extensión,
 // sin distinguir mayúsculas): en Windows son dispositivos y abrirlos puede quedarse esperando.
 func ReservedWindowsName(path string) bool {
-	if strings.HasPrefix(path, `\\.\`) { // espacio de nombres de dispositivos (\\.\pipe\x, \\.\COM1): nunca un archivo regular
+	p := strings.ReplaceAll(path, "/", `\`) // Windows acepta las dos barras
+	if strings.HasPrefix(p, `\\.\`) {       // espacio de nombres de dispositivos (\\.\pipe\x, \\.\COM1): nunca un archivo regular
 		return true
 	}
-	if strings.HasPrefix(path, `\\?\`) { // ruta literal: los nombres de dispositivo DOS no se interpretan
+	if strings.HasPrefix(p, `\\?\`) { // ruta literal: los nombres de dispositivo DOS no se interpretan
 		return false
 	}
-	base := path
-	if i := strings.LastIndexAny(base, `/\`); i >= 0 {
+	// el último tramo, tras una barra o los dos puntos de una unidad (C:CON) y sin los dos puntos finales (CON:)
+	base := strings.TrimRight(p, ":")
+	if i := strings.LastIndexAny(base, `\:`); i >= 0 {
 		base = base[i+1:]
 	}
 	if i := strings.IndexByte(base, '.'); i >= 0 {

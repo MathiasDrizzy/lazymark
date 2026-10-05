@@ -114,6 +114,7 @@ func (p *tasksPanel) toggle(reload func()) tea.Cmd {
 	}
 	reload()
 	p.selectTask(path, line)
+	defer p.c.dateNotice()
 	if done {
 		p.c.setStatus(i18n.T("Tarea completada: %s", "Task completed: %s"), text)
 	} else {

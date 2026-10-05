@@ -138,6 +138,11 @@ func removeHit(text string, h tagHit) string { return removeSpan(text, h.start, 
 // (en el lugar del tag que ya había, o al final). Al salir de la columna de hecho se quita el `✅`. Las etiquetas del
 // formato anterior se reemplazan por la nueva. No toca nada más de la línea.
 func RewriteForColumn(line string, cols Columns, target int) (string, error) {
+	return RewriteForColumnIn(line, cols, target, FormatEmoji)
+}
+
+// RewriteForColumnIn es RewriteForColumn que escribe la fecha de completada en el formato fm.
+func RewriteForColumnIn(line string, cols Columns, target int, fm DateFormat) (string, error) {
 	if target < 0 || target >= len(cols) {
 		return "", fmt.Errorf("la columna %d no existe (hay %d)", target, len(cols))
 	}
@@ -192,7 +197,7 @@ func RewriteForColumn(line string, cols Columns, target int) (string, error) {
 	if wasDone && target == cols.DoneIndex() {
 		return out, nil // ya estaba hecha: no se cambia su fecha de completada
 	}
-	return withCompletion(out, target == cols.DoneIndex()), nil
+	return withCompletionIn(out, target == cols.DoneIndex(), fm), nil
 }
 
 // MoveTask mueve la tarea de la línea line de la nota a la columna target, reescribiendo solo esa línea. Si
@@ -203,7 +208,7 @@ func (s *Storage) MoveTask(notePath string, line int, cols Columns, target int, 
 		return err
 	}
 	return rewriteLine(notePath, line, expected, func(l string) (string, error) {
-		out, err := RewriteForColumn(l, cols, target)
+		out, err := RewriteForColumnIn(l, cols, target, s.WriteDateFormat())
 		if err != nil {
 			return "", fmt.Errorf("la línea %d: %w", line, err)
 		}
@@ -211,9 +216,10 @@ func (s *Storage) MoveTask(notePath string, line int, cols Columns, target int, 
 	})
 }
 
-// withCompletion mantiene la fecha de completada de una tarea según su casilla: al quedar hecha se agrega `✅ hoy` si no
+// withCompletionIn mantiene la fecha de completada de una tarea según su casilla: al quedar hecha se agrega `✅ hoy` si no
 // tenía una válida (si ya la tenía, por ejemplo de Obsidian, se respeta), y al dejar de estarlo se quita.
-func withCompletion(line string, done bool) string {
+// Si hay que agregar la fecha, la escribe en el formato fm (si la línea ya tiene fechas, en el de ellas).
+func withCompletionIn(line string, done bool, fm DateFormat) string {
 	has := false
 	for _, h := range scanDates(line) {
 		if h.field == DateDone {
@@ -222,7 +228,7 @@ func withCompletion(line string, done bool) string {
 	}
 	switch {
 	case done && !has:
-		return setDate(line, DateDone, Today())
+		return setDateIn(line, DateDone, Today(), fm)
 	case !done && has:
 		return setDate(line, DateDone, "") // quita todos los ✅
 	}

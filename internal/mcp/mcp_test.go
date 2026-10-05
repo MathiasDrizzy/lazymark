@@ -217,7 +217,7 @@ func TestMCPSession(t *testing.T) {
 	if b, _ := os.ReadFile(secreto); string(b) != "clave\n" {
 		t.Errorf("se tocó un archivo de fuera: %q", b)
 	}
-	if b, _ := os.ReadFile(proyecto); !strings.Contains(string(b), "- [x] Tarea Todo ✅ ") || !strings.Contains(string(b), "- [x] Tarea Doing ✅ ") {
+	if b, _ := os.ReadFile(proyecto); !strings.Contains(string(b), "- [x] Tarea Todo [completion:: ") || !strings.Contains(string(b), "- [x] Tarea Doing [completion:: ") {
 		t.Errorf("proyecto.md tras las llamadas:\n%s", b)
 	}
 }

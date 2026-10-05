@@ -79,38 +79,38 @@ func splitWidth(s string, width int) (head, rest string) {
 	return s, ""
 }
 
-// cardDates arma la línea de fechas de una tarjeta (glifo y fecha: inicio, vencimiento, completada), con el vencimiento en el color de
-// error del tema si está vencida; "" si no tiene fechas. width es el ancho disponible: si no caben todas, se quita
-// primero la de completada y después la de inicio.
+// cardDates arma la línea de fechas de una tarjeta (glifo y fecha: inicio, programada, vencimiento, completada, creada), con el vencimiento en
+// el color de error del tema si está vencida; "" si no tiene fechas. width es el ancho disponible: si no caben todas, se quitan primero la
+// de creada, la programada y la de completada, y después la de inicio.
 func cardDates(d storage.Dates, done bool, today string, width int) string {
 	overdue := storage.Overdue(done, d.Due, today)
-	part := func(f storage.DateField, date string, over bool) string {
-		if date == "" {
-			return ""
-		}
-		return DatePart(f, date, over)
+	type field struct {
+		f    storage.DateField
+		date string
+		over bool
 	}
-	build := func(start, due, completed bool) string {
+	all := []field{{storage.DateStart, d.Start, false}, {storage.DateScheduled, d.Scheduled, false}, {storage.DateDue, d.Due, overdue}, {storage.DateDone, d.Done, false}, {storage.DateCreated, d.Created, false}}
+	build := func(keep func(storage.DateField) bool) string {
 		var parts []string
-		if start {
-			if p := part(storage.DateStart, d.Start, false); p != "" {
-				parts = append(parts, p)
-			}
-		}
-		if due {
-			if p := part(storage.DateDue, d.Due, overdue); p != "" {
-				parts = append(parts, p)
-			}
-		}
-		if completed {
-			if p := part(storage.DateDone, d.Done, false); p != "" {
-				parts = append(parts, p)
+		for _, x := range all {
+			if x.date != "" && keep(x.f) {
+				parts = append(parts, DatePart(x.f, x.date, x.over))
 			}
 		}
 		return strings.Join(parts, " ")
 	}
-	for _, combo := range [][3]bool{{true, true, true}, {true, true, false}, {false, true, false}, {false, false, true}} {
-		if s := build(combo[0], combo[1], combo[2]); s != "" && textwidth.Width(s) <= width {
+	// de más a menos: todas, sin creada, sin creada ni programada, solo vencimiento y completada, solo vencimiento, solo completada
+	ladder := []func(storage.DateField) bool{
+		func(storage.DateField) bool { return true },
+		func(f storage.DateField) bool { return f != storage.DateCreated },
+		func(f storage.DateField) bool { return f != storage.DateCreated && f != storage.DateScheduled },
+		func(f storage.DateField) bool { return f == storage.DateStart || f == storage.DateDue },
+		func(f storage.DateField) bool { return f == storage.DateDue || f == storage.DateDone },
+		func(f storage.DateField) bool { return f == storage.DateDue },
+		func(f storage.DateField) bool { return f == storage.DateDone },
+	}
+	for _, keep := range ladder {
+		if s := build(keep); s != "" && textwidth.Width(s) <= width {
 			return s
 		}
 	}

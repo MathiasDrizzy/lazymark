@@ -21,6 +21,7 @@ func TestToggleTaskRewritesOnlyThatLine(t *testing.T) {
 		t.Fatal(err)
 	}
 	s := New(dir)
+	s.DateFormatPref = "emoji" // estas pruebas ejercitan el formato de emojis
 	cases := []struct {
 		line int
 		old  string
@@ -81,6 +82,7 @@ func TestToggleTaskRefusesStaleNote(t *testing.T) {
 	}
 	_ = os.Chtimes(path, loaded, loaded)
 	s := New(dir)
+	s.DateFormatPref = "emoji" // estas pruebas ejercitan el formato de emojis
 
 	// Otro programa edita la nota después de que lazymark la cargó.
 	external := []byte("- [ ] tarea\nlínea agregada por otro editor\n")

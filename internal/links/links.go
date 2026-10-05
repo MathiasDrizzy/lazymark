@@ -293,7 +293,58 @@ type Edit struct {
 // nombre del archivo sin .md). Los enlaces de ruta (`[[carpeta/nota]]`) cambian solo el último tramo; el alias, el # y el estilo de
 // mayúsculas del resto del enlace se conservan. Hay que llamarla ANTES de renombrar (resuelve con los nombres de ahora).
 func (ix *Index) RenameEdits(old, newBase string) []Edit {
-	byLine := map[string][]Link{} // "ruta\x00línea" → enlaces de esa línea que apuntan a old
+	return ix.collectEdits(func(l Link, dst *storage.Note, _ string) (string, bool) {
+		if dst.Path == old && l.Target != "" {
+			return rewrite(l, newBase), true
+		}
+		return "", false
+	})
+}
+
+// FolderRenameEdits devuelve las ediciones que hacen falta al renombrar la carpeta oldFolder (ruta absoluta) a newName (su nombre nuevo, un solo tramo):
+// los wikilinks de ruta ([[carpeta/nota]], [[arriba/carpeta/nota]]) que pasan por esa carpeta y apuntan a una nota de dentro. Los que solo llevan el
+// nombre ([[nota]]) siguen resolviendo y no cambian.
+func (ix *Index) FolderRenameEdits(oldFolder, newName string) []Edit {
+	rel, err := filepath.Rel(ix.base, oldFolder)
+	if err != nil {
+		return nil
+	}
+	fkey := key(filepath.ToSlash(rel))
+	fsegs := strings.Split(fkey, "/")
+	m := len(fsegs)
+	return ix.collectEdits(func(l Link, dst *storage.Note, _ string) (string, bool) {
+		if l.Target == "" || !strings.Contains(l.Target, "/") {
+			return "", false
+		}
+		r, err := filepath.Rel(ix.base, dst.Path)
+		if err != nil {
+			return "", false
+		}
+		dsegs := strings.Split(key(filepath.ToSlash(r)), "/")
+		if len(dsegs) <= m || strings.Join(dsegs[:m], "/") != fkey {
+			return "", false // la nota no está dentro de la carpeta
+		}
+		segs := strings.Split(strings.ReplaceAll(strings.TrimSpace(l.Target), "\\", "/"), "/")
+		j := (m - 1) - (len(dsegs) - len(segs)) // el tramo del enlace que corresponde a la carpeta
+		if j < 0 || j >= len(segs) {
+			return "", false // el enlace no menciona la carpeta (solo su final)
+		}
+		return rewriteName(l, func(name string) string {
+			parts := strings.Split(strings.ReplaceAll(name, "\\", "/"), "/")
+			parts[j] = newName
+			return strings.Join(parts, "/")
+		}), true
+	})
+}
+
+// collectEdits recorre los wikilinks de todas las notas y, por cada uno que resuelve a una nota para la que match devuelve un enlace nuevo, arma la edición
+// de su línea (varios enlaces de una misma línea se reescriben de atrás hacia adelante).
+func (ix *Index) collectEdits(match func(l Link, dst *storage.Note, from string) (string, bool)) []Edit {
+	type found struct {
+		l    Link
+		repl string
+	}
+	byLine := map[string][]found{} // "ruta\x00línea" → enlaces de esa línea que cambian
 	var order []string
 	for i := range ix.notes {
 		n := &ix.notes[i]
@@ -301,13 +352,19 @@ func (ix *Index) RenameEdits(old, newBase string) []Edit {
 			continue
 		}
 		for _, l := range Parse(n.Content) {
-			if dst, ok := ix.Resolve(l, n.Path); ok && dst.Path == old && l.Target != "" {
-				k := n.Path + "\x00" + itoa(l.Line)
-				if _, seen := byLine[k]; !seen {
-					order = append(order, k)
-				}
-				byLine[k] = append(byLine[k], l)
+			dst, ok := ix.Resolve(l, n.Path)
+			if !ok {
+				continue
 			}
+			repl, ok := match(l, dst, n.Path)
+			if !ok {
+				continue
+			}
+			k := n.Path + "\x00" + itoa(l.Line)
+			if _, seen := byLine[k]; !seen {
+				order = append(order, k)
+			}
+			byLine[k] = append(byLine[k], found{l, repl})
 		}
 	}
 	var edits []Edit
@@ -323,12 +380,12 @@ func (ix *Index) RenameEdits(old, newBase string) []Edit {
 		n := atoi(lineNo)
 		before := lines[n-1]
 		after := before
-		ls := byLine[k]
-		sort.Slice(ls, func(a, b int) bool { return ls[a].Start > ls[b].Start }) // de atrás hacia adelante: los índices anteriores siguen valiendo
+		fs := byLine[k]
+		sort.Slice(fs, func(a, b int) bool { return fs[a].l.Start > fs[b].l.Start }) // de atrás hacia adelante: los índices anteriores siguen valiendo
 		cr := strings.HasSuffix(after, "\r")
 		after = strings.TrimSuffix(after, "\r")
-		for _, l := range ls {
-			after = after[:l.Start] + rewrite(l, newBase) + after[l.End:]
+		for _, f := range fs {
+			after = after[:f.l.Start] + f.repl + after[f.l.End:]
 		}
 		if cr {
 			after += "\r"
@@ -348,6 +405,17 @@ func (ix *Index) RenameEdits(old, newBase string) []Edit {
 
 // rewrite devuelve el enlace l apuntando a newBase, con su alias y su anchor.
 func rewrite(l Link, newBase string) string {
+	return rewriteName(l, func(name string) string {
+		dir := ""
+		if i := strings.LastIndex(name, "/"); i >= 0 {
+			dir = name[:i+1]
+		}
+		return dir + newBase
+	})
+}
+
+// rewriteName devuelve el enlace l con su nombre (la parte antes de # y |, sin .md) cambiado por fn(nombre), conservando .md, el anchor y el alias.
+func rewriteName(l Link, fn func(name string) string) string {
 	inner := strings.TrimSuffix(strings.TrimPrefix(l.Raw, "[["), "]]")
 	targetPart, alias, hasAlias := strings.Cut(inner, "|")
 	nameAnchor := strings.TrimSpace(targetPart)
@@ -358,11 +426,10 @@ func rewrite(l Link, newBase string) string {
 	}
 	name = strings.TrimSpace(name)
 	hadMD := strings.HasSuffix(strings.ToLower(name), ".md")
-	dir := ""
-	if i := strings.LastIndex(name, "/"); i >= 0 {
-		dir = name[:i+1]
+	if hadMD {
+		name = name[:len(name)-3]
 	}
-	out := dir + newBase
+	out := fn(name)
 	if hadMD {
 		out += ".md"
 	}

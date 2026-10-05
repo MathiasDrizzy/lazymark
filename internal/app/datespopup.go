@@ -157,6 +157,7 @@ func (p *datesPopup) save() (tea.Cmd, bool) {
 	p.c.reload()
 	p.onSaved()
 	p.c.setStatus("%s", i18n.T("Fechas guardadas", "Dates saved"))
+	p.c.dateNotice()
 	return nil, true
 }
 
@@ -202,10 +203,20 @@ func (p *datesPopup) render(l Layout) string {
 		"",
 		dim(textwidth.Truncate(i18n.T("hoy · mañana · +3d · +1w · lunes · vacío: quitar", "today · tomorrow · +3d · +1w · monday · empty: remove"), w-6, "…")),
 	}
-	if p.err != "" {
+	switch {
+	case p.err != "":
 		lines = append(lines, lipgloss.NewStyle().Foreground(theme.ColorRed).Render(textwidth.Truncate(p.err, w-6, "…")))
-	} else {
+	case p.startAfterDue():
+		lines = append(lines, lipgloss.NewStyle().Foreground(theme.ColorYellow).Render(textwidth.Truncate(i18n.T("Aviso: el inicio es posterior al vencimiento (se guarda igual)", "Warning: the start is after the due date (it is saved anyway)"), w-6, "…")))
+	default:
 		lines = append(lines, "")
 	}
 	return theme.RenderPopup(i18n.T("Fechas", "Dates"), "[Tab] "+i18n.T("cambiar", "switch")+" · [Enter] OK · "+escHint, lines, w)
+}
+
+// startAfterDue dice si, con lo escrito, el inicio queda después del vencimiento: es un aviso, no impide guardar.
+func (p *datesPopup) startAfterDue() bool {
+	start, err1 := p.resolve(dateStart)
+	due, err2 := p.resolve(dateDue)
+	return err1 == nil && err2 == nil && start != "" && due != "" && start > due
 }

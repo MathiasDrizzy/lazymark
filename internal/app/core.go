@@ -99,6 +99,15 @@ func (c *core) setStatus(format string, a ...any) {
 
 func (c *core) save() { _ = c.cfg.Save() }
 
+// dateNotice muestra, una sola vez, el aviso de que las fechas se escriben con emojis porque el vault ya las tiene así, y lo recuerda en la config.
+func (c *core) dateNotice() {
+	if n := c.store.TakeDateFormatNotice(); n != "" {
+		c.cfg.DateFormatNoticeShown = true
+		c.save()
+		c.setStatus("%s", n)
+	}
+}
+
 func (c *core) push(p popup) { c.popups = append(c.popups, p) }
 
 func (c *core) pop() {

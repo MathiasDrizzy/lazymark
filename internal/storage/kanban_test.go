@@ -110,7 +110,9 @@ func kanbanNote(t *testing.T, body string) (*Storage, string) {
 	if err := os.WriteFile(p, []byte(body), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	return New(dir), p
+	s := New(dir)
+	s.DateFormatPref = "emoji" // las pruebas de este archivo ejercitan el formato de emojis
+	return s, p
 }
 
 // TestMoveTaskChangesOneLine (K1): mover una tarjeta cambia exactamente esa línea del archivo; el resto queda

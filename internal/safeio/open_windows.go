@@ -16,5 +16,14 @@ func openNonBlocking(path string) (*os.File, error) {
 	if fi, err := os.Stat(path); err == nil && !fi.Mode().IsRegular() {
 		return nil, fmt.Errorf("%w: %s", ErrNotRegular, path)
 	}
-	return os.Open(path)
+	f, err := os.Open(path)
+	if err != nil {
+		return nil, err
+	}
+	// vuelve a comprobar con el archivo ya abierto: entre el Stat y el Open pudo cambiar (TOCTOU)
+	if fi, err := f.Stat(); err != nil || !fi.Mode().IsRegular() {
+		_ = f.Close()
+		return nil, fmt.Errorf("%w: %s", ErrNotRegular, path)
+	}
+	return f, nil
 }

@@ -52,6 +52,7 @@ type AppModel struct {
 func New(cfg *config.Config) (*AppModel, error) {
 	storage.MaxNoteBytes = cfg.MaxNoteBytes()
 	store := storage.New(cfg.NotesDir)
+	store.DateFormatPref, store.DateNoticeSeen = cfg.DateFormat, cfg.DateFormatNoticeShown
 	if _, err := store.ListNotes(); err != nil {
 		return nil, err
 	}

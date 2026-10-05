@@ -52,7 +52,12 @@ Select a task, in the Tasks panel or on the board, and press `d`. A small popup 
 
 <img src="assets/readme/feature-dates.gif" alt="Pressing d on a task, typing +3d and friday, and seeing the dates on the task's card on the Kanban board" width="100%">
 
-The completion date is added by itself when you tick a task. On screen the dates are monochrome glyphs in the theme's colors (an overdue due date in the error color). In the file they are kept at the end of the task line in the [Obsidian Tasks](https://publish.obsidian.md/tasks/Introduction) format, so Obsidian and other tools read them too (the exact format is in [docs/cli.md](docs/cli.md)); you never have to type it.
+The completion date is added by itself when you tick a task. On screen the dates are monochrome glyphs in the theme's colors (an overdue due date in the error color), never emoji. If you set a start date after the due date, the popup warns you (and saves anyway).
+
+**In the file** the dates go at the end of the task line, in a format that [Obsidian Tasks](https://publish.obsidian.md/tasks/Introduction) understands. By default lazymark writes the **Dataview** format (`[due:: 2026-10-09]`, plain ASCII, so it looks the same in any editor and on GitHub), and it always reads both that and the emoji format of Obsidian Tasks, including scheduled and created dates. To write the emoji format instead, set **Date format** in Settings (`,`) or `date_format` in the config. A vault that already has emoji dates and none in Dataview keeps writing emojis (lazymark tells you once, so formats do not get mixed). A task you edit keeps the format its line already had.
+
+To use Dataview dates in Obsidian, open the Tasks plugin settings and set **Task format** to **Dataview**; Obsidian Tasks reads one format at a time, so after that it will not read the emoji ones. To convert the notes you already have, run `lazymark dates migrate --to dataview --dry-run` to see the change and then without `--dry-run` to apply it (`--to emoji` goes back). It is never automatic, only touches task lines, writes each note atomically and a second run changes nothing. More in [docs/cli.md](docs/cli.md).
+
 ### Categories
 
 Every `#tag` in your notes. `Enter` on a tag shows only the notes that have it.

@@ -1,0 +1,452 @@
+[
+ {
+  "line": "- [ ] preparar viaje 🛫 2026-06-01",
+  "start": "2026-06-01",
+  "due": "",
+  "done": "",
+  "scheduled": "",
+  "created": "",
+  "clean": "- [ ] preparar viaje"
+ },
+ {
+  "line": "- [ ] enviar reporte 📅 2026-05-15",
+  "start": "",
+  "due": "2026-05-15",
+  "done": "",
+  "scheduled": "",
+  "created": "",
+  "clean": "- [ ] enviar reporte"
+ },
+ {
+  "line": "- [x] pagar facturas ✅ 2026-05-10",
+  "start": "",
+  "due": "",
+  "done": "2026-05-10",
+  "scheduled": "",
+  "created": "",
+  "clean": "- [x] pagar facturas"
+ },
+ {
+  "line": "- [ ] reunion de equipo ⏳ 2026-05-20",
+  "start": "",
+  "due": "",
+  "done": "",
+  "scheduled": "2026-05-20",
+  "created": "",
+  "clean": "- [ ] reunion de equipo"
+ },
+ {
+  "line": "- [ ] redactar borrador ➕ 2026-05-01",
+  "start": "",
+  "due": "",
+  "done": "",
+  "scheduled": "",
+  "created": "2026-05-01",
+  "clean": "- [ ] redactar borrador"
+ },
+ {
+  "line": "- [ ] inicio de obra 🛫️ 2026-07-01",
+  "start": "2026-07-01",
+  "due": "",
+  "done": "",
+  "scheduled": "",
+  "created": "",
+  "clean": "- [ ] inicio de obra"
+ },
+ {
+  "line": "- [ ] entrega final 📅️ 2026-08-15",
+  "start": "",
+  "due": "2026-08-15",
+  "done": "",
+  "scheduled": "",
+  "created": "",
+  "clean": "- [ ] entrega final"
+ },
+ {
+  "line": "- [x] revision terminada ✅️ 2026-05-12",
+  "start": "",
+  "due": "",
+  "done": "2026-05-12",
+  "scheduled": "",
+  "created": "",
+  "clean": "- [x] revision terminada"
+ },
+ {
+  "line": "- [ ] llamada cliente ⏳️ 2026-06-10",
+  "start": "",
+  "due": "",
+  "done": "",
+  "scheduled": "2026-06-10",
+  "created": "",
+  "clean": "- [ ] llamada cliente"
+ },
+ {
+  "line": "- [ ] nueva propuesta ➕️ 2026-04-15",
+  "start": "",
+  "due": "",
+  "done": "",
+  "scheduled": "",
+  "created": "2026-04-15",
+  "clean": "- [ ] nueva propuesta"
+ },
+ {
+  "line": "- [ ] inicio curso [start:: 2026-09-01]",
+  "start": "2026-09-01",
+  "due": "",
+  "done": "",
+  "scheduled": "",
+  "created": "",
+  "clean": "- [ ] inicio curso"
+ },
+ {
+  "line": "- [ ] entrega proyecto [due:: 2026-10-31]",
+  "start": "",
+  "due": "2026-10-31",
+  "done": "",
+  "scheduled": "",
+  "created": "",
+  "clean": "- [ ] entrega proyecto"
+ },
+ {
+  "line": "- [x] auditoria [completion:: 2026-05-08]",
+  "start": "",
+  "due": "",
+  "done": "2026-05-08",
+  "scheduled": "",
+  "created": "",
+  "clean": "- [x] auditoria"
+ },
+ {
+  "line": "- [ ] mantenimiento [scheduled:: 2026-06-15]",
+  "start": "",
+  "due": "",
+  "done": "",
+  "scheduled": "2026-06-15",
+  "created": "",
+  "clean": "- [ ] mantenimiento"
+ },
+ {
+  "line": "- [ ] ticket abierto [created:: 2026-05-02]",
+  "start": "",
+  "due": "",
+  "done": "",
+  "scheduled": "",
+  "created": "2026-05-02",
+  "clean": "- [ ] ticket abierto"
+ },
+ {
+  "line": "- [ ] curso avanzado (start:: 2026-09-15)",
+  "start": "2026-09-15",
+  "due": "",
+  "done": "",
+  "scheduled": "",
+  "created": "",
+  "clean": "- [ ] curso avanzado"
+ },
+ {
+  "line": "- [ ] presentacion (due:: 2026-11-20)",
+  "start": "",
+  "due": "2026-11-20",
+  "done": "",
+  "scheduled": "",
+  "created": "",
+  "clean": "- [ ] presentacion"
+ },
+ {
+  "line": "- [x] deploy produccion (completion:: 2026-05-09)",
+  "start": "",
+  "due": "",
+  "done": "2026-05-09",
+  "scheduled": "",
+  "created": "",
+  "clean": "- [x] deploy produccion"
+ },
+ {
+  "line": "- [ ] demo tecnica (scheduled:: 2026-06-25)",
+  "start": "",
+  "due": "",
+  "done": "",
+  "scheduled": "2026-06-25",
+  "created": "",
+  "clean": "- [ ] demo tecnica"
+ },
+ {
+  "line": "- [ ] registro usuario (created:: 2026-05-03)",
+  "start": "",
+  "due": "",
+  "done": "",
+  "scheduled": "",
+  "created": "2026-05-03",
+  "clean": "- [ ] registro usuario"
+ },
+ {
+  "line": "- [ ] prueba espacios [ due :: 2026-05-10 ]",
+  "start": "",
+  "due": "2026-05-10",
+  "done": "",
+  "scheduled": "",
+  "created": "",
+  "clean": "- [ ] prueba espacios"
+ },
+ {
+  "line": "- [ ] prueba espacios parentesis (  scheduled  ::  2026-06-01  )",
+  "start": "",
+  "due": "",
+  "done": "",
+  "scheduled": "2026-06-01",
+  "created": "",
+  "clean": "- [ ] prueba espacios parentesis"
+ },
+ {
+  "line": "- [ ] compacto sin espacios [start::2026-07-01]",
+  "start": "2026-07-01",
+  "due": "",
+  "done": "",
+  "scheduled": "",
+  "created": "",
+  "clean": "- [ ] compacto sin espacios"
+ },
+ {
+  "line": "- [ ] emoji pegado a fecha 📅2026-05-10",
+  "start": "",
+  "due": "2026-05-10",
+  "done": "",
+  "scheduled": "",
+  "created": "",
+  "clean": "- [ ] emoji pegado a fecha"
+ },
+ {
+  "line": "- [ ] emoji muchos espacios 🛫   2026-06-15",
+  "start": "2026-06-15",
+  "due": "",
+  "done": "",
+  "scheduled": "",
+  "created": "",
+  "clean": "- [ ] emoji muchos espacios"
+ },
+ {
+  "line": "- [ ] fecha febrero invalida 📅 2026-02-30",
+  "start": "",
+  "due": "",
+  "done": "",
+  "scheduled": "",
+  "created": "",
+  "clean": "- [ ] fecha febrero invalida 📅 2026-02-30"
+ },
+ {
+  "line": "- [ ] mes trece invalido [due:: 2026-13-01]",
+  "start": "",
+  "due": "",
+  "done": "",
+  "scheduled": "",
+  "created": "",
+  "clean": "- [ ] mes trece invalido [due:: 2026-13-01]"
+ },
+ {
+  "line": "- [ ] fecha sin ceros 🛫 2026-5-1",
+  "start": "",
+  "due": "",
+  "done": "",
+  "scheduled": "",
+  "created": "",
+  "clean": "- [ ] fecha sin ceros 🛫 2026-5-1"
+ },
+ {
+  "line": "- [ ] anio corto [created:: 26-1-1]",
+  "start": "",
+  "due": "",
+  "done": "",
+  "scheduled": "",
+  "created": "",
+  "clean": "- [ ] anio corto [created:: 26-1-1]"
+ },
+ {
+  "line": "- [ ] dia invalido en abril (scheduled:: 2026-04-31)",
+  "start": "",
+  "due": "",
+  "done": "",
+  "scheduled": "",
+  "created": "",
+  "clean": "- [ ] dia invalido en abril (scheduled:: 2026-04-31)"
+ },
+ {
+  "line": "- [ ] dos vencimientos emoji 📅 2026-05-10 📅 2026-06-20",
+  "start": "",
+  "due": "2026-05-10",
+  "done": "",
+  "scheduled": "",
+  "created": "",
+  "clean": "- [ ] dos vencimientos emoji"
+ },
+ {
+  "line": "- [ ] dos inicios corchetes [start:: 2026-06-01] [start:: 2026-07-01]",
+  "start": "2026-06-01",
+  "due": "",
+  "done": "",
+  "scheduled": "",
+  "created": "",
+  "clean": "- [ ] dos inicios corchetes"
+ },
+ {
+  "line": "- [ ] vencimiento mixto repetido 📅 2026-05-10 [due:: 2026-06-20]",
+  "start": "",
+  "due": "2026-05-10",
+  "done": "",
+  "scheduled": "",
+  "created": "",
+  "clean": "- [ ] vencimiento mixto repetido"
+ },
+ {
+  "line": "- [ ] inicio mixto repetido [start:: 2026-05-01] 🛫 2026-06-01",
+  "start": "2026-05-01",
+  "due": "",
+  "done": "",
+  "scheduled": "",
+  "created": "",
+  "clean": "- [ ] inicio mixto repetido"
+ },
+ {
+  "line": "- [ ] invalido luego valido 📅 2026-02-30 📅 2026-05-10",
+  "start": "",
+  "due": "2026-05-10",
+  "done": "",
+  "scheduled": "",
+  "created": "",
+  "clean": "- [ ] invalido luego valido 📅 2026-02-30"
+ },
+ {
+  "line": "- [ ] dataview invalido luego valido [due:: 2026-13-05] [due:: 2026-05-10]",
+  "start": "",
+  "due": "2026-05-10",
+  "done": "",
+  "scheduled": "",
+  "created": "",
+  "clean": "- [ ] dataview invalido luego valido [due:: 2026-13-05]"
+ },
+ {
+  "line": "- [ ] valido luego invalido 📅 2026-05-10 📅 2026-02-30",
+  "start": "",
+  "due": "2026-05-10",
+  "done": "",
+  "scheduled": "",
+  "created": "",
+  "clean": "- [ ] valido luego invalido 📅 2026-02-30"
+ },
+ {
+  "line": "- [ ] sin ceros luego valido 🛫 2026-5-1 🛫 2026-05-01",
+  "start": "2026-05-01",
+  "due": "",
+  "done": "",
+  "scheduled": "",
+  "created": "",
+  "clean": "- [ ] sin ceros luego valido 🛫 2026-5-1"
+ },
+ {
+  "line": "- [ ] mayuscula no valida [Due:: 2026-05-10]",
+  "start": "",
+  "due": "",
+  "done": "",
+  "scheduled": "",
+  "created": "",
+  "clean": "- [ ] mayuscula no valida [Due:: 2026-05-10]"
+ },
+ {
+  "line": "- [ ] todo mayusculas (START:: 2026-05-01)",
+  "start": "",
+  "due": "",
+  "done": "",
+  "scheduled": "",
+  "created": "",
+  "clean": "- [ ] todo mayusculas (START:: 2026-05-01)"
+ },
+ {
+  "line": "- [x] mayuscula luego valida [Completion:: 2026-05-01] [completion:: 2026-05-10]",
+  "start": "",
+  "due": "",
+  "done": "2026-05-10",
+  "scheduled": "",
+  "created": "",
+  "clean": "- [x] mayuscula luego valida [Completion:: 2026-05-01]"
+ },
+ {
+  "line": "- [ ] revisar enlace [guia](https://example.com/doc) 📅 2026-05-10",
+  "start": "",
+  "due": "2026-05-10",
+  "done": "",
+  "scheduled": "",
+  "created": "",
+  "clean": "- [ ] revisar enlace [guia](https://example.com/doc)"
+ },
+ {
+  "line": "- [ ] marcar casilla [x] en el formulario 📅 2026-05-10",
+  "start": "",
+  "due": "2026-05-10",
+  "done": "",
+  "scheduled": "",
+  "created": "",
+  "clean": "- [ ] marcar casilla [x] en el formulario"
+ },
+ {
+  "line": "- [ ] verificar [nota] tecnica [due:: 2026-05-10]",
+  "start": "",
+  "due": "2026-05-10",
+  "done": "",
+  "scheduled": "",
+  "created": "",
+  "clean": "- [ ] verificar [nota] tecnica"
+ },
+ {
+  "line": "- [ ] dos emojis pegados 🛫2026-05-01📅2026-05-10",
+  "start": "2026-05-01",
+  "due": "2026-05-10",
+  "done": "",
+  "scheduled": "",
+  "created": "",
+  "clean": "- [ ] dos emojis pegados"
+ },
+ {
+  "line": "- [ ] dos dataview pegados [start:: 2026-05-01][due:: 2026-05-10]",
+  "start": "2026-05-01",
+  "due": "2026-05-10",
+  "done": "",
+  "scheduled": "",
+  "created": "",
+  "clean": "- [ ] dos dataview pegados"
+ },
+ {
+  "line": "- [ ] mixto pegado 📅2026-05-10[scheduled:: 2026-05-15]",
+  "start": "",
+  "due": "2026-05-10",
+  "done": "",
+  "scheduled": "2026-05-15",
+  "created": "",
+  "clean": "- [ ] mixto pegado"
+ },
+ {
+  "line": "- [ ] 📅 2026-05-10 comprar viveres en el mercado",
+  "start": "",
+  "due": "2026-05-10",
+  "done": "",
+  "scheduled": "",
+  "created": "",
+  "clean": "- [ ] comprar viveres en el mercado"
+ },
+ {
+  "line": "- [ ] comprar [due:: 2026-05-10] viveres en el mercado",
+  "start": "",
+  "due": "2026-05-10",
+  "done": "",
+  "scheduled": "",
+  "created": "",
+  "clean": "- [ ] comprar viveres en el mercado"
+ },
+ {
+  "line": "- [x] tarea completa con retorno ➕ 2026-04-01 🛫 2026-04-10 [scheduled:: 2026-04-15] 📅 2026-04-20 (completion:: 2026-04-25)\r",
+  "start": "2026-04-10",
+  "due": "2026-04-20",
+  "done": "2026-04-25",
+  "scheduled": "2026-04-15",
+  "created": "2026-04-01",
+  "clean": "- [x] tarea completa con retorno"
+ }
+]

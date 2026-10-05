@@ -68,6 +68,22 @@ type Service struct {
 	Cols   storage.Columns
 	Titles []string
 	Config []config.KanbanColumn
+	// Notice recibe el aviso del formato de fechas (una sola vez); la CLI lo escribe por stderr.
+	Notice func(string)
+	cfg    *config.Config
+}
+
+// afterDateWrite muestra (una sola vez) el aviso de que el vault tiene fechas con emojis y se escriben así, y lo recuerda en la configuración.
+func (s *Service) afterDateWrite() {
+	if n := s.Store.TakeDateFormatNotice(); n != "" {
+		if s.cfg != nil {
+			s.cfg.DateFormatNoticeShown = true
+			_ = s.cfg.Save()
+		}
+		if s.Notice != nil {
+			s.Notice(n)
+		}
+	}
 }
 
 // New crea el servicio para una carpeta de notas ("" es la de por defecto), con las columnas de la config del
@@ -83,7 +99,9 @@ func New(notesDir string) (*Service, error) {
 		titles[i] = c.DisplayTitle(lang)
 	}
 	storage.MaxNoteBytes = cfg.MaxNoteBytes()
-	return &Service{Store: storage.New(cfg.NotesDir), Cols: storage.Columns(cfg.KanbanIDs()), Titles: titles, Config: cfg.KanbanColumns}, nil
+	store := storage.New(cfg.NotesDir)
+	store.DateFormatPref, store.DateNoticeSeen = cfg.DateFormat, cfg.DateFormatNoticeShown
+	return &Service{Store: store, cfg: cfg, Cols: storage.Columns(cfg.KanbanIDs()), Titles: titles, Config: cfg.KanbanColumns}, nil
 }
 
 // NoteDTO es una nota en la salida JSON (esquema estable, docs/cli.md).
@@ -118,10 +136,13 @@ type TaskDTO struct {
 	Text      string `json:"text"`   // el texto sin las etiquetas del tablero
 	Column    string `json:"column"` // el id de su columna
 	Done      bool   `json:"done"`
-	Start     string `json:"start"`     // 🛫 AAAA-MM-DD, o ""
-	Due       string `json:"due"`       // 📅 AAAA-MM-DD, o ""
-	Completed string `json:"completed"` // ✅ AAAA-MM-DD, o ""
-	Overdue   bool   `json:"overdue"`   // tiene vencimiento anterior a hoy y no está hecha
+	Start     string `json:"start"`     // inicio (🛫 o [start:: ]) AAAA-MM-DD, o ""
+	Due       string `json:"due"`       // vencimiento (📅 o [due:: ]), o ""
+	Completed string `json:"completed"` // completada (✅ o [completion:: ]), o ""
+	// Scheduled y Created (⏳ y ➕ de Obsidian Tasks) solo aparecen si la tarea los tiene.
+	Scheduled string `json:"scheduled,omitempty"`
+	Created   string `json:"created,omitempty"`
+	Overdue   bool   `json:"overdue"` // tiene vencimiento anterior a hoy y no está hecha
 	Line      int    `json:"line"`
 	Note      string `json:"note"` // la ruta de la nota, relativa a la carpeta de notas
 	NoteTitle string `json:"note_title"`
@@ -131,7 +152,7 @@ type TaskDTO struct {
 func (s *Service) taskDTO(n storage.Note, id string, t storage.Task) TaskDTO {
 	return TaskDTO{
 		ID: id, Text: storage.CleanTaskText(t.Text), Column: s.Cols[s.Cols.Of(t)], Done: t.Done,
-		Start: t.Dates.Start, Due: t.Dates.Due, Completed: t.Dates.Done, Overdue: storage.Overdue(t.Done, t.Dates.Due, storage.Today()),
+		Start: t.Dates.Start, Due: t.Dates.Due, Completed: t.Dates.Done, Scheduled: t.Dates.Scheduled, Created: t.Dates.Created, Overdue: storage.Overdue(t.Done, t.Dates.Due, storage.Today()),
 		Line: t.Line, Note: strings.SplitN(id, "#", 2)[0], NoteTitle: n.Title, Path: n.Path,
 	}
 }
@@ -372,6 +393,7 @@ func (s *Service) SetDate(id, field, date string) (TaskDTO, error) {
 // (no es el de antes): si el cambio alteró el texto de la tarea (por ejemplo quitó un marcador que contaba para su huella) el id
 // es otro, y buscar el viejo daría "no existe" aunque la escritura ya se hizo.
 func (s *Service) afterWrite(path string, line int) (TaskDTO, error) {
+	s.afterDateWrite()
 	notes, err := s.Store.ListNotes()
 	if err != nil {
 		return TaskDTO{}, err
@@ -503,4 +525,46 @@ func (s *Service) Daily() (DailyDTO, error) {
 	}
 	full.Warnings = n.Warnings
 	return DailyDTO{NoteDTO: full.NoteDTO, Created: created}, nil
+}
+
+// DateChangeDTO es una línea que cambia al migrar las fechas.
+type DateChangeDTO struct {
+	Note   string `json:"note"` // la ruta de la nota, relativa a la carpeta de notas
+	Line   int    `json:"line"`
+	Before string `json:"before"`
+	After  string `json:"after"`
+}
+
+// MigrationDTO es el resultado de `dates migrate`.
+type MigrationDTO struct {
+	To      string          `json:"to"`
+	DryRun  bool            `json:"dry_run"`
+	Notes   int             `json:"notes"` // notas que cambian
+	Lines   int             `json:"lines"` // líneas que cambian
+	Changes []DateChangeDTO `json:"changes"`
+}
+
+// MigrateDates pasa las fechas de las tareas al formato to ("dataview" o "emoji"); con dryRun solo cuenta y muestra el cambio, sin escribir.
+func (s *Service) MigrateDates(to string, dryRun bool) (MigrationDTO, error) {
+	var fm storage.DateFormat
+	switch to {
+	case "dataview":
+		fm = storage.FormatDataview
+	case "emoji":
+		fm = storage.FormatEmoji
+	default:
+		return MigrationDTO{}, usage("--to debe ser dataview o emoji")
+	}
+	changes, err := s.Store.MigrateDates(fm, dryRun)
+	out := MigrationDTO{To: to, DryRun: dryRun, Changes: []DateChangeDTO{}}
+	seen := map[string]bool{}
+	for _, c := range changes {
+		out.Changes = append(out.Changes, DateChangeDTO{Note: c.Rel, Line: c.Line, Before: c.Before, After: c.After})
+		seen[c.Path] = true
+	}
+	out.Lines, out.Notes = len(changes), len(seen)
+	if err == nil && !dryRun {
+		s.Store.ResetDateFormat() // el vault cambió de formato
+	}
+	return out, err
 }

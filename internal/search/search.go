@@ -27,8 +27,9 @@ const (
 	DefaultMaxFileBytes = 2 << 20 // las notas más grandes no se leen (se cuentan en Result.Skipped)
 	DefaultMaxResults   = 500
 	DefaultTimeout      = 10 * time.Second
-	// maxRegexCost es el costo máximo de una expresión regular (ver regexCost): una de 100 000 tarda unos 4 s en 2 MB de letras, una de 300 000 más de 15 s.
-	maxRegexCost = 100000
+	// maxRegexCost es el costo máximo de una expresión regular (ver regexCost): la unidad es ~0,1 ms sobre una línea de 2 MB, así que lo aceptado tarda
+	// como mucho unos 3 s en esa medida (\w{160}x: 2,8 s; [\p{L}\p{N}]{100}x: 2,9 s; \w{330}x, que tardaba 5,9 s, se rechaza).
+	maxRegexCost = 30000
 	// longLine es el largo (bytes) desde el cual una línea se compara con un lector que mira la cancelación: así el corte por tiempo detiene la coincidencia.
 	longLine   = 64 << 10
 	maxPerFile = 50
@@ -345,10 +346,10 @@ func dedupe(paths []string) []string {
 	return out
 }
 
-// regexCost estima lo que cuesta ejecutar la expresión en el peor texto: cada instrucción del programa compilado que puede quedarse viva sobre muchas
-// letras (una clase, un cualquiera, una bifurcación de ? * + |) cuesta 300, y una clase con muchos rangos (\p{L}: unos 650) cuesta algo más. Una letra
-// suelta cuesta 0 (un hilo que no coincide muere al instante). Lo que decide el tiempo es cuántas de esas instrucciones hay y no la expresión escrita:
-// \w{1000}x tarda 18 s en 2 MB, ([\p{L}\p{N}]{50}){20}x más de 60 s y (a?){1000}b 30 s, pero (a|b){500}c solo milisegundos. Una expresión que no compila se
+// regexCost estima lo que cuesta ejecutar la expresión en el peor texto, en décimas de milisegundo sobre una línea de 2 MB (medido): cada instrucción del
+// programa compilado que puede quedarse viva sobre muchas letras (una clase, un cualquiera) cuesta unas 180 más 0,07 por cada extremo de rango de runas (\w{160}x tarda
+// 2,8 s y [\p{L}\p{N}]{100}x 2,9 s), y cada bifurcación (? * + |) 300 (en "aaaa…" (a?){100}b tarda 3,1 s). Una letra suelta cuesta 0: un hilo que no
+// coincide muere al instante. Lo que decide el tiempo es cuántas de esas instrucciones hay y no la expresión escrita. Una expresión que no compila se
 // trata como cara (se rechaza).
 func regexCost(re *syntax.Regexp) int {
 	prog, err := syntax.Compile(re.Simplify())
@@ -359,8 +360,14 @@ func regexCost(re *syntax.Regexp) int {
 	for _, in := range prog.Inst {
 		switch in.Op {
 		case syntax.InstRune:
-			cost += 300 + len(in.Rune)/4
-		case syntax.InstRuneAny, syntax.InstRuneAnyNotNL, syntax.InstAlt, syntax.InstAltMatch:
+			if len(in.Rune) == 1 || (len(in.Rune) == 2 && in.Rune[0] == in.Rune[1]) { // una letra suelta (también sin distinguir mayúsculas: (?i)a)
+				cost += 5
+			} else {
+				cost += 180 + len(in.Rune)*7/100
+			}
+		case syntax.InstRuneAny, syntax.InstRuneAnyNotNL:
+			cost += 180
+		case syntax.InstAlt, syntax.InstAltMatch:
 			cost += 300
 		}
 	}

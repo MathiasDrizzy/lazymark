@@ -223,6 +223,7 @@ func (k *kanbanSheet) setColumn(card *views.KanbanCard, target int) tea.Cmd {
 		}
 	}
 	k.c.setStatus("→ %s", k.c.board.Titles[target])
+	k.c.dateNotice()
 	return nil
 }
 
