@@ -51,7 +51,7 @@ func Code(err error) int {
 		return ExitOK
 	case errors.As(err, &e):
 		return e.Code
-	case errors.Is(err, storage.ErrOutsideNotes):
+	case errors.Is(err, storage.ErrOutsideNotes), errors.Is(err, storage.ErrTemplateInvalid):
 		return ExitUsage
 	case errors.Is(err, storage.ErrNoteChanged):
 		return ExitConflict
@@ -92,6 +92,8 @@ type NoteDTO struct {
 	Tags       []string `json:"tags"`
 	TasksCount int      `json:"tasks_count"`
 	ModTime    string   `json:"mod_time"`
+	// Warnings: avisos de la creación (variables {{...}} desconocidas de la plantilla); solo aparece si hay.
+	Warnings []string `json:"warnings,omitempty"`
 }
 
 // NoteContentDTO es una nota con su contenido.
@@ -222,6 +224,7 @@ func (s *Service) NewNoteFromTemplate(title, folder, template string, empty bool
 	if err != nil {
 		return NoteDTO{}, err
 	}
+	full.Warnings = n.Warnings
 	return full.NoteDTO, nil
 }
 
@@ -495,5 +498,6 @@ func (s *Service) Daily() (DailyDTO, error) {
 	if err != nil {
 		return DailyDTO{}, err
 	}
+	full.Warnings = n.Warnings
 	return DailyDTO{NoteDTO: full.NoteDTO, Created: created}, nil
 }

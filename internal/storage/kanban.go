@@ -302,11 +302,20 @@ func (s *Storage) BlockEnd(notePath string, line int) (int, error) {
 	return end + 1, nil
 }
 
-// shiftBlock corre d columnas el contenido de las líneas de un bloque: agrega d espacios (d > 0) o quita hasta -d espacios de la sangría
-// (d < 0). Las líneas en blanco no se tocan.
-func shiftBlock(lines []string, d int) {
+// shiftBlock corre d columnas el contenido de las líneas de un bloque cuya primera línea tiene ahora su contenido en la columna ci:
+// agrega d espacios (d > 0) o quita hasta -d espacios de la sangría (d < 0). Una línea sangrada con tabulador no se toca si ya llega a ci
+// (un espacio antes de un tab no cambia su ancho y solo ensuciaría el archivo); si no llega, se reconstruye con espacios al ancho nuevo.
+// Las líneas en blanco no se tocan.
+func shiftBlock(lines []string, d, ci int) {
 	for i, l := range lines {
 		if d == 0 || strings.TrimSpace(l) == "" {
+			continue
+		}
+		ws := leadingSpace(l)
+		if strings.Contains(ws, "\t") {
+			if w := indentWidth(ws); w < ci {
+				lines[i] = strings.Repeat(" ", max(0, w+d)) + l[len(ws):]
+			}
 			continue
 		}
 		if d > 0 {
@@ -386,8 +395,8 @@ func (s *Storage) SwapTasks(notePath string, lineA, lineB int, expected time.Tim
 			// el contenido de un ítem numerado empieza tras su número: si cambia el ancho (9. ↔ 10.), el resto del bloque se corre igual
 			blockA[0] = ma[1] + mb[2] + ma[3] + blockA[0][len(ma[0]):]
 			blockB[0] = mb[1] + ma[2] + mb[3] + blockB[0][len(mb[0]):]
-			shiftBlock(blockA[1:], len(mb[2])-len(ma[2]))
-			shiftBlock(blockB[1:], len(ma[2])-len(mb[2]))
+			shiftBlock(blockA[1:], len(mb[2])-len(ma[2]), contentIndent(blockA[0]))
+			shiftBlock(blockB[1:], len(ma[2])-len(mb[2]), contentIndent(blockB[0]))
 		}
 		out := make([]string, 0, len(lines))
 		out = append(out, flat[:a]...)

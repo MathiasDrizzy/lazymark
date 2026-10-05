@@ -700,3 +700,52 @@ func TestDailyCLI(t *testing.T) {
 		t.Errorf("un argumento de más es de uso: %v", err)
 	}
 }
+
+// TestTemplateErrorsAndWarningsCLI (ORD-014 M1 y M2): una plantilla binaria, UTF-16 o de más de 1 MB sale con 2 y no crea nada (note new y
+// daily); una variable desconocida deja la nota con la variable tal cual, avisa por stderr y en el JSON, y no cambia el código de salida.
+func TestTemplateErrorsAndWarningsCLI(t *testing.T) {
+	dir := fixture(t)
+	tpl := filepath.Join(dir, "templates")
+	os.MkdirAll(tpl, 0o755)
+	os.WriteFile(filepath.Join(tpl, "bin.md"), []byte("# x\x00\x01\x02"), 0o644)
+	os.WriteFile(filepath.Join(tpl, "utf16.md"), []byte{0xff, 0xfe, '#', 0, ' ', 0, 'h', 0}, 0o644)
+	os.WriteFile(filepath.Join(tpl, "grande.md"), []byte("# x\n"+strings.Repeat("0123456789abcdef", 70<<10)), 0o644)
+	os.WriteFile(filepath.Join(tpl, "vars.md"), []byte("# {{title}}\n{{fecha}} {{Date}}\n"), 0o644)
+	before := snapshot(t, dir)
+	for _, name := range []string{"bin", "utf16", "grande"} {
+		out, err := run(t, dir, "note", "new", "Nota "+name, "--template", name)
+		if err == nil || ExitCode(err) != 2 || out != "" {
+			t.Errorf("--template %s: código %d, salida %q, error %v; se esperaba 2 sin salida", name, ExitCode(err), out, err)
+		}
+	}
+	os.WriteFile(filepath.Join(tpl, "daily.md"), []byte("# x\x00"), 0o644)
+	before = snapshot(t, dir)
+	if out, err := run(t, dir, "daily"); err == nil || ExitCode(err) != 2 || out != "" {
+		t.Errorf("daily con plantilla binaria: código %d, salida %q, error %v", ExitCode(err), out, err)
+	}
+	if after := snapshot(t, dir); !reflect.DeepEqual(before, after) {
+		t.Error("una plantilla inválida no debe crear nada (ni journal/)")
+	}
+
+	var errBuf bytes.Buffer
+	old := Stderr
+	Stderr = &errBuf
+	defer func() { Stderr = old }()
+	out, err := run(t, dir, "note", "new", "Con variables", "--template", "vars", "--json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var n struct {
+		Path     string   `json:"path"`
+		Warnings []string `json:"warnings"`
+	}
+	if json.Unmarshal([]byte(out), &n) != nil || !reflect.DeepEqual(n.Warnings, []string{"{{fecha}}"}) {
+		t.Errorf("warnings en el JSON: %q", out)
+	}
+	if !strings.Contains(errBuf.String(), "{{fecha}}") || strings.Contains(errBuf.String(), "{{Date}}") {
+		t.Errorf("el aviso va por stderr y solo de la desconocida: %q", errBuf.String())
+	}
+	if b, _ := os.ReadFile(n.Path); !strings.HasPrefix(string(b), "# Con variables\n{{fecha}} 20") {
+		t.Errorf("la nota: %q", b)
+	}
+}

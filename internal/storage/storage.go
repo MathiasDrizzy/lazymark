@@ -38,6 +38,8 @@ type Note struct {
 	Size     int64
 	Tasks    []Task
 	Images   []string
+	// Warnings son avisos de la creación de la nota (hoy: las {{variables}} desconocidas de su plantilla); no se guardan.
+	Warnings []string
 }
 
 // EntryType define si es una nota o una carpeta

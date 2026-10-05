@@ -109,13 +109,13 @@ exit codes: 0 ok · 1 failed · 2 invalid arguments (nothing touched) · 3 not f
 const noteUsageES = `uso: lazymark note list [--json] [--dir <carpeta>]
      lazymark note show <ruta> [--json] [--dir <carpeta>]
      lazymark note new  <título> [--folder <subcarpeta>] [--empty] [--template <nombre>] [--json] [--dir <carpeta>]
-códigos de salida: 0 ok · 1 falló · 2 argumentos inválidos o ruta fuera de la carpeta de notas · 3 no existe
+códigos de salida: 0 ok · 1 falló · 2 argumentos inválidos, ruta fuera de la carpeta de notas o plantilla no válida · 3 no existe
 `
 
 const noteUsageEN = `usage: lazymark note list [--json] [--dir <folder>]
        lazymark note show <path> [--json] [--dir <folder>]
        lazymark note new  <title> [--folder <subfolder>] [--empty] [--template <name>] [--json] [--dir <folder>]
-exit codes: 0 ok · 1 failed · 2 invalid arguments or a path outside the notes folder · 3 not found
+exit codes: 0 ok · 1 failed · 2 invalid arguments, a path outside the notes folder or an invalid template · 3 not found
 `
 
 // RunTask ejecuta `lazymark task …` (list, toggle, move).
@@ -356,11 +356,22 @@ func RunNoteWithWriter(w io.Writer, args []string, defaultNotesDir string) error
 		if err != nil {
 			return err
 		}
+		warn(n.Warnings)
 		if p.json {
 			return printJSON(w, n)
 		}
 		fmt.Fprintf(w, "%s\n", n.Path)
 		return nil
+	}
+}
+
+// Stderr es donde van los avisos de la CLI (variables desconocidas de una plantilla); los tests lo reemplazan.
+var Stderr io.Writer = os.Stderr
+
+// warn escribe un aviso por cada variable desconocida de la plantilla; la nota se creó igual, con la variable tal cual.
+func warn(unknown []string) {
+	for _, v := range unknown {
+		fmt.Fprintf(Stderr, "%s\n", plain(i18n.T("aviso: variable desconocida: ", "warning: unknown variable: ")+v))
 	}
 }
 
@@ -422,13 +433,13 @@ func RunSearchWithWriter(w io.Writer, args []string, defaultNotesDir string) err
 const dailyUsageES = `uso: lazymark daily [--json] [--dir <carpeta>]
 Crea (o abre, si ya existe) la nota de hoy, journal/AAAA-MM-DD.md, con la plantilla templates/daily.md ({{date}}, {{time}} y {{title}}
 se reemplazan); sin plantilla, con el título de la fecha. Imprime la ruta de la nota; no la modifica si ya existía.
-códigos de salida: 0 ok · 1 falló · 2 argumentos inválidos o una carpeta fuera de la carpeta de notas
+códigos de salida: 0 ok · 1 falló · 2 argumentos inválidos, una carpeta fuera de la carpeta de notas o plantilla no válida
 `
 
 const dailyUsageEN = `usage: lazymark daily [--json] [--dir <folder>]
 Creates (or opens, if it already exists) today's note, journal/YYYY-MM-DD.md, from the template templates/daily.md ({{date}}, {{time}}
 and {{title}} are replaced); without a template, with the date as its title. Prints the note's path; it does not modify an existing one.
-exit codes: 0 ok · 1 failed · 2 invalid arguments or a folder outside the notes folder
+exit codes: 0 ok · 1 failed · 2 invalid arguments, a folder outside the notes folder or an invalid template
 `
 
 // RunDaily ejecuta `lazymark daily`.
@@ -458,6 +469,7 @@ func RunDailyWithWriter(w io.Writer, args []string, defaultNotesDir string) erro
 	if err != nil {
 		return err
 	}
+	warn(d.Warnings)
 	if p.json {
 		return printJSON(w, d)
 	}

@@ -1,13 +1,16 @@
 package storage
 
 import (
+	"bytes"
 	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
+	"regexp"
 	"sort"
 	"strings"
 	"time"
+	"unicode/utf8"
 )
 
 // Carpetas especiales dentro de la carpeta de notas.
@@ -19,6 +22,13 @@ const (
 
 // maxTemplateBytes es el tamaño máximo de una plantilla (una plantilla enorme es un error, no una nota).
 const maxTemplateBytes = 256 << 10
+
+// ErrTemplateInvalid es el error de una plantilla que no se puede usar: no es texto UTF-8 (bytes nulos, UTF-16, otra codificación) o pesa
+// más de maxTemplateBytes. No se crea ninguna nota con ella.
+var ErrTemplateInvalid = errors.New("plantilla no válida")
+
+// templateVar reconoce una {{variable}}: el nombre es lo que haya entre las llaves, sin llaves ni saltos de línea.
+var templateVar = regexp.MustCompile(`\{\{[^{}\n]{1,40}\}\}`)
 
 // templatePath devuelve la ruta (ya confinada a la carpeta de notas) de la plantilla name, con o sin ".md".
 func (s *Storage) templatePath(name string) (string, error) {
@@ -68,76 +78,114 @@ func (s *Storage) Templates() []string {
 }
 
 // RenderTemplate lee la plantilla name y cambia {{date}} por la fecha (AAAA-MM-DD), {{time}} por la hora (HH:MM) y {{title}} por el
-// título. Lo demás, incluidas otras {{llaves}}, queda tal cual; el título no se vuelve a expandir.
+// título; los nombres no distinguen mayúsculas ({{Date}} vale). Lo demás, incluidas las variables desconocidas, queda tal cual; el título
+// no se vuelve a expandir. Devuelve ErrTemplateInvalid si la plantilla no es texto UTF-8 o pesa más de 256 KB.
 func (s *Storage) RenderTemplate(name, title string, now time.Time) (string, error) {
+	out, _, err := s.renderTemplate(name, title, now)
+	return out, err
+}
+
+// renderTemplate es RenderTemplate y además devuelve las {{variables}} desconocidas que dejó tal cual, sin repetir, en el orden en que
+// aparecen.
+func (s *Storage) renderTemplate(name, title string, now time.Time) (string, []string, error) {
 	p, err := s.templatePath(name)
 	if err != nil {
-		return "", err
+		return "", nil, err
 	}
 	fi, err := os.Stat(p)
 	if err != nil {
-		return "", err
+		return "", nil, err
 	}
 	if fi.Size() > maxTemplateBytes {
-		return "", fmt.Errorf("la plantilla %q pesa más de %d KB", name, maxTemplateBytes>>10)
+		return "", nil, fmt.Errorf("%w: %q pesa más de %d KB", ErrTemplateInvalid, name, maxTemplateBytes>>10)
 	}
 	data, err := os.ReadFile(p)
 	if err != nil {
-		return "", err
+		return "", nil, err
 	}
-	return strings.NewReplacer(
-		"{{date}}", now.Format("2006-01-02"),
-		"{{time}}", now.Format("15:04"),
-		"{{title}}", title,
-	).Replace(string(data)), nil
+	if bytes.IndexByte(data, 0) >= 0 || !utf8.Valid(data) {
+		return "", nil, fmt.Errorf("%w: %q no es texto UTF-8", ErrTemplateInvalid, name)
+	}
+	data = bytes.TrimPrefix(data, []byte("\xef\xbb\xbf")) // el BOM de UTF-8 no pasa a la nota
+	var unknown []string
+	seen := map[string]bool{}
+	out := templateVar.ReplaceAllStringFunc(string(data), func(m string) string {
+		switch strings.ToLower(m[2 : len(m)-2]) {
+		case "date":
+			return now.Format("2006-01-02")
+		case "time":
+			return now.Format("15:04")
+		case "title":
+			return title
+		}
+		if !seen[m] {
+			seen[m] = true
+			unknown = append(unknown, m)
+		}
+		return m
+	})
+	return out, unknown, nil
 }
 
 // CreateNoteFromTemplate crea la nota title en dir con el contenido de la plantilla template.
 func (s *Storage) CreateNoteFromTemplate(dir, title, template string, now time.Time) (*Note, error) {
-	body, err := s.RenderTemplate(template, title, now)
+	body, unknown, err := s.renderTemplate(template, title, now)
 	if err != nil {
 		return nil, err
 	}
 	if strings.TrimSpace(body) == "" {
 		body = "# " + title + "\n" // una plantilla vacía da una nota con su título, no la nota por defecto
 	}
-	return s.CreateNoteInDirWithBody(dir, title, body)
+	note, err := s.CreateNoteInDirWithBody(dir, title, body)
+	if note != nil {
+		note.Warnings = unknown
+	}
+	return note, err
 }
 
 // DailyNote devuelve la nota diaria de now (journal/AAAA-MM-DD.md) y si la acaba de crear. Si no existe la crea con la plantilla
 // templates/daily.md (o, sin ella, con el título de la fecha), y crea journal/ si falta. Si ya existe, no la toca.
 func (s *Storage) DailyNote(now time.Time) (*Note, bool, error) {
 	name := now.Format("2006-01-02")
+	path := filepath.Join(s.BaseDir, JournalDir, name+".md")
+	existing := func() (*Note, bool, error) {
+		if _, err := s.ResolveNote(path); err != nil { // confinada: un enlace simbólico hacia fuera no se lee
+			return nil, false, err
+		}
+		data, err := os.ReadFile(path)
+		if err != nil {
+			return nil, false, err
+		}
+		n := &Note{ID: filepath.Base(path), Title: name, Path: path, Content: string(data)}
+		n.Tags, n.Tasks = s.extractTags(n.Content), s.extractTasks(name, path, n.Content)
+		return n, false, nil
+	}
+	if _, err := os.Lstat(path); err == nil {
+		return existing()
+	}
+	// la plantilla se lee y se valida antes de crear nada (ni siquiera journal/): una plantilla inválida no deja rastro
+	body, unknown, err := s.renderTemplate(DailyTemplate, name, now)
+	if errors.Is(err, ErrTemplateNotFound) { // sin plantilla (o quitada mientras tanto): la nota con el título de la fecha
+		body, unknown, err = "# "+name+"\n\n", nil, nil
+	}
+	if err != nil {
+		return nil, false, err
+	}
+	if strings.TrimSpace(body) == "" {
+		body = "# " + name + "\n"
+	}
 	dir, err := s.EnsureFolder(JournalDir)
 	if err != nil {
 		return nil, false, err
 	}
-	existing := func() (*Note, bool, error) {
-		p := filepath.Join(dir, name+".md")
-		if _, err := s.ResolveNote(p); err != nil { // confinada: un enlace simbólico hacia fuera no se lee
-			return nil, false, err
-		}
-		data, err := os.ReadFile(p)
-		if err != nil {
-			return nil, false, err
-		}
-		n := &Note{ID: filepath.Base(p), Title: name, Path: p, Content: string(data)}
-		n.Tags, n.Tasks = s.extractTags(n.Content), s.extractTasks(name, p, n.Content)
-		return n, false, nil
-	}
-	if _, err := os.Lstat(filepath.Join(dir, name+".md")); err == nil {
-		return existing()
-	}
-	note, err := s.CreateNoteFromTemplate(dir, name, DailyTemplate, now)
-	if errors.Is(err, ErrTemplateNotFound) { // sin plantilla (o quitada mientras tanto): la nota con el título de la fecha
-		note, err = s.CreateNoteInDirWithBody(dir, name, "# "+name+"\n\n")
-	}
+	note, err := s.CreateNoteInDirWithBody(dir, name, body)
 	if errors.Is(err, ErrNoteExists) { // otra instancia la creó entre medio
 		return existing()
 	}
 	if err != nil {
 		return nil, false, err
 	}
+	note.Warnings = unknown
 	return note, true, nil
 }
 

@@ -89,3 +89,58 @@ func TestNewNoteFromTemplateShortcut(t *testing.T) {
 		t.Errorf("sin plantillas debe avisar: %q", lastRow(m))
 	}
 }
+
+// TestTemplateProblemsInTheTUI (ORD-014 M1 y M2): C con una plantilla binaria no crea la nota y avisa; con una variable desconocida la crea y
+// avisa "Variable desconocida: {{…}}"; T con una daily binaria no crea journal/.
+func TestTemplateProblemsInTheTUI(t *testing.T) {
+	m, dir := tplModel(t)
+	os.WriteFile(filepath.Join(dir, "templates", "binaria.md"), []byte("# x\x00\xff"), 0o644)
+	os.WriteFile(filepath.Join(dir, "templates", "vars.md"), []byte("# {{title}}\n{{fecha}}\n"), 0o644)
+	os.Remove(filepath.Join(dir, "templates", "daily.md"))
+	m.c.reload()
+	m.notes.selectPath(filepath.Join(dir, "compras.md"))
+	create := func(tpl, name string) {
+		press(m, "C")
+		pickTemplate(m, tpl)
+		press(m, "ctrl+a", "ctrl+k")
+		for _, r := range name {
+			press(m, string(r))
+		}
+		press(m, "enter")
+	}
+	create("binaria", "Rota")
+	if _, err := os.Stat(filepath.Join(dir, "rota.md")); err == nil {
+		t.Error("una plantilla binaria no crea la nota")
+	}
+	if !strings.Contains(lastRow(m), "plantilla") && !strings.Contains(lastRow(m), "UTF-8") {
+		t.Errorf("debe avisar de que la plantilla no vale: %q", lastRow(m))
+	}
+	create("vars", "Con var")
+	if b, err := os.ReadFile(filepath.Join(dir, "con-var.md")); err != nil || !strings.Contains(string(b), "{{fecha}}") {
+		t.Fatalf("la nota con variable desconocida se crea: %v %q", err, b)
+	}
+	if !strings.Contains(lastRow(m), "Variable desconocida: {{fecha}}") {
+		t.Errorf("aviso: %q", lastRow(m))
+	}
+	os.WriteFile(filepath.Join(dir, "templates", "daily.md"), []byte("# x\x00"), 0o644)
+	press(m, "T")
+	if _, err := os.Stat(filepath.Join(dir, "journal")); err == nil {
+		if es, _ := os.ReadDir(filepath.Join(dir, "journal")); len(es) != 0 {
+			t.Errorf("T con una daily binaria no debe crear la nota: %v", es)
+		}
+	}
+}
+
+// pickTemplate mueve el cursor del popup de plantillas a tpl y lo confirma.
+func pickTemplate(m *AppModel, tpl string) {
+	p, ok := m.c.top().(*templatePopup)
+	if !ok {
+		return
+	}
+	for i, n := range p.names {
+		if n == tpl {
+			p.list.cursor = i
+		}
+	}
+	press(m, "enter")
+}

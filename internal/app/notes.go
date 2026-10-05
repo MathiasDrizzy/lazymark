@@ -515,7 +515,9 @@ func (p *notesPanel) promptFromTemplate() tea.Cmd {
 			p.c.reload()
 			p.reload()
 			p.selectPath(note.Path)
-			p.c.setStatus(i18n.T("Nota creada: %s", "Note created: %s"), note.ID)
+			if !p.c.warnUnknown(note.Warnings) {
+				p.c.setStatus(i18n.T("Nota creada: %s", "Note created: %s"), note.ID)
+			}
 			return nil
 		}))
 		return nil
@@ -532,10 +534,22 @@ func (m *AppModel) openDaily() tea.Cmd {
 	}
 	m.c.reload()
 	m.jumpToPath(note.Path, 1)
-	if created {
+	if m.c.warnUnknown(note.Warnings) {
+		// la nota se creó igual; el aviso de la variable desconocida pasa por delante del de creada
+	} else if created {
 		m.c.setStatus(i18n.T("Nota diaria creada: %s", "Daily note created: %s"), note.ID)
 	} else {
 		m.c.setStatus(i18n.T("Nota diaria: %s", "Daily note: %s"), note.ID)
 	}
 	return nil
+}
+
+// warnUnknown avisa en la barra de las {{variables}} desconocidas de la plantilla con que se creó una nota (la nota se creó con ellas tal
+// cual). Devuelve si avisó.
+func (c *core) warnUnknown(unknown []string) bool {
+	if len(unknown) == 0 {
+		return false
+	}
+	c.setStatus(i18n.T("Variable desconocida: %s", "Unknown variable: %s"), textwidth.NoControl(strings.Join(unknown, ", ")))
+	return true
 }
