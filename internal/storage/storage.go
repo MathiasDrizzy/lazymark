@@ -91,7 +91,7 @@ var (
 	listItemRegex = regexp.MustCompile(`^(?:[-*+]|\d+[.)])(?:\s|$)`)
 	imageRegex    = regexp.MustCompile(`!\[(.*?)\]\((.*?)\)`)
 	tagRegex      = regexp.MustCompile(`#([a-zA-Z0-9_-]+)(/[a-zA-Z0-9_/-]*)?`)
-	unsafeChars   = regexp.MustCompile(`[\\/:*?"<>|]`)
+	unsafeChars   = regexp.MustCompile(`[\\/:*?"<>|\[\]#^]`) // además de lo que el sistema de archivos no admite, lo que rompe un [[wikilink]]
 )
 
 // CurrentDir devuelve la ruta absoluta del directorio actualmente navegado
@@ -709,15 +709,12 @@ func (s *Storage) AppendToNote(notePath, text string, expected time.Time) error 
 	default:
 		add = nl + nl + text + nl
 	}
-	f, err := os.OpenFile(notePath, os.O_APPEND|os.O_WRONLY, 0)
-	if err != nil {
-		return err
+	// atómico: el archivo nuevo (lo leído más lo agregado) se escribe aparte y se renombra encima, y solo si la nota sigue como se leyó
+	after, err := os.Stat(notePath)
+	if err != nil || !after.ModTime().Equal(fi.ModTime()) || after.Size() != fi.Size() {
+		return ErrNoteChanged
 	}
-	if _, err := f.WriteString(add); err != nil {
-		_ = f.Close()
-		return err
-	}
-	return f.Close()
+	return safeio.WriteFileAtomic(notePath, append(data, add...), 0o644)
 }
 
 // InsertAfterLine inserta text, separado por una línea en blanco, debajo de la

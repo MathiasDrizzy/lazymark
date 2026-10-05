@@ -4,9 +4,12 @@ import (
 	"bufio"
 	"bytes"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
+	"math"
 	"os"
+	"sort"
 
 	"github.com/MathiasDrizzy/lazymark/internal/config"
 	"github.com/MathiasDrizzy/lazymark/internal/ops"
@@ -68,16 +71,24 @@ func RunServer(notesDir string) error {
 
 // Serve procesa el stream de JSON-RPC línea por línea
 func (s *Server) Serve(r io.Reader, w io.Writer) error {
-	scanner := bufio.NewScanner(r)
-	// Permitir líneas de hasta 1MB por si se envían notas grandes
-	buf := make([]byte, 1024*1024)
-	scanner.Buffer(buf, 1024*1024)
-
+	reader := bufio.NewReaderSize(r, 64*1024)
 	encoder := json.NewEncoder(w)
 
-	for scanner.Scan() {
-		line := scanner.Bytes()
+	for {
+		line, tooLong, rerr := readLine(reader, maxLineBytes)
+		if tooLong { // una línea de más de 1 MiB no cierra el servidor: se contesta con un error y se sigue con la siguiente
+			if err := encoder.Encode(rpcError(nil, -32600, "Invalid Request: la petición pasa de 1 MiB", nil)); err != nil {
+				return err
+			}
+			if rerr != nil {
+				return nilIfEOF(rerr)
+			}
+			continue
+		}
 		if len(line) == 0 {
+			if rerr != nil {
+				return nilIfEOF(rerr)
+			}
 			continue
 		}
 
@@ -104,9 +115,40 @@ func (s *Server) Serve(r io.Reader, w io.Writer) error {
 				return err
 			}
 		}
+		if rerr != nil {
+			return nilIfEOF(rerr)
+		}
 	}
+}
 
-	return scanner.Err()
+// maxLineBytes es el tamaño máximo de una petición (una línea JSON).
+const maxLineBytes = 1 << 20
+
+func nilIfEOF(err error) error {
+	if errors.Is(err, io.EOF) {
+		return nil
+	}
+	return err
+}
+
+// readLine lee una línea de hasta max bytes (sin el salto). Si es más larga, la descarta entera sin guardarla (tooLong) y deja el lector en el
+// comienzo de la siguiente. err es el error de lectura (io.EOF al final, con la última línea sin salto incluida).
+func readLine(r *bufio.Reader, max int) (line []byte, tooLong bool, err error) {
+	var buf []byte
+	for {
+		chunk, e := r.ReadSlice('\n')
+		if !tooLong {
+			if len(buf)+len(chunk) > max+1 { // +1: el salto
+				tooLong, buf = true, nil
+			} else {
+				buf = append(buf, chunk...)
+			}
+		}
+		if e == bufio.ErrBufferFull {
+			continue
+		}
+		return bytes.TrimRight(buf, "\r\n"), tooLong, e
+	}
 }
 
 // Versiones del protocolo que habla el servidor. La vigente (2026-07-28) no tiene sesiones ni handshake `initialize`: cada
@@ -380,6 +422,9 @@ func (s *Server) callTool(name string, args map[string]interface{}) CallToolResu
 	if err != nil {
 		return fail(err)
 	}
+	if msg := checkArgs(args); msg != "" {
+		return CallToolResult{IsError: true, Content: []ToolContent{{Type: "text", Text: "Error: " + msg}}}
+	}
 	text := func(k string) string { v, _ := args[k].(string); return v }
 
 	switch name {
@@ -482,4 +527,41 @@ func (s *Server) callTool(name string, args map[string]interface{}) CallToolResu
 			Content: []ToolContent{{Type: "text", Text: fmt.Sprintf("Herramienta '%s' no encontrada", name)}},
 		}
 	}
+}
+
+// argKinds son los tipos de los argumentos de las herramientas: un argumento de otro tipo es un error, no se ignora en silencio.
+var argKinds = map[string]string{
+	"path": "texto", "title": "texto", "folder": "texto", "query": "texto", "column": "texto", "note_path": "texto", "id": "texto", "field": "texto", "date": "texto",
+	"empty": "booleano", "regex": "booleano", "case_sensitive": "booleano", "pending_only": "booleano",
+	"limit": "entero", "line": "entero",
+}
+
+// checkArgs devuelve el error del primer argumento (por orden alfabético) con un tipo que no es el suyo, o "".
+func checkArgs(args map[string]interface{}) string {
+	names := make([]string, 0, len(args))
+	for k := range args {
+		names = append(names, k)
+	}
+	sort.Strings(names)
+	for _, k := range names {
+		kind, known := argKinds[k]
+		if !known {
+			continue
+		}
+		v := args[k]
+		ok := false
+		switch kind {
+		case "texto":
+			_, ok = v.(string)
+		case "booleano":
+			_, ok = v.(bool)
+		case "entero":
+			f, isNum := v.(float64)
+			ok = isNum && f == math.Trunc(f) && f >= 0 && f <= 1e9
+		}
+		if !ok {
+			return fmt.Sprintf("el argumento '%s' debe ser %s", k, map[string]string{"texto": "un texto", "booleano": "verdadero o falso", "entero": "un número entero (0 o mayor)"}[kind])
+		}
+	}
+	return ""
 }

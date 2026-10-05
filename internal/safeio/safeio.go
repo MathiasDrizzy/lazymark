@@ -6,6 +6,8 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"os"
+	"path/filepath"
 )
 
 var (
@@ -45,4 +47,36 @@ func ReadRegular(path string, max int64) ([]byte, error) {
 		return nil, fmt.Errorf("%w: %s", ErrTooLarge, path)
 	}
 	return data, nil
+}
+
+// WriteFileAtomic escribe data en path sin dejarlo nunca a medio escribir: lo escribe en un temporal de la misma carpeta (nombre aleatorio, O_EXCL, así
+// un enlace simbólico preparado de antemano no lo desvía), lo sincroniza y lo renombra encima. Conserva los permisos del archivo que reemplaza
+// (o perm si es nuevo). Si algo falla, el archivo original queda como estaba y el temporal se borra.
+func WriteFileAtomic(path string, data []byte, perm os.FileMode) error {
+	if fi, err := os.Stat(path); err == nil {
+		perm = fi.Mode().Perm()
+	}
+	tmp, err := os.CreateTemp(filepath.Dir(path), ".lazymark-*.tmp")
+	if err != nil {
+		return fmt.Errorf("error al crear archivo temporal: %w", err)
+	}
+	name := tmp.Name()
+	_, werr := tmp.Write(data)
+	if werr == nil {
+		werr = tmp.Sync()
+	}
+	if cerr := tmp.Close(); werr == nil {
+		werr = cerr
+	}
+	if werr == nil {
+		werr = os.Chmod(name, perm)
+	}
+	if werr == nil {
+		werr = os.Rename(name, path)
+	}
+	if werr != nil {
+		_ = os.Remove(name)
+		return fmt.Errorf("error al escribir %s: %w", filepath.Base(path), werr)
+	}
+	return nil
 }

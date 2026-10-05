@@ -50,3 +50,35 @@ func TestReadRegularNeverBlocks(t *testing.T) {
 		}
 	}
 }
+
+// TestWriteFileAtomic (ORD-015 C.5 S5): reemplaza el archivo entero conservando sus permisos, no deja temporales y, si falla, deja el original.
+func TestWriteFileAtomic(t *testing.T) {
+	dir := t.TempDir()
+	p := filepath.Join(dir, "a.json")
+	os.WriteFile(p, []byte("viejo"), 0o600)
+	if err := WriteFileAtomic(p, []byte("nuevo"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if b, _ := os.ReadFile(p); string(b) != "nuevo" {
+		t.Errorf("%q", b)
+	}
+	if runtime.GOOS != "windows" {
+		if fi, _ := os.Stat(p); fi.Mode().Perm() != 0o600 {
+			t.Errorf("conserva los permisos del original: %v", fi.Mode().Perm())
+		}
+	}
+	if es, _ := os.ReadDir(dir); len(es) != 1 {
+		t.Errorf("no deben quedar temporales: %v", es)
+	}
+	if err := WriteFileAtomic(filepath.Join(dir, "no-existe", "x"), []byte("x"), 0o644); err == nil {
+		t.Error("una carpeta que no existe es un error")
+	}
+	// un archivo nuevo usa perm
+	q := filepath.Join(dir, "nuevo.json")
+	if err := WriteFileAtomic(q, []byte("n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if b, _ := os.ReadFile(q); string(b) != "n" {
+		t.Errorf("%q", b)
+	}
+}

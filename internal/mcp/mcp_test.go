@@ -362,3 +362,65 @@ func TestMCPMalformedRequests(t *testing.T) {
 		}
 	}
 }
+
+// TestMCPHugeLineKeepsServing (ORD-015 C.5 S5): una línea de más de 1 MiB no cierra el servidor: se contesta con un error JSON-RPC y la
+// petición siguiente se atiende normalmente.
+func TestMCPHugeLineKeepsServing(t *testing.T) {
+	dir := t.TempDir()
+	var in bytes.Buffer
+	in.WriteString(`{"jsonrpc":"2.0","id":1,"method":"tools/list","params":{"pad":"` + strings.Repeat("x", 2<<20) + `"}}` + "\n")
+	in.WriteString(`{"jsonrpc":"2.0","id":2,"method":"tools/list"}` + "\n")
+	var out bytes.Buffer
+	if err := NewServer(dir).Serve(&in, &out); err != nil {
+		t.Fatalf("el servidor no debe terminar con error: %v", err)
+	}
+	var got []JSONRPCResponse
+	dec := json.NewDecoder(&out)
+	for dec.More() {
+		var r JSONRPCResponse
+		if err := dec.Decode(&r); err != nil {
+			t.Fatal(err)
+		}
+		got = append(got, r)
+	}
+	if len(got) != 2 {
+		t.Fatalf("se esperaban 2 respuestas (error + tools/list), llegaron %d", len(got))
+	}
+	if got[0].Error == nil || got[0].Error.Code != -32600 || !strings.Contains(got[0].Error.Message, "1 MiB") {
+		t.Errorf("la línea enorme da un error de petición inválida: %+v", got[0].Error)
+	}
+	if id, _ := got[1].ID.(float64); id != 2 || got[1].Error != nil {
+		t.Errorf("la siguiente petición se atiende: %+v", got[1])
+	}
+}
+
+// TestMCPArgumentTypes (ORD-015 C.5 S5): un argumento de tipo equivocado es un error de herramienta (isError) con el nombre del argumento, no un
+// valor silenciosamente ignorado.
+func TestMCPArgumentTypes(t *testing.T) {
+	dir := t.TempDir()
+	os.WriteFile(filepath.Join(dir, "a.md"), []byte("# a\n- [ ] t\n"), 0o644)
+	for i, c := range []struct {
+		tool string
+		args map[string]interface{}
+		want string
+	}{
+		{"read_note", map[string]interface{}{"path": 123}, "path"},
+		{"create_note", map[string]interface{}{"title": "x", "empty": "si"}, "empty"},
+		{"search_notes", map[string]interface{}{"query": "a", "limit": "10"}, "limit"},
+		{"search_notes", map[string]interface{}{"query": "a", "limit": 1.5}, "limit"},
+		{"search_notes", map[string]interface{}{"query": "a", "regex": 1}, "regex"},
+		{"list_tasks", map[string]interface{}{"pending_only": "true"}, "pending_only"},
+		{"toggle_task", map[string]interface{}{"path": "a.md", "line": "2"}, "line"},
+	} {
+		r := session(t, dir, call(i+1, c.tool, c.args))[float64(i+1)]
+		text, isErr := toolText(t, r)
+		if !isErr || !strings.Contains(text, c.want) {
+			t.Errorf("%s %v: se esperaba un error que nombre %q: %q (isError=%v)", c.tool, c.args, c.want, text, isErr)
+		}
+	}
+	// los tipos correctos siguen funcionando
+	r := session(t, dir, call(1, "search_notes", map[string]interface{}{"query": "a", "limit": 3, "regex": false}))[1]
+	if _, isErr := toolText(t, r); isErr {
+		t.Error("argumentos válidos no deben dar error")
+	}
+}

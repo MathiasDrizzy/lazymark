@@ -3,6 +3,7 @@ package storage
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 )
@@ -292,5 +293,23 @@ func TestReplaceLineIf(t *testing.T) {
 	}
 	if got, _ := os.ReadFile(p); string(got) != "# T\r\nver [[b]] fin\r\notra\n" {
 		t.Errorf("no debía cambiar: %q", got)
+	}
+}
+
+// TestSlugDropsWikilinkBreakers (ORD-015 C.5 S5): los caracteres que rompen un [[wikilink]] ([ ] # ^) no llegan al nombre del archivo, ni al crear ni
+// al renombrar: un nombre con "]]" o "#" no deja enlaces que se parten o apuntan a un encabezado.
+func TestSlugDropsWikilinkBreakers(t *testing.T) {
+	for in, want := range map[string]string{"a]]b": "ab", "x#y": "xy", "[[z]]": "z", "a^b": "ab", "C# notas": "c-notas", "ok name": "ok-name"} {
+		if got := Slug(in); got != want {
+			t.Errorf("Slug(%q) = %q, se esperaba %q", in, got, want)
+		}
+	}
+	s, p := kanbanNote(t, "x\n")
+	np, err := s.Rename(p, "se]]ñal#1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if b := filepath.Base(np); strings.ContainsAny(b, "[]#^") {
+		t.Errorf("el nombre renombrado conserva caracteres de enlace: %q", b)
 	}
 }

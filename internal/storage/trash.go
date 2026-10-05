@@ -3,6 +3,7 @@ package storage
 import (
 	"encoding/json"
 	"fmt"
+	"github.com/MathiasDrizzy/lazymark/internal/safeio"
 	"os"
 	"path/filepath"
 	"sort"
@@ -87,7 +88,7 @@ func (s *Storage) saveTrashMeta(items []TrashItem) error {
 	if err != nil {
 		return err
 	}
-	return os.WriteFile(s.trashMetaFile(), data, 0644)
+	return safeio.WriteFileAtomic(s.trashMetaFile(), data, 0o644)
 }
 
 // ListTrash devuelve los elementos de la papelera purgando automáticamente los que superen los 20 días

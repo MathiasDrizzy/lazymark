@@ -2,6 +2,7 @@ package config
 
 import (
 	"encoding/json"
+	"github.com/MathiasDrizzy/lazymark/internal/safeio"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -411,7 +412,7 @@ func (c *Config) Save() error {
 	if err != nil {
 		return err
 	}
-	return os.WriteFile(c.configPath, data, 0644)
+	return safeio.WriteFileAtomic(c.configPath, data, 0o644)
 }
 
 // ResolveEditorBin busca la ruta absoluta ejecutable para el editor
