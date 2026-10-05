@@ -93,7 +93,8 @@ func (c *core) scopedNotes() []storage.Note {
 }
 
 func (c *core) setStatus(format string, a ...any) {
-	c.status = fmt.Sprintf(format, a...)
+	// en pantalla no hay emojis de fecha (🛫 📅 ✅): si un aviso lleva texto de una tarea, se dibujan como los glifos del resto de la interfaz
+	c.status = views.ReplaceDateEmoji(fmt.Sprintf(format, a...))
 }
 
 func (c *core) save() { _ = c.cfg.Save() }

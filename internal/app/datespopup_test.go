@@ -1,6 +1,7 @@
 package app
 
 import (
+	"github.com/charmbracelet/x/ansi"
 	"os"
 	"path/filepath"
 	"strings"
@@ -204,4 +205,41 @@ func TestDatesPopupPreviewMatchesWhatIsWritten(t *testing.T) {
 			}
 		})
 	}
+}
+
+// TestNoDateEmojiOnScreen (Mathias, 2026-10-05: "te dije que era sin emojis"): ninguna pantalla muestra los emojis de fecha del archivo (🛫 📅 ✅), tampoco
+// la barra de estado al marcar o reabrir una tarea con fechas: el aviso usa el texto sin fechas y, por si acaso, la barra reemplaza cualquier emoji de fecha.
+func TestNoDateEmojiOnScreen(t *testing.T) {
+	m := newTestModel(t, 200, 40)
+	dir := m.c.store.BaseDir
+	for _, n := range m.c.notes {
+		os.Remove(n.Path)
+	}
+	line := "- [ ] Publicar tag v0.1.0 para releases automáticas con GoReleaser 🛫 2026-10-08 📅 2026-10-05"
+	path := filepath.Join(dir, "pub.md")
+	os.WriteFile(path, []byte("# Pub\n\n"+line+"\n"), 0o644)
+	m.c.reload()
+	m.afterChange()
+	m.notes.selectPath(path)
+	noEmoji := func(where string) {
+		t.Helper()
+		for i, l := range screen(m) {
+			if strings.ContainsAny(ansi.Strip(l), "🛫📅✅") {
+				t.Errorf("%s: emoji de fecha en la fila %d: %q", where, i, ansi.Strip(l))
+			}
+		}
+	}
+	noEmoji("notas")
+	press(m, "2")
+	noEmoji("Tareas")
+	press(m, "space") // marcar: "Tarea completada: …"
+	noEmoji("aviso al marcar")
+	press(m, "space") // reabrir
+	noEmoji("aviso al reabrir")
+	press(m, "d")
+	noEmoji("popup de fechas")
+	press(m, "esc", "W")
+	noEmoji("Kanban")
+	m.c.setStatus("%s", "cualquier aviso con 📅 2026-10-05 y 🛫 y ✅")
+	noEmoji("un aviso cualquiera con emojis de fecha")
 }

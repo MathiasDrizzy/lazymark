@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"regexp"
 	"runtime"
 	"strings"
 	"testing"
@@ -407,12 +408,17 @@ func TestSlowLinesDoNotDelayTheCut(t *testing.T) {
 		b.WriteString(strings.Repeat("abcdefghij", 3000) + "\n") // 30 KB
 	}
 	os.WriteFile(filepath.Join(dir, "muchas.md"), []byte(b.String()), 0o644)
+	// lo que cuesta una línea en esta máquina (con -race o sin él): el corte puede tardar a lo sumo en terminar las que están en curso
+	oneLine := []byte(strings.Repeat("abcdefghij", 3000))
+	t0 := time.Now()
+	regexp.MustCompile(`\w{300}x`).Find(oneLine)
+	lineCost := time.Since(t0)
 	start := time.Now()
 	res, err := Run(context.Background(), store, `\w{300}x`, Options{Regex: true, Timeout: 300 * time.Millisecond})
 	if err != nil || !res.TimedOut {
 		t.Fatalf("debía cortarse por tiempo: %v %+v", err, res.TimedOut)
 	}
-	if d := time.Since(start); d > 2*time.Second {
-		t.Errorf("la búsqueda tardó %v con un máximo de 300 ms: el corte no se nota entre líneas", d)
+	if d, limit := time.Since(start), 300*time.Millisecond+8*lineCost+500*time.Millisecond; d > limit {
+		t.Errorf("la búsqueda tardó %v con un máximo de 300 ms (una línea cuesta %v; límite %v): el corte no se nota entre líneas", d, lineCost, limit)
 	}
 }

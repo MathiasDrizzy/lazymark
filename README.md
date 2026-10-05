@@ -52,12 +52,7 @@ Select a task, in the Tasks panel or on the board, and press `d`. A small popup 
 
 <img src="assets/readme/feature-dates.gif" alt="Pressing d on a task, typing +3d and friday, and seeing the dates on the task's card on the Kanban board" width="100%">
 
-The completion date is added by itself when you tick a task. On screen the dates are monochrome glyphs in the theme's colors (an overdue due date in the error color). In the file they are kept in the [Obsidian Tasks](https://publish.obsidian.md/tasks/Introduction) format, so other tools read them too:
-
-```markdown
-- [ ] write the report 🛫 2026-05-01 📅 2026-05-10
-```
-
+The completion date is added by itself when you tick a task. On screen the dates are monochrome glyphs in the theme's colors (an overdue due date in the error color). In the file they are kept at the end of the task line in the [Obsidian Tasks](https://publish.obsidian.md/tasks/Introduction) format, so Obsidian and other tools read them too (the exact format is in [docs/cli.md](docs/cli.md)); you never have to type it.
 ### Categories
 
 Every `#tag` in your notes. `Enter` on a tag shows only the notes that have it.

@@ -100,7 +100,7 @@ func (p *tasksPanel) toggle(reload func()) tea.Cmd {
 	if t == nil {
 		return nil
 	}
-	path, line, text := t.NotePath, t.Line, t.Text
+	path, line, text := t.NotePath, t.Line, textwidth.NoControl(storage.CleanTaskText(t.Text)) // el aviso lleva el texto sin fechas ni etiquetas del tablero
 	done, err := p.c.store.ToggleTaskIfUnchanged(path, line, p.noteMod(path))
 	if errors.Is(err, storage.ErrNoteChanged) {
 		reload()
