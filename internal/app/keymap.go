@@ -18,6 +18,7 @@ const (
 	actTrash
 	actSearch
 	actDaily
+	actDates
 	actNewFromTemplate
 	actNextLink
 	actPrevLink
@@ -170,6 +171,7 @@ func defaultBindings() []Binding {
 		{actEnter, ctxTasks, []string{"enter"}, "Abrir nota", "Open note", true},
 		{actToggleTask, ctxTasks, []string{"space"}, "Alternar tarea", "Toggle task", true},
 		{actHideDone, ctxTasks, []string{"H"}, "Ocultar hechas", "Hide done", true},
+		{actDates, ctxTasks, []string{"d"}, "Fechas", "Dates", true},
 		{actTaskFilter, ctxTasks, []string{"f"}, "Filtrar tareas", "Filter tasks", false},
 
 		{actEnter, ctxTags, []string{"enter"}, "Filtrar notas", "Filter notes", true},
@@ -185,6 +187,7 @@ func defaultBindings() []Binding {
 		{actMoveCardUp, ctxKanban, []string{"K", "shift+up"}, "Subir en la columna", "Move up", true},
 		{actMoveCardDown, ctxKanban, []string{"J", "shift+down"}, "Bajar en la columna", "Move down", true},
 		{actToggleTask, ctxKanban, []string{"space"}, "Alternar tarea", "Toggle task", true},
+		{actDates, ctxKanban, []string{"d"}, "Fechas", "Dates", true},
 		{actEdit, ctxKanban, []string{"enter", "e"}, "Editar", "Edit", true},
 		{actKanban, ctxKanban, []string{"esc", "W"}, "Volver a notas", "Back to notes", false},
 

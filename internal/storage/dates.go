@@ -188,3 +188,30 @@ func (s *Storage) SetTaskDate(notePath string, line int, f DateField, value stri
 		return setDate(l, f, value), nil
 	})
 }
+
+// SetTaskDates pone, cambia o quita el inicio y el vencimiento de la tarea de la línea line en una sola escritura de esa línea (el popup de
+// fechas): nil deja el campo como está, "" lo quita y "AAAA-MM-DD" lo pone. Las dos se validan antes de escribir y, como en SetTaskDate,
+// una nota cambiada en disco (expected) no se pisa.
+func (s *Storage) SetTaskDates(notePath string, line int, start, due *string, expected time.Time) error {
+	for _, v := range []*string{start, due} {
+		if v != nil && *v != "" && !ValidDate(*v) {
+			return fmt.Errorf("%q no es una fecha válida (AAAA-MM-DD)", *v)
+		}
+	}
+	notePath, err := s.ResolveNote(notePath)
+	if err != nil {
+		return err
+	}
+	return rewriteLine(notePath, line, expected, func(l string) (string, error) {
+		if !toggleTaskRegex.MatchString(l) {
+			return "", fmt.Errorf("la línea %d no es una tarea válida de markdown", line)
+		}
+		if start != nil {
+			l = setDate(l, DateStart, *start)
+		}
+		if due != nil {
+			l = setDate(l, DateDue, *due)
+		}
+		return l, nil
+	})
+}

@@ -94,12 +94,32 @@ func (k *kanbanSheet) key(a Action) tea.Cmd {
 			}
 			return k.setColumn(card, target)
 		}
+	case actDates:
+		if card := k.current(); card != nil {
+			k.openDates(card)
+		}
 	case actEdit:
 		if card := k.current(); card != nil {
 			return k.c.openEditor(card.NotePath, card.Task.Line)
 		}
 	}
 	return nil
+}
+
+// openDates abre el popup de fechas de la tarjeta; al guardar el cursor sigue a la tarjeta (la nota pasa a ser la más reciente y se reordena).
+func (k *kanbanSheet) openDates(card *views.KanbanCard) {
+	path, line := card.NotePath, card.Task.Line
+	k.c.openDates(path, line, card.Task.Text, card.Task.Dates, func() {
+		k.c.reload()
+		k.clampSelection()
+		for c := range k.selected {
+			for i, cd := range k.c.board.ColumnCards(c) {
+				if cd.NotePath == path && cd.Task.Line == line {
+					k.col, k.selected[c] = c, i
+				}
+			}
+		}
+	})
 }
 
 func (k *kanbanSheet) moveTo(target int) tea.Cmd {
@@ -207,7 +227,7 @@ func (k *kanbanSheet) setColumn(card *views.KanbanCard, target int) tea.Cmd {
 }
 
 // click maneja las zonas que registra views.RenderKanban (el botón apretado).
-func (k *kanbanSheet) click(z *mouse.Zone, double bool) tea.Cmd {
+func (k *kanbanSheet) click(z *mouse.Zone, y int, double bool) tea.Cmd {
 	switch z.Type {
 	case mouse.ZoneKanbanCol:
 		k.col = clamp(z.Index, 0, k.numCols()-1)
@@ -225,6 +245,12 @@ func (k *kanbanSheet) click(z *mouse.Zone, double bool) tea.Cmd {
 				k.selected[k.col] = i
 				k.press = &kanbanPress{col: k.col, idx: i}
 			}
+		}
+		// un clic en la fila de fechas de la tarjeta (la última antes del borde de abajo) abre el popup de fechas
+		if card := k.current(); card != nil && card.NotePath == parts[2] && card.Task.Line == line && card.Task.Dates != (storage.Dates{}) && y == z.Y2-1 {
+			k.press = nil
+			k.openDates(card)
+			return nil
 		}
 		if double {
 			k.press = nil

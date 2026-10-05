@@ -46,6 +46,11 @@ func (p *tasksPanel) key(a Action, reload func()) tea.Cmd {
 		p.list.move(10, n)
 	case actToggleTask:
 		return p.toggle(reload)
+	case actDates:
+		if t := p.current(); t != nil {
+			path, line := t.NotePath, t.Line
+			p.c.openDates(path, line, t.Text, t.Dates, func() { reload(); p.selectTask(path, line) })
+		}
 	case actHideDone:
 		p.c.cfg.HideCompletedTasks = !p.c.cfg.HideCompletedTasks
 		p.c.save()

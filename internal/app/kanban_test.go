@@ -423,7 +423,7 @@ func TestKanbanCardsWithDates(t *testing.T) {
 			t.Errorf("falta %q:\n%s", want, out)
 		}
 	}
-	// clic en la fila de las fechas de BBB (no en su texto): selecciona esa tarjeta
+	// clic en la fila de las fechas de BBB (no en su texto): selecciona esa tarjeta y abre el popup de fechas (ORD-015 C.2); Esc lo cierra
 	x, y, ok := cellOf(m, "\uf073 2099-01-01")
 	if !ok {
 		t.Fatalf("no se ve la fecha de BBB:\n%s", out)
@@ -432,6 +432,13 @@ func TestKanbanCardsWithDates(t *testing.T) {
 	m.Update(tea.MouseReleaseMsg{X: x, Y: y, Button: tea.MouseLeft})
 	if cur := m.kanban.current(); cur == nil || !strings.Contains(cur.CleanText, "BBB_SEGUNDA") {
 		t.Fatalf("el clic en la fila de fechas debía seleccionar la tarjeta BBB: %+v", cur)
+	}
+	if _, ok := m.c.top().(*datesPopup); !ok {
+		t.Fatalf("el clic en la fecha de la tarjeta debe abrir el popup de fechas: %T", m.c.top())
+	}
+	press(m, "esc")
+	if m.c.top() != nil {
+		t.Fatal("Esc cierra el popup")
 	}
 	// Espacio la marca como hecha: ✅ hoy en esa línea y solo en esa
 	before := fileLines(t, p)

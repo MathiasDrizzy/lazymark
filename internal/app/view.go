@@ -176,6 +176,7 @@ func (m *AppModel) kanbanHints() []hint {
 		{i18n.T("Mover ← (%s)", "Move ← (%s)"), "← (%s)", actMoveCardLeft, true},
 		{i18n.T("Mover → (%s)", "Move → (%s)"), "→ (%s)", actMoveCardRight, true},
 		{i18n.T("Listo/Por hacer (%s)", "Done/To do (%s)"), i18n.T("Listo (%s)", "Done (%s)"), actToggleTask, true},
+		{i18n.T("Fechas (%s)", "Dates (%s)"), i18n.T("Fechas (%s)", "Dates (%s)"), actDates, true},
 		{i18n.T("Editar (%s)", "Edit (%s)"), i18n.T("Editar (%s)", "Edit (%s)"), actEdit, true},
 	}).withKeys(key)
 }
@@ -285,6 +286,17 @@ func (m *AppModel) renderFooter() string {
 	var hints []shown
 	candidates := [][]shown{join(mk(panel, false), globalShown), join(mk(panel, true), globalShown)}
 	if pinned {
+		// antes de acortar las etiquetas del tablero se suelta "Salir: q": con las 5 acciones de la tarjeta (con Fechas) las etiquetas largas
+		// solo caben así a 120 columnas
+		var noQuit []shown
+		for _, h := range globalShown {
+			if h.action != actQuit {
+				noQuit = append(noQuit, h)
+			}
+		}
+		candidates = [][]shown{candidates[0], join(mk(panel, false), noQuit), candidates[1]}
+	}
+	if pinned {
 		// el estado cede ante los botones del Kanban
 		for _, c := range candidates {
 			if span(c)+trashW <= f.W {
@@ -331,7 +343,7 @@ func (m *AppModel) renderFooter() string {
 	}
 	if pinned { // el estado ocupa lo que dejan los botones; un aviso corto (→ En progreso) cabe siempre
 		need := min(textwidth.Width(m.c.status), 30) + gap
-		for _, drop := range []Action{actQuit, actCheatsheet} {
+		for _, drop := range []Action{actQuit, actCheatsheet, actDates} {
 			if f.W-trashW-span(hints) >= need {
 				break
 			}

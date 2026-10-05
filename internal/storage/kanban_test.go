@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"reflect"
 	"runtime"
 	"strings"
 	"testing"
@@ -519,5 +520,54 @@ func TestLegacyTagsColumn(t *testing.T) {
 	}
 	if got := noDoing.Of(Task{Text: "x #wip #doing"}); got != 0 {
 		t.Errorf("sin columna doing cae en la primera: %d", got)
+	}
+}
+
+// TestSetTaskDates (ORD-015 C.2): pone, cambia y quita el inicio y el vencimiento de una tarea en una sola escritura de su línea (nil = no tocar),
+// con el formato Obsidian Tasks en el archivo; no toca el resto, ni la fecha de completada, ni pisa una nota cambiada por fuera.
+func TestSetTaskDates(t *testing.T) {
+	body := "# N\n- [ ] uno #kb/doing\n- [x] dos ✅ 2026-10-01\n  - [ ] sub\nfin"
+	s, p := kanbanNote(t, body)
+	str := func(v string) *string { return &v }
+	read := func() []string { b, _ := os.ReadFile(p); return strings.Split(string(b), "\n") }
+	if err := s.SetTaskDates(p, 2, str("2026-05-01"), str("2026-05-10"), time.Time{}); err != nil {
+		t.Fatal(err)
+	}
+	if got := read(); got[1] != "- [ ] uno #kb/doing 🛫 2026-05-01 📅 2026-05-10" || got[0] != "# N" || got[2] != "- [x] dos ✅ 2026-10-01" || len(got) != 5 {
+		t.Errorf("poner ambas: %q", got)
+	}
+	if err := s.SetTaskDates(p, 2, nil, str("2026-06-01"), time.Time{}); err != nil {
+		t.Fatal(err)
+	}
+	if got := read()[1]; got != "- [ ] uno #kb/doing 🛫 2026-05-01 📅 2026-06-01" {
+		t.Errorf("cambiar solo el vencimiento: %q", got)
+	}
+	if err := s.SetTaskDates(p, 2, str(""), nil, time.Time{}); err != nil {
+		t.Fatal(err)
+	}
+	if got := read()[1]; got != "- [ ] uno #kb/doing 📅 2026-06-01" {
+		t.Errorf("quitar el inicio: %q", got)
+	}
+	if err := s.SetTaskDates(p, 3, str("2026-01-02"), str(""), time.Time{}); err != nil {
+		t.Fatal(err)
+	}
+	if got := read()[2]; got != "- [x] dos 🛫 2026-01-02 ✅ 2026-10-01" {
+		t.Errorf("la completada se conserva al final: %q", got)
+	}
+	before := read()
+	if err := s.SetTaskDates(p, 2, str("2026-02-30"), nil, time.Time{}); err == nil {
+		t.Error("una fecha inexistente se rechaza")
+	}
+	if err := s.SetTaskDates(p, 1, str("2026-01-01"), nil, time.Time{}); err == nil {
+		t.Error("una línea que no es tarea se rechaza")
+	}
+	if !reflect.DeepEqual(before, read()) {
+		t.Error("los rechazos no deben escribir")
+	}
+	st, _ := os.Stat(p)
+	os.WriteFile(p, []byte(body+"\notro"), 0o644)
+	os.Chtimes(p, time.Now().Add(time.Hour), time.Now().Add(time.Hour))
+	if err := s.SetTaskDates(p, 2, str("2026-01-01"), nil, st.ModTime()); !errors.Is(err, ErrNoteChanged) {
+		t.Errorf("con el mtime viejo: %v", err)
 	}
 }

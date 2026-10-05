@@ -41,7 +41,7 @@ func (m *AppModel) handleClick(msg tea.MouseClickMsg) tea.Cmd {
 		case z.Type == mouse.ZoneAction: // el botón "← Notas (Esc)"
 			return m.do(Action(z.Index))
 		default:
-			return m.kanban.click(z, m.clicks.hit(z.ID, time.Now()))
+			return m.kanban.click(z, y, m.clicks.hit(z.ID, time.Now()))
 		}
 		return nil
 	}
