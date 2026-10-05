@@ -1,0 +1,398 @@
+[
+ {
+  "today": "2026-04-30",
+  "lang": "es",
+  "input": "+1d",
+  "expect": "2026-05-01"
+ },
+ {
+  "today": "2026-04-30",
+  "lang": "es",
+  "input": "+1w",
+  "expect": "2026-05-07"
+ },
+ {
+  "today": "2026-05-31",
+  "lang": "es",
+  "input": "+1d",
+  "expect": "2026-06-01"
+ },
+ {
+  "today": "2026-05-31",
+  "lang": "es",
+  "input": "+1w",
+  "expect": "2026-06-07"
+ },
+ {
+  "today": "2026-12-31",
+  "lang": "es",
+  "input": "+1d",
+  "expect": "2027-01-01"
+ },
+ {
+  "today": "2028-02-28",
+  "lang": "es",
+  "input": "+1d",
+  "expect": "2028-02-29"
+ },
+ {
+  "today": "2028-02-29",
+  "lang": "es",
+  "input": "+1d",
+  "expect": "2028-03-01"
+ },
+ {
+  "today": "2027-02-28",
+  "lang": "es",
+  "input": "+1d",
+  "expect": "2027-03-01"
+ },
+ {
+  "today": "2028-02-29",
+  "lang": "es",
+  "input": "+1w",
+  "expect": "2028-03-07"
+ },
+ {
+  "today": "2024-02-29",
+  "lang": "es",
+  "input": "+365d",
+  "expect": "2025-02-28"
+ },
+ {
+  "today": "2026-10-05",
+  "lang": "es",
+  "input": "+0d",
+  "expect": "2026-10-05"
+ },
+ {
+  "today": "2026-10-05",
+  "lang": "es",
+  "input": "+9999d",
+  "expect": "2054-02-19"
+ },
+ {
+  "today": "2026-10-05",
+  "lang": "es",
+  "input": "+10000d",
+  "expect": "ERROR"
+ },
+ {
+  "today": "2026-10-05",
+  "lang": "es",
+  "input": "+3 d",
+  "expect": "2026-10-08"
+ },
+ {
+  "today": "2026-10-05",
+  "lang": "en",
+  "input": "+2W",
+  "expect": "2026-10-19"
+ },
+ {
+  "today": "2026-10-05",
+  "lang": "es",
+  "input": "",
+  "expect": ""
+ },
+ {
+  "today": "2026-10-05",
+  "lang": "en",
+  "input": "   ",
+  "expect": ""
+ },
+ {
+  "today": "2026-10-05",
+  "lang": "es",
+  "input": "lunes",
+  "expect": "2026-10-12",
+  "note": "2026-10-05 es lunes"
+ },
+ {
+  "today": "2026-10-06",
+  "lang": "es",
+  "input": "lunes",
+  "expect": "2026-10-12",
+  "note": "2026-10-06 es martes"
+ },
+ {
+  "today": "2026-10-06",
+  "lang": "es",
+  "input": "martes",
+  "expect": "2026-10-13",
+  "note": "2026-10-06 es martes"
+ },
+ {
+  "today": "2026-10-05",
+  "lang": "es",
+  "input": "martes",
+  "expect": "2026-10-06",
+  "note": "2026-10-05 es lunes"
+ },
+ {
+  "today": "2026-10-07",
+  "lang": "es",
+  "input": "miércoles",
+  "expect": "2026-10-14",
+  "note": "2026-10-07 es miércoles"
+ },
+ {
+  "today": "2026-10-05",
+  "lang": "es",
+  "input": "miércoles",
+  "expect": "2026-10-07",
+  "note": "2026-10-05 es lunes"
+ },
+ {
+  "today": "2026-10-07",
+  "lang": "es",
+  "input": "miercoles",
+  "expect": "2026-10-14",
+  "note": "2026-10-07 es miércoles"
+ },
+ {
+  "today": "2026-10-05",
+  "lang": "es",
+  "input": "miercoles",
+  "expect": "2026-10-07",
+  "note": "2026-10-05 es lunes"
+ },
+ {
+  "today": "2026-10-08",
+  "lang": "es",
+  "input": "jueves",
+  "expect": "2026-10-15",
+  "note": "2026-10-08 es jueves"
+ },
+ {
+  "today": "2026-10-05",
+  "lang": "es",
+  "input": "jueves",
+  "expect": "2026-10-08",
+  "note": "2026-10-05 es lunes"
+ },
+ {
+  "today": "2026-10-09",
+  "lang": "es",
+  "input": "viernes",
+  "expect": "2026-10-16",
+  "note": "2026-10-09 es viernes"
+ },
+ {
+  "today": "2026-10-05",
+  "lang": "es",
+  "input": "viernes",
+  "expect": "2026-10-09",
+  "note": "2026-10-05 es lunes"
+ },
+ {
+  "today": "2026-10-10",
+  "lang": "es",
+  "input": "sábado",
+  "expect": "2026-10-17",
+  "note": "2026-10-10 es sábado"
+ },
+ {
+  "today": "2026-10-05",
+  "lang": "es",
+  "input": "sábado",
+  "expect": "2026-10-10",
+  "note": "2026-10-05 es lunes"
+ },
+ {
+  "today": "2026-10-10",
+  "lang": "es",
+  "input": "sabado",
+  "expect": "2026-10-17",
+  "note": "2026-10-10 es sábado"
+ },
+ {
+  "today": "2026-10-05",
+  "lang": "es",
+  "input": "sabado",
+  "expect": "2026-10-10",
+  "note": "2026-10-05 es lunes"
+ },
+ {
+  "today": "2026-10-11",
+  "lang": "es",
+  "input": "domingo",
+  "expect": "2026-10-18",
+  "note": "2026-10-11 es domingo"
+ },
+ {
+  "today": "2026-10-05",
+  "lang": "es",
+  "input": "domingo",
+  "expect": "2026-10-11",
+  "note": "2026-10-05 es lunes"
+ },
+ {
+  "today": "2026-10-05",
+  "lang": "en",
+  "input": "monday",
+  "expect": "2026-10-12",
+  "note": "2026-10-05 es lunes"
+ },
+ {
+  "today": "2026-10-06",
+  "lang": "en",
+  "input": "monday",
+  "expect": "2026-10-12",
+  "note": "2026-10-06 es martes"
+ },
+ {
+  "today": "2026-10-06",
+  "lang": "en",
+  "input": "tuesday",
+  "expect": "2026-10-13",
+  "note": "2026-10-06 es martes"
+ },
+ {
+  "today": "2026-10-05",
+  "lang": "en",
+  "input": "tuesday",
+  "expect": "2026-10-06",
+  "note": "2026-10-05 es lunes"
+ },
+ {
+  "today": "2026-10-07",
+  "lang": "en",
+  "input": "wednesday",
+  "expect": "2026-10-14",
+  "note": "2026-10-07 es miércoles"
+ },
+ {
+  "today": "2026-10-05",
+  "lang": "en",
+  "input": "wednesday",
+  "expect": "2026-10-07",
+  "note": "2026-10-05 es lunes"
+ },
+ {
+  "today": "2026-10-08",
+  "lang": "en",
+  "input": "thursday",
+  "expect": "2026-10-15",
+  "note": "2026-10-08 es jueves"
+ },
+ {
+  "today": "2026-10-05",
+  "lang": "en",
+  "input": "thursday",
+  "expect": "2026-10-08",
+  "note": "2026-10-05 es lunes"
+ },
+ {
+  "today": "2026-10-09",
+  "lang": "en",
+  "input": "friday",
+  "expect": "2026-10-16",
+  "note": "2026-10-09 es viernes"
+ },
+ {
+  "today": "2026-10-05",
+  "lang": "en",
+  "input": "friday",
+  "expect": "2026-10-09",
+  "note": "2026-10-05 es lunes"
+ },
+ {
+  "today": "2026-10-10",
+  "lang": "en",
+  "input": "saturday",
+  "expect": "2026-10-17",
+  "note": "2026-10-10 es sábado"
+ },
+ {
+  "today": "2026-10-05",
+  "lang": "en",
+  "input": "saturday",
+  "expect": "2026-10-10",
+  "note": "2026-10-05 es lunes"
+ },
+ {
+  "today": "2026-10-11",
+  "lang": "en",
+  "input": "sunday",
+  "expect": "2026-10-18",
+  "note": "2026-10-11 es domingo"
+ },
+ {
+  "today": "2026-10-05",
+  "lang": "en",
+  "input": "sunday",
+  "expect": "2026-10-11",
+  "note": "2026-10-05 es lunes"
+ },
+ {
+  "today": "2026-10-05",
+  "lang": "es",
+  "input": "mie",
+  "expect": "2026-10-07",
+  "note": "2026-10-05 es lunes"
+ },
+ {
+  "today": "2026-10-05",
+  "lang": "en",
+  "input": "fri",
+  "expect": "2026-10-09",
+  "note": "2026-10-05 es lunes"
+ },
+ {
+  "today": "2026-10-05",
+  "lang": "es",
+  "input": "VIERNES",
+  "expect": "2026-10-09",
+  "note": "2026-10-05 es lunes"
+ },
+ {
+  "today": "2026-10-05",
+  "lang": "es",
+  "input": "  martes  ",
+  "expect": "2026-10-06",
+  "note": "2026-10-05 es lunes"
+ },
+ {
+  "today": "2026-10-05",
+  "lang": "es",
+  "input": "2026-12-25",
+  "expect": "2026-12-25"
+ },
+ {
+  "today": "2026-10-05",
+  "lang": "es",
+  "input": "2026-02-30",
+  "expect": "ERROR"
+ },
+ {
+  "today": "2026-10-05",
+  "lang": "es",
+  "input": "ayer",
+  "expect": "ERROR"
+ },
+ {
+  "today": "2026-10-05",
+  "lang": "es",
+  "input": "-3d",
+  "expect": "ERROR"
+ },
+ {
+  "today": "2026-10-05",
+  "lang": "es",
+  "input": "3d",
+  "expect": "ERROR"
+ },
+ {
+  "today": "2026-10-05",
+  "lang": "es",
+  "input": "+1.5d",
+  "expect": "ERROR"
+ },
+ {
+  "today": "2026-10-05",
+  "lang": "es",
+  "input": "lunes martes",
+  "expect": "ERROR"
+ }
+]

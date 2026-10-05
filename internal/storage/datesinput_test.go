@@ -1,6 +1,8 @@
 package storage
 
 import (
+	"encoding/json"
+	"os"
 	"testing"
 	"time"
 
@@ -90,6 +92,39 @@ func TestWeekdayNames(t *testing.T) {
 	for lang, want := range map[i18n.Language]string{i18n.LangES: "lunes", i18n.LangEN: "Monday", i18n.LangPT: "segunda-feira", i18n.LangFR: "lundi", i18n.LangDE: "Montag", i18n.LangIT: "lunedì", i18n.LangJA: "月曜日", i18n.LangZH: "星期一"} {
 		if got := WeekdayName(time.Monday, lang); got != want {
 			t.Errorf("%s: %q, se esperaba %q", lang, got, want)
+		}
+	}
+}
+
+// TestParseDateInputAgainstOracle (ORD-015 C.2): casos de borde (fin de mes, año bisiesto, +0d, días de la semana con y sin tilde, mayúsculas,
+// inválidas) escritos por un segundo modelo (agente de apoyo) solo desde las reglas, con su resultado esperado calculado a mano. Los desacuerdos
+// se revisaron uno por uno (ver ESTADO).
+func TestParseDateInputAgainstOracle(t *testing.T) {
+	data, err := os.ReadFile("testdata/dates-input-oracle.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var cases []struct {
+		Today  string `json:"today"`
+		Lang   string `json:"lang"`
+		Input  string `json:"input"`
+		Expect string `json:"expect"`
+		Note   string `json:"note"`
+	}
+	if err := json.Unmarshal(data, &cases); err != nil {
+		t.Fatal(err)
+	}
+	if len(cases) < 40 {
+		t.Fatalf("solo %d casos", len(cases))
+	}
+	for _, c := range cases {
+		lang := i18n.Language(c.Lang)
+		got, err := ParseDateInput(c.Input, day(c.Today), lang)
+		switch {
+		case c.Expect == "ERROR" && err == nil:
+			t.Errorf("%s %q (%s): el oráculo espera error, dio %q [%s]", c.Today, c.Input, c.Lang, got, c.Note)
+		case c.Expect != "ERROR" && (err != nil || got != c.Expect):
+			t.Errorf("%s %q (%s): dio %q (%v), el oráculo dice %q [%s]", c.Today, c.Input, c.Lang, got, err, c.Expect, c.Note)
 		}
 	}
 }
