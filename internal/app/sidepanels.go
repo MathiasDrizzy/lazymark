@@ -58,12 +58,12 @@ func (p *tasksPanel) key(a Action, reload func()) tea.Cmd {
 		if p.c.cfg.HideCompletedTasks {
 			p.c.taskFilter = views.TaskFilterPending
 		}
-		p.c.tasks = views.CollectTasks(p.c.scopedNotes(), p.c.taskFilter)
+		p.c.collectTasks()
 		p.list.set(0, len(p.c.tasks))
 		p.c.setStatus("%s: %s", i18n.T("Tareas", "Tasks"), views.TaskFilterLabel(p.c.taskFilter))
 	case actTaskFilter:
 		p.c.taskFilter = (p.c.taskFilter + 1) % 3
-		p.c.tasks = views.CollectTasks(p.c.scopedNotes(), p.c.taskFilter)
+		p.c.collectTasks()
 		p.list.set(0, len(p.c.tasks))
 		p.c.setStatus("%s: %s", i18n.T("Filtro", "Filter"), views.TaskFilterLabel(p.c.taskFilter))
 	}

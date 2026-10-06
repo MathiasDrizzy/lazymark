@@ -391,12 +391,21 @@ func (p *notesPanel) promptDelete() tea.Cmd {
 			delete(p.expanded, path)
 		}
 		p.reload()
-		p.c.setStatus(i18n.T("%d elemento(s) a la papelera", "%d item(s) moved to trash"), len(paths))
+		if storage.TrashDays == 0 {
+			p.c.setStatus(i18n.T("%d elemento(s) borrado(s)", "%d item(s) deleted"), len(paths))
+		} else {
+			p.c.setStatus(i18n.T("%d elemento(s) a la papelera", "%d item(s) moved to trash"), len(paths))
+		}
 		return nil
 	}
 	title := i18n.T("Borrar", "Delete")
+	forever := storage.TrashDays == 0 // sin papelera (trash_days = 0): se borra para siempre y siempre se pregunta
 	if len(paths) > 1 {
-		return p.c.confirm(title, fmt.Sprintf(i18n.T("¿Mover %d notas a la papelera?", "Move %d notes to trash?"), len(paths)), false, trash)
+		msg := fmt.Sprintf(i18n.T("¿Mover %d notas a la papelera?", "Move %d notes to trash?"), len(paths))
+		if forever {
+			msg = fmt.Sprintf(i18n.T("¿Borrar %d notas para siempre? No hay papelera.", "Delete %d notes forever? There is no trash."), len(paths))
+		}
+		return p.c.confirm(title, msg, forever, trash)
 	}
 	e := p.current()
 	if e != nil && e.Type == storage.EntryFolder {
@@ -404,9 +413,15 @@ func (p *notesPanel) promptDelete() tea.Cmd {
 		if items > 0 {
 			// Borrar una carpeta con contenido siempre pide confirmación (H1-3).
 			msg := fmt.Sprintf(i18n.T("La carpeta '%s' tiene %d elemento(s). ¿Moverla a la papelera con todo su contenido?", "Folder '%s' has %d item(s). Move it to trash with all its content?"), e.Name, items)
+			if forever {
+				msg = fmt.Sprintf(i18n.T("La carpeta '%s' tiene %d elemento(s). ¿Borrarla para siempre con todo su contenido? No hay papelera.", "Folder '%s' has %d item(s). Delete it forever with all its content? There is no trash."), e.Name, items)
+			}
 			return p.c.confirm(title, msg, true, trash)
 		}
 		return trash()
+	}
+	if forever {
+		return p.c.confirm(title, fmt.Sprintf(i18n.T("¿Borrar '%s' para siempre? No hay papelera.", "Delete '%s' forever? There is no trash."), filepath.Base(paths[0])), true, trash)
 	}
 	return p.c.confirm(title, fmt.Sprintf(i18n.T("¿Mover '%s' a la papelera?", "Move '%s' to trash?"), filepath.Base(paths[0])), false, trash)
 }

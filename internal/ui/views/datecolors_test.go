@@ -3,6 +3,7 @@ package views
 import (
 	"fmt"
 	"github.com/MathiasDrizzy/lazymark/internal/ui/textwidth"
+	"github.com/charmbracelet/x/ansi"
 	"image/color"
 	"os"
 	"strings"
@@ -181,5 +182,43 @@ func TestDoneMarkHasNoWidth(t *testing.T) {
 	line := "- [x] tarea " + DateGlyph(storage.DateDue) + " 2026-10-01"
 	if textwidth.Width(MarkDoneDates(line, map[int]bool{1: true})) != textwidth.Width(line) {
 		t.Error("marcar una tarea hecha no cambia el ancho de su línea")
+	}
+}
+
+// TestCustomDateGlyphs (ORD-025 O8): date_glyphs reemplaza el glifo de un campo (los demás siguen con el de Nerd Font o de texto); ReplaceDateEmoji, las tarjetas y el color de la
+// vista previa lo usan; sin glifos propios todo queda como siempre.
+func TestCustomDateGlyphs(t *testing.T) {
+	oldG, oldI, oldC := DateGlyphs, DateIcons, DateColors
+	t.Cleanup(func() { DateGlyphs, DateIcons, DateColors = oldG, oldI, oldC })
+	DateColors = defaultColors()
+	theme.ApplyThemeByName("catppuccin-mocha")
+	DateIcons = false
+	if DateGlyph(storage.DateDue) != "◷" {
+		t.Fatalf("sin glifos propios: el de texto de siempre: %q", DateGlyph(storage.DateDue))
+	}
+	DateGlyphs[storage.DateDue] = "D"
+	DateGlyphs[storage.DateStart] = "日"
+	if DateGlyph(storage.DateDue) != "D" || DateGlyph(storage.DateStart) != "日" || DateGlyph(storage.DateDone) != "✓" {
+		t.Errorf("propios en due y start, el de siempre en done: %q %q %q", DateGlyph(storage.DateDue), DateGlyph(storage.DateStart), DateGlyph(storage.DateDone))
+	}
+	if got := ReplaceDateEmoji("t 📅 2026-10-01 🛫 2026-10-02"); got != "t D 2026-10-01 日 2026-10-02" {
+		t.Errorf("ReplaceDateEmoji usa los propios: %q", got)
+	}
+	if got := ReplaceDateEmoji("t [due:: 2026-10-01]"); got != "t D 2026-10-01" {
+		t.Errorf("también con Dataview: %q", got)
+	}
+	card := ansi.Strip(DatePart(storage.DateDue, "2026-10-01", false, "2026-10-06"))
+	if card != "D 2026-10-01" {
+		t.Errorf("DatePart usa el propio: %q", card)
+	}
+	// el color de la vista previa reconoce el glifo propio (sin él la fecha vencida quedaría sin color)
+	line := ColorDateLines([]string{"- [ ] tarea D 2026-10-01"}, "2026-10-06")[0]
+	if !strings.Contains(line, "\x1b[1;") && !strings.Contains(line, "\x1b[1m") {
+		t.Errorf("la vista previa colorea la fecha con el glifo propio: %q", line)
+	}
+	// sin propios, una "D" suelta antes de una fecha no es un glifo
+	DateGlyphs = [5]string{}
+	if got := ColorDateLines([]string{"- [ ] tarea D 2026-10-01"}, "2026-10-06")[0]; strings.Contains(got, "\x1b[") {
+		t.Errorf("sin glifos propios una D no es un glifo de fecha: %q", got)
 	}
 }

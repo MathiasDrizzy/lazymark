@@ -42,6 +42,19 @@ const (
 	setColorStarted
 	setColorNotStarted
 	setColorDone
+	setDateWarnings
+	setDateFormatNotice
+	setHintIdle
+	setHintShow
+	setHintEvery
+	setTrashDays
+	setNotesSort
+	setTasksSort
+	setDailyFolder
+	setDailyName
+	setTemplatesFolder
+	setKanbanTag
+	setDateGlyphs
 	settingCount
 )
 
@@ -128,8 +141,74 @@ func (p *settingsPopup) label(id settingID) string {
 		return "  " + i18n.T("Color: completada", "Color: completed")
 	case setNotesDir:
 		return i18n.T("Carpeta de notas", "Notes folder")
+	case setDateWarnings:
+		return i18n.T("Aviso inicio > vencimiento", "Start > due warning")
+	case setDateFormatNotice:
+		return i18n.T("Aviso del formato de fechas", "Date format notice")
+	case setHintIdle:
+		return i18n.T("\"click me!\": quietud (s)", "\"click me!\": idle (s)")
+	case setHintShow:
+		return i18n.T("\"click me!\": visible (s)", "\"click me!\": shown (s)")
+	case setHintEvery:
+		return i18n.T("\"click me!\": cada (s)", "\"click me!\": every (s)")
+	case setTrashDays:
+		return i18n.T("Días en la papelera", "Days in trash")
+	case setNotesSort:
+		return i18n.T("Orden de las notas", "Notes order")
+	case setTasksSort:
+		return i18n.T("Orden de las tareas", "Tasks order")
+	case setDailyFolder:
+		return i18n.T("Carpeta de notas diarias", "Daily notes folder")
+	case setDailyName:
+		return i18n.T("Nombre de la nota diaria", "Daily note name")
+	case setTemplatesFolder:
+		return i18n.T("Carpeta de plantillas", "Templates folder")
+	case setKanbanTag:
+		return i18n.T("Etiqueta del tablero", "Board tag")
+	case setDateGlyphs:
+		return i18n.T("Glifos de las fechas", "Date glyphs")
 	}
 	return ""
+}
+
+// presets de los ajustes numéricos que se recorren con ←/→ (el archivo de configuración admite cualquier valor del rango).
+var (
+	hintSecondsPresets = []int{5, 10, 15, 20, 30, 45, 60, 90, 120, 180, 300, 600}
+	trashDaysPresets   = []int{0, 1, 3, 7, 14, 20, 30, 60, 90, 180, 365}
+)
+
+// stepInt devuelve el valor siguiente (dir=1) o anterior (dir=-1) de presets respecto de cur (el siguiente mayor o el anterior menor si cur no está), dando la vuelta.
+func stepInt(presets []int, cur, dir int) int {
+	idx := -1
+	for i, v := range presets {
+		if v == cur {
+			idx = i
+		}
+	}
+	if idx < 0 { // no es un preset: el más cercano en esa dirección
+		if dir > 0 {
+			for _, v := range presets {
+				if v > cur {
+					return v
+				}
+			}
+			return presets[0]
+		}
+		for i := len(presets) - 1; i >= 0; i-- {
+			if presets[i] < cur {
+				return presets[i]
+			}
+		}
+		return presets[len(presets)-1]
+	}
+	return presets[(idx+dir+len(presets))%len(presets)]
+}
+
+func yesNo(b bool) string {
+	if b {
+		return i18n.T("sí", "yes")
+	}
+	return "no"
 }
 
 // dateColorKey es la clave de configuración del estado que edita la fila id de color, y si id es una fila de color.
@@ -200,6 +279,41 @@ func (p *settingsPopup) value(id settingID) string {
 			return i18n.T("sí", "yes")
 		}
 		return "no"
+	case setDateWarnings:
+		return yesNo(cfg.DateWarnings)
+	case setDateFormatNotice:
+		return yesNo(cfg.DateFormatNotice)
+	case setHintIdle:
+		return fmt.Sprintf("%d", cfg.ClickHintIdleSeconds)
+	case setHintShow:
+		return fmt.Sprintf("%d", cfg.ClickHintShowSeconds)
+	case setHintEvery:
+		return fmt.Sprintf("%d", cfg.ClickHintEverySeconds)
+	case setTrashDays:
+		if cfg.TrashDays == 0 {
+			return i18n.T("0 (sin papelera)", "0 (no trash)")
+		}
+		return fmt.Sprintf("%d", cfg.TrashDays)
+	case setNotesSort:
+		if cfg.NotesSort == "modified" {
+			return i18n.T("más recientes primero", "most recent first")
+		}
+		return i18n.T("por nombre", "by name")
+	case setTasksSort:
+		if cfg.TasksSort == "due" {
+			return i18n.T("por vencimiento", "by due date")
+		}
+		return i18n.T("por nota", "by note")
+	case setDailyFolder:
+		return cfg.DailyFolder
+	case setDailyName:
+		return cfg.DailyName
+	case setTemplatesFolder:
+		return cfg.TemplatesFolder
+	case setKanbanTag:
+		return "#" + cfg.KanbanTag + "/…"
+	case setDateGlyphs:
+		return glyphsText(cfg)
 	case setDateColors:
 		if cfg.DateColors {
 			return i18n.T("sí", "yes")
@@ -223,6 +337,9 @@ func (p *settingsPopup) value(id settingID) string {
 func (p *settingsPopup) change(id settingID, dir int) {
 	if id == setNotesDir { // no se recorre: abre el selector de carpeta
 		p.openPicker()
+		return
+	}
+	if p.editText(id) { // los ajustes de texto se escriben en un popup
 		return
 	}
 	cfg := p.c.cfg
@@ -281,6 +398,36 @@ func (p *settingsPopup) change(id settingID, dir int) {
 		}
 	case setClickHint:
 		cfg.ClickHint = !cfg.ClickHint
+	case setDateWarnings:
+		cfg.DateWarnings = !cfg.DateWarnings
+	case setDateFormatNotice:
+		cfg.DateFormatNotice = !cfg.DateFormatNotice
+	case setHintIdle:
+		cfg.ClickHintIdleSeconds = stepInt(hintSecondsPresets, cfg.ClickHintIdleSeconds, dir)
+	case setHintShow:
+		cfg.ClickHintShowSeconds = stepInt(hintSecondsPresets, cfg.ClickHintShowSeconds, dir)
+		if cfg.ClickHintShowSeconds >= cfg.ClickHintEverySeconds { // se tiene que ir antes de volver a salir
+			cfg.ClickHintEverySeconds = stepInt(hintSecondsPresets, cfg.ClickHintShowSeconds, 1)
+		}
+	case setHintEvery:
+		cfg.ClickHintEverySeconds = stepInt(hintSecondsPresets, cfg.ClickHintEverySeconds, dir)
+		if cfg.ClickHintEverySeconds <= cfg.ClickHintShowSeconds {
+			cfg.ClickHintShowSeconds = stepInt(hintSecondsPresets, cfg.ClickHintEverySeconds, -1)
+		}
+	case setTrashDays:
+		cfg.TrashDays = stepInt(trashDaysPresets, cfg.TrashDays, dir)
+	case setNotesSort:
+		if cfg.NotesSort == "modified" {
+			cfg.NotesSort = "name"
+		} else {
+			cfg.NotesSort = "modified"
+		}
+	case setTasksSort:
+		if cfg.TasksSort == "due" {
+			cfg.TasksSort = "note"
+		} else {
+			cfg.TasksSort = "due"
+		}
 	case setDateColors:
 		cfg.DateColors = !cfg.DateColors
 	case setDueSoon:
@@ -300,6 +447,7 @@ func (p *settingsPopup) change(id settingID, dir int) {
 		}
 	}
 	applyDateColors(cfg)
+	applyStorageOptions(cfg, p.c.store)
 	p.c.save()
 	p.c.setStatus("%s: %s", p.label(id), p.value(id))
 	p.onChange()
@@ -477,7 +625,7 @@ func (p *trashPopup) render(l Layout) string {
 	w := popupWidth(l, 56)
 	p.top = 2
 	p.height = clamp(p.n, 1, max(1, l.H-12))
-	lines := []string{dim(fmt.Sprintf(i18n.T("Se borra sola a los %d días", "Auto-deleted after %d days"), storage.TrashRetentionDays))}
+	lines := []string{dim(fmt.Sprintf(i18n.T("Se borra sola a los %d días", "Auto-deleted after %d days"), storage.TrashDays))}
 	if p.n == 0 {
 		lines = append(lines, "  "+dim(i18n.T("La papelera está vacía", "Trash is empty")))
 	} else {
@@ -507,4 +655,135 @@ func (p *trashPopup) render(l Layout) string {
 // applyDateColors pasa a la vista la configuración de los colores de las fechas (date_colors, due_soon_days y el color de cada estado).
 func applyDateColors(cfg *config.Config) {
 	views.DateColors = views.DateColorSettings{Enabled: cfg.DateColors, SoonDays: cfg.DueSoonDays, Names: cfg.DateColorNames}
+	views.DateGlyphs = cfg.DateGlyphArray()
+}
+
+// applyStorageOptions pasa a la capa de datos las opciones de la configuración que ella lee (papelera, carpetas, orden, prefijo del tablero, aviso del formato).
+func applyStorageOptions(cfg *config.Config, store *storage.Storage) {
+	storage.TrashDays = cfg.TrashDays
+	storage.KanbanTag = cfg.KanbanTag
+	store.DateNoticeOff = !cfg.DateFormatNotice
+	store.TemplatesFolder, store.DailyFolder, store.DailyNameFormat = cfg.TemplatesFolder, cfg.DailyFolder, cfg.DailyName
+	store.NotesSort = cfg.NotesSort
+}
+
+// glyphsText es el valor del ajuste de glifos: los cinco (inicio, vencimiento, completada, programada, creada) como se ven, o "por defecto".
+func glyphsText(cfg *config.Config) string {
+	if len(cfg.DateGlyphs) == 0 {
+		return i18n.T("por defecto", "default")
+	}
+	arr := cfg.DateGlyphArray()
+	var parts []string
+	for f, g := range arr {
+		if g == "" {
+			g = views.DateGlyph(storage.DateField(f)) // el que se dibuja ahora (Nerd Font o texto)
+			if views.DateGlyphs[f] == "" && views.DateIcons {
+				g = "·"
+			}
+		}
+		parts = append(parts, g)
+	}
+	return strings.Join(parts, " ")
+}
+
+// editText abre el popup de texto de los ajustes que se escriben (carpetas, nombre diario, prefijo del tablero y glifos) y dice si id era uno de ellos. Lo escrito se valida con
+// las mismas reglas que al leer la configuración: si no vale, no se cambia nada y se dice.
+func (p *settingsPopup) editText(id settingID) bool {
+	cfg := p.c.cfg
+	var title, cur string
+	var apply func(string) bool
+	switch id {
+	case setDailyFolder:
+		title, cur = i18n.T("Carpeta de notas diarias (dentro de la carpeta de notas)", "Daily notes folder (inside the notes folder)"), cfg.DailyFolder
+		apply = func(v string) bool {
+			f, ok := config.CleanRelFolder(v)
+			if ok {
+				cfg.DailyFolder = f
+			}
+			return ok
+		}
+	case setTemplatesFolder:
+		title, cur = i18n.T("Carpeta de plantillas (dentro de la carpeta de notas)", "Templates folder (inside the notes folder)"), cfg.TemplatesFolder
+		apply = func(v string) bool {
+			f, ok := config.CleanRelFolder(v)
+			if ok {
+				cfg.TemplatesFolder = f
+			}
+			return ok
+		}
+	case setDailyName:
+		title, cur = i18n.T("Nombre de la nota diaria (YYYY, MM y DD)", "Daily note name (YYYY, MM and DD)"), cfg.DailyName
+		apply = func(v string) bool {
+			v = strings.TrimSpace(v)
+			ok := config.ValidDailyName(v)
+			if ok {
+				cfg.DailyName = v
+			}
+			return ok
+		}
+	case setKanbanTag:
+		title, cur = i18n.T("Prefijo de la etiqueta del tablero (#<prefijo>/columna)", "Board tag prefix (#<prefix>/column)"), cfg.KanbanTag
+		apply = func(v string) bool {
+			v = strings.TrimSpace(v)
+			ok := config.KanbanTagRe.MatchString(v)
+			if ok {
+				old := cfg.KanbanTag
+				cfg.KanbanTag = v
+				if !strings.EqualFold(old, v) {
+					p.c.setStatus("%s", fmt.Sprintf(i18n.T("Las notas que ya tienen #%s/… no se cambian: lazymark kanban retag --from %s --to %s", "Notes that already have #%s/… are not changed: lazymark kanban retag --from %s --to %s"), old, old, v))
+				}
+			}
+			return ok
+		}
+	case setDateGlyphs:
+		title, cur = i18n.T("Glifos: inicio vencimiento hecha programada creada (- = por defecto)", "Glyphs: start due done scheduled created (- = default)"), strings.Join(glyphFields(cfg), " ")
+		apply = func(v string) bool {
+			fields := strings.Fields(v)
+			if len(fields) > 5 {
+				return false
+			}
+			glyphs := map[string]string{}
+			for i, g := range fields {
+				if g == "-" {
+					continue
+				}
+				if !config.ValidDateGlyph(g) {
+					return false
+				}
+				glyphs[[]string{"start", "due", "done", "scheduled", "created"}[i]] = g
+			}
+			cfg.DateGlyphs = glyphs
+			return true
+		}
+	default:
+		return false
+	}
+	p.c.push(newInputPopup(title, cur, func(v string) tea.Cmd {
+		if !apply(v) {
+			p.c.setStatus("%s: %q", i18n.T("Valor no válido", "Invalid value"), v)
+			return nil
+		}
+		applyDateColors(cfg)
+		applyStorageOptions(cfg, p.c.store)
+		p.c.save()
+		if id != setKanbanTag { // el aviso del retag ya dice lo que hace falta
+			p.c.setStatus("%s: %s", p.label(id), p.value(id))
+		}
+		p.onChange()
+		return nil
+	}))
+	return true
+}
+
+// glyphFields son los cinco glifos propios para editar (un "-" donde se usa el de por defecto).
+func glyphFields(cfg *config.Config) []string {
+	arr := cfg.DateGlyphArray()
+	out := make([]string, 5)
+	for i, g := range arr {
+		if g == "" {
+			g = "-"
+		}
+		out[i] = g
+	}
+	return out
 }

@@ -38,6 +38,7 @@ func usageHeader() string {
 		"  note show <path> [--json] [--dir <dir>]\n" +
 		"  note new <title> [--folder <sub>] [--empty] [--template <name>] [--json] [--dir <dir>]\n" +
 		"  daily [--json] [--dir <dir>]\n" +
+		"  kanban retag --from <prefix> --to <prefix> [--dry-run] [--json] [--dir <dir>]\n" +
 		"  dates migrate --to dataview|emoji [--dry-run] [--json] [--dir <dir>]\n" +
 		"  search <text> [--regex] [--case] [--limit <n>] [--json] [--dir <dir>]\n" +
 		"  task list [--json] [--pending] [--column <id>] [--note <path>] [--dir <dir>]\n" +
@@ -79,6 +80,14 @@ func main() {
 		if arg == "dates" {
 			dir := extractDirArg(os.Args[1:])
 			if err := cli.RunDates(os.Args[idx+2:], dir); err != nil {
+				fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+				os.Exit(cli.ExitCode(err))
+			}
+			return
+		}
+		if arg == "kanban" {
+			dir := extractDirArg(os.Args[1:])
+			if err := cli.RunKanban(os.Args[idx+2:], dir); err != nil {
 				fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 				os.Exit(cli.ExitCode(err))
 			}

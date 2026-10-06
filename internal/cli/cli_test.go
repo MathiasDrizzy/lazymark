@@ -6,6 +6,7 @@ import (
 	"flag"
 	"github.com/MathiasDrizzy/lazymark/internal/config"
 	"github.com/MathiasDrizzy/lazymark/internal/i18n"
+	"github.com/MathiasDrizzy/lazymark/internal/ui/views"
 	"io/fs"
 	"os"
 	"path/filepath"
@@ -1189,5 +1190,90 @@ func TestTaskMoveColorOnlyOnTTY(t *testing.T) {
 		if out := moveTo(false, args...); strings.Contains(out, "\x1b") {
 			t.Errorf("%v en una tubería no lleva color: %q", args[:2], out)
 		}
+	}
+}
+
+// TestDateWarningsOptionCLI (ORD-025 O1): con date_warnings en false `task start` no avisa por stderr que el inicio es posterior al vencimiento (y escribe igual).
+func TestDateWarningsOptionCLI(t *testing.T) {
+	dir := fixture(t)
+	base, _ := os.UserConfigDir()
+	os.MkdirAll(filepath.Join(base, "lazymark"), 0o755)
+	os.WriteFile(filepath.Join(base, "lazymark", "config.json"), []byte(`{"date_warnings":false}`), 0o644)
+	id := taskID(t, dir, "Escribir informe", "proyecto.md")
+	var errBuf bytes.Buffer
+	old := Stderr
+	Stderr = &errBuf
+	defer func() { Stderr = old }()
+	if _, err := run(t, dir, "task", "due", id, "2026-10-05"); err != nil {
+		t.Fatal(err)
+	}
+	id = taskID(t, dir, "Escribir informe", "proyecto.md")
+	if _, err := run(t, dir, "task", "start", id, "2026-10-08"); err != nil || errBuf.Len() != 0 {
+		t.Errorf("con date_warnings=false no hay aviso: %v %q", err, errBuf.String())
+	}
+	b, _ := os.ReadFile(filepath.Join(dir, "proyecto.md"))
+	if !strings.Contains(string(b), "2026-10-08") {
+		t.Errorf("escribe igual: %s", b)
+	}
+}
+
+// TestKanbanRetagCLI (ORD-025 O6): `kanban retag --from kb --to board`: --dry-run muestra el cambio y no escribe; después escribe; una segunda corrida no cambia nada; --json
+// lleva los campos; argumentos inválidos (prefijo mal formado o iguales) salen con código 2 y no escriben.
+func TestKanbanRetagCLI(t *testing.T) {
+	dir := fixture(t)
+	p := filepath.Join(dir, "tab.md")
+	os.WriteFile(p, []byte("# T\n- [ ] uno #kb/doing\n- [ ] dos\n"), 0o644)
+	runK := func(args ...string) (string, error) {
+		var buf bytes.Buffer
+		err := RunKanbanWithWriter(&buf, append(args, "--dir", dir), dir)
+		return buf.String(), err
+	}
+	out, err := runK("retag", "--from", "kb", "--to", "board", "--dry-run")
+	if err != nil || !strings.Contains(out, "- - [ ] uno #kb/doing") || !strings.Contains(out, "+ - [ ] uno #board/doing") {
+		t.Fatalf("dry-run: %v\n%s", err, out)
+	}
+	if b, _ := os.ReadFile(p); !strings.Contains(string(b), "#kb/doing") {
+		t.Fatal("--dry-run no escribe")
+	}
+	if _, err := runK("retag", "--from", "kb", "--to", "board"); err != nil {
+		t.Fatal(err)
+	}
+	if b, _ := os.ReadFile(p); !strings.Contains(string(b), "uno #board/doing") {
+		t.Errorf("escribe: %s", b)
+	}
+	js, err := runK("retag", "--from", "kb", "--to", "board", "--json")
+	var r struct {
+		From, To string
+		Lines    int
+		Changes  []any
+	}
+	if err != nil || json.Unmarshal([]byte(js), &r) != nil || r.Lines != 0 || len(r.Changes) != 0 || r.From != "kb" || r.To != "board" {
+		t.Errorf("segunda corrida sin cambios, con --json: %v %s", err, js)
+	}
+	for _, bad := range [][]string{{"retag", "--from", "kb", "--to", "1 mal"}, {"retag", "--from", "kb", "--to", "KB"}, {"retag", "--from", "", "--to", "x"}, {"otra"}, {}} {
+		if _, err := runK(bad...); err == nil || ExitCode(err) != 2 {
+			t.Errorf("%v debe salir con código 2: %v", bad, err)
+		}
+	}
+}
+
+// TestDateGlyphsOptionCLI (ORD-025 O8): con date_glyphs en la configuración, la salida de texto de `task list` usa el glifo propio del campo; sin él, el símbolo de siempre.
+func TestDateGlyphsOptionCLI(t *testing.T) {
+	dir := fixture(t)
+	oldG := views.DateGlyphs
+	t.Cleanup(func() { views.DateGlyphs = oldG })
+	os.WriteFile(filepath.Join(dir, "g.md"), []byte("# G\n- [ ] con fecha 📅 2999-01-01\n"), 0o644)
+	out, err := run(t, dir, "task", "list", "--note", "g.md")
+	if err != nil || !strings.Contains(out, "◷ 2999-01-01") {
+		t.Fatalf("por defecto ◷: %v %q", err, out)
+	}
+	base, _ := os.UserConfigDir()
+	os.MkdirAll(filepath.Join(base, "lazymark"), 0o755)
+	cfg := filepath.Join(base, "lazymark", "config.json")
+	os.WriteFile(cfg, []byte(`{"date_glyphs":{"due":"D","start":"ab"}}`), 0o644)
+	t.Cleanup(func() { os.Remove(cfg) })
+	out, err = run(t, dir, "task", "list", "--note", "g.md")
+	if err != nil || !strings.Contains(out, "D 2999-01-01") || strings.Contains(out, "◷") {
+		t.Errorf("con date_glyphs.due = D: %v %q", err, out)
 	}
 }

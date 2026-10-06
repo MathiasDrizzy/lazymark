@@ -227,7 +227,7 @@ Most things are in Settings (`,`) and are saved at once. They live in a `config.
 }
 ```
 
-See [docs/configuration.md](docs/configuration.md) for every setting, the command line and the commands for scripts and other tools (`lazymark task list`, `lazymark mcp`, and more). If you write in micro, vim or nano, [docs/editor-plugins.md](docs/editor-plugins.md) shows how to paste a copied image into the note from the editor.
+Almost everything lazymark does its own way can be changed or turned off: the date warnings and colors, the mascot and its `click me!`, the trash days (or no trash), where the daily notes and templates live, the prefix of the board tag, the order of the Notes and Tasks panels and the glyph of each date field. See [docs/configuration.md](docs/configuration.md) for every setting, the command line and the commands for scripts and other tools (`lazymark task list`, `lazymark mcp`, and more). If you write in micro, vim or nano, [docs/editor-plugins.md](docs/editor-plugins.md) shows how to paste a copied image into the note from the editor.
 
 ## Compatibility
 

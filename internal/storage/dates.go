@@ -364,7 +364,7 @@ func (s *Storage) WriteDateFormat() DateFormat {
 		}
 		s.fmtKnown = true
 	}
-	if s.fmtExcept && !s.DateNoticeSeen && s.notice == "" {
+	if s.fmtExcept && !s.DateNoticeSeen && !s.DateNoticeOff && s.notice == "" {
 		s.notice = i18n.T("Este vault usa emojis en las fechas: se escriben así (cambiar: Ajustes → Formato de fechas o date_format; migrar: lazymark dates migrate).",
 			"This vault uses emoji dates: they are written that way (change: Settings → Date format or date_format; migrate: lazymark dates migrate).")
 	}
@@ -427,6 +427,13 @@ type DateChange struct {
 // y todo lo que no es una línea de tarea —párrafos, bloques de código— quedan intactos). Con dryRun solo devuelve lo que cambiaría. Es idempotente:
 // una segunda corrida no devuelve cambios. Cada nota se escribe de forma atómica, y solo si no cambió mientras tanto (ErrNoteChanged).
 func (s *Storage) MigrateDates(to DateFormat, dryRun bool) ([]DateChange, error) {
+	return s.rewriteTaskLines(func(l string) string { return convertDates(l, to) }, dryRun)
+}
+
+// rewriteTaskLines aplica conv a cada línea de TAREA de cada nota (no a párrafos ni a código) y escribe lo que cambió, nota por nota y de forma atómica, con las
+// comprobaciones de MigrateDates (la nota que cambió afuera no se escribe, los enlaces se siguen a su destino, un enlace que sale de la carpeta se salta). Con dryRun no
+// escribe nada. Es el motor de `dates migrate` y de `kanban retag`.
+func (s *Storage) rewriteTaskLines(conv func(line string) string, dryRun bool) ([]DateChange, error) {
 	notes, err := s.ListNotes()
 	if err != nil {
 		return nil, err
@@ -448,7 +455,7 @@ func (s *Storage) MigrateDates(to DateFormat, dryRun bool) ([]DateChange, error)
 			if !taskLine[i+1] {
 				continue
 			}
-			if after := convertDates(l, to); after != l {
+			if after := conv(l); after != l {
 				changes = append(changes, DateChange{Path: n.Path, Rel: s.relPath(n.Path), Line: i + 1, Before: strings.TrimSuffix(l, "\r"), After: strings.TrimSuffix(after, "\r")})
 			}
 		}

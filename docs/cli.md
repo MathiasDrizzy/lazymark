@@ -16,9 +16,10 @@ lazymark task move   <id> <column> [--json]
 lazymark task due    <id> <YYYY-MM-DD|none> [--json]
 lazymark task start  <id> <YYYY-MM-DD|none> [--json]
 lazymark dates migrate --to dataview|emoji [--dry-run] [--json]
+lazymark kanban retag --from <prefix> --to <prefix> [--dry-run] [--json]
 ```
 
-`note new --template <name>` fills the note from `templates/<name>.md` (see [templates.md](templates.md)); a template that does not exist exits with 3 and one that is not valid text (binary, UTF-16, over 256 KB) exits with 2; neither creates anything. An unknown `{{variable}}` stays as written, is reported on stderr (`warning: unknown variable: {{x}}`) and in a `warnings` array of the JSON, and does not change the exit code. `daily` creates today's note `journal/YYYY-MM-DD.md` from `templates/daily.md`, or opens it if it exists, and prints its path (`--json`: the note plus `"created": true|false`); it never modifies an existing one.
+`note new --template <name>` fills the note from `templates/<name>.md` (see [templates.md](templates.md)); a template that does not exist exits with 3 and one that is not valid text (binary, UTF-16, over 256 KB) exits with 2; neither creates anything. An unknown `{{variable}}` stays as written, is reported on stderr (`warning: unknown variable: {{x}}`) and in a `warnings` array of the JSON, and does not change the exit code. `daily` creates today's note `journal/YYYY-MM-DD.md` (or the folder and name set by `daily_folder` and `daily_name`) from `templates/daily.md` (or `templates_folder`), or opens it if it exists, and prints its path (`--json`: the note plus `"created": true|false`); it never modifies an existing one.
 
 `note get <path>` and `task toggle --path <note> --line <n>` still work.
 
@@ -148,6 +149,14 @@ Moves the dates of every task to the chosen format. It is never automatic. It on
 Rules for edge cases: a field written as `(due:: …)` is kept with parentheses while you edit the line, but migrating normalises it to square brackets (what Obsidian Tasks writes), so `(due:: …)` → emoji → Dataview comes back as `[due:: …]` with the same dates. `[due:: 2026-05-10](https://…)` (a Markdown link), `[[due:: …]]` (a wikilink), `[due:: …][ref]` / `[due:: …][]` (reference links) and anything inside inline code are text, not fields. As in CommonMark, inline code needs a closing run of the same number of backticks; a lone backtick is plain text. If a field is repeated the first valid one wins; the others are also hidden from the task text, and editing that field replaces the first and removes the repeats. A value that is not a date (`[due:: tomorrow]`) is not read as a date, stays in the text, and editing that field replaces it (a line never ends up with two `due`). If a note cannot be written, the command lists the notes already migrated and exits with a non-zero code; running it again continues where it stopped.
 
 `task start` and `task due` warn on stderr (exit code 0) when the start ends up after the due date.
+
+### `lazymark kanban retag`
+
+```
+lazymark kanban retag --from <prefix> --to <prefix> [--dry-run] [--json] [--dir <folder>]
+```
+
+Changes the prefix of the board's column tag in every task: `#kb/doing` becomes `#<new>/doing`. Use it after changing `kanban_tag` in the configuration, because changing the setting does **not** migrate the notes that already have another prefix. It only touches task lines (not paragraphs, inline code or links), keeps the rest of the line and the line endings, writes each note atomically (a note that changed meanwhile is not written: exit code 4) and is idempotent: a second run changes nothing. `--dry-run` prints the change (`-` before, `+` after); `--json` gives `{from, to, dry_run, notes, lines, changes: [{note, line, before, after}]}`. A prefix is a letter followed by up to 19 letters, digits, `-` or `_`; two equal or invalid prefixes exit with 2.
 
 ## Kanban format
 

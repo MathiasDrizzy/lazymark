@@ -14,6 +14,9 @@ import (
 
 const TrashRetentionDays = 20
 
+// TrashDays son los días que se guarda lo que se borra (trash_days en la configuración; 20 por defecto). 0 = sin papelera: MoveToTrash borra de inmediato y para siempre.
+var TrashDays = TrashRetentionDays
+
 // TrashItem representa un archivo o carpeta movido a la papelera
 type TrashItem struct {
 	ID           string    `json:"id"`
@@ -27,7 +30,7 @@ type TrashItem struct {
 // DaysRemaining calcula cuántos días quedan antes de la eliminación permanente automática (20 días max)
 func (t *TrashItem) DaysRemaining() int {
 	elapsed := time.Since(t.DeletedAt)
-	daysLeft := TrashRetentionDays - int(elapsed.Hours()/24)
+	daysLeft := TrashDays - int(elapsed.Hours()/24)
 	if daysLeft < 0 {
 		return 0
 	}
@@ -101,7 +104,7 @@ func (s *Storage) ListTrash() ([]TrashItem, error) {
 
 	var validItems []TrashItem
 	now := time.Now()
-	cutoff := now.Add(-time.Duration(TrashRetentionDays) * 24 * time.Hour)
+	cutoff := now.Add(-time.Duration(TrashDays) * 24 * time.Hour)
 	hasChanges := false
 
 	for _, item := range items {
@@ -141,6 +144,13 @@ func (s *Storage) MoveToTrash(targetPath string) (*TrashItem, error) {
 	info, err := os.Stat(targetPath)
 	if err != nil {
 		return nil, err
+	}
+
+	if TrashDays == 0 { // sin papelera: se borra de verdad (la app pide siempre confirmación en este modo)
+		if err := os.RemoveAll(targetPath); err != nil {
+			return nil, err
+		}
+		return &TrashItem{Name: filepath.Base(targetPath), OriginalPath: targetPath, DeletedAt: time.Now(), IsDir: info.IsDir(), Size: info.Size()}, nil
 	}
 
 	td := s.trashDir()

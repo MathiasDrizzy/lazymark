@@ -573,3 +573,69 @@ func TestSetTaskDates(t *testing.T) {
 		t.Errorf("con el mtime viejo: %v", err)
 	}
 }
+
+// TestKanbanTagOption (ORD-025 O6): con kanban_tag = "board" el tablero escribe y lee `#board/<columna>`; el prefijo por defecto sigue siendo kb; las etiquetas con otro prefijo no son
+// del tablero (ni se vuelven categorías el prefijo nuevo).
+func TestKanbanTagOption(t *testing.T) {
+	old := KanbanTag
+	t.Cleanup(func() { KanbanTag = old })
+	if KanbanTag != "kb" {
+		t.Fatalf("el prefijo por defecto es kb: %q", KanbanTag)
+	}
+	out, err := RewriteForColumn("- [ ] tarea", Columns{"todo", "doing", "done"}, 1)
+	if err != nil || out != "- [ ] tarea #kb/doing" {
+		t.Fatalf("por defecto: %q %v", out, err)
+	}
+	KanbanTag = "board"
+	out, err = RewriteForColumn("- [ ] tarea", Columns{"todo", "doing", "done"}, 1)
+	if err != nil || out != "- [ ] tarea #board/doing" {
+		t.Errorf("con kanban_tag=board: %q %v", out, err)
+	}
+	s := New(t.TempDir())
+	cols := Columns{"todo", "doing", "done"}
+	if got := cols.Of(Task{Text: "x #board/doing"}); got != 1 {
+		t.Errorf("#board/doing es la columna doing: %d", got)
+	}
+	if got := cols.Of(Task{Text: "x #kb/doing"}); got != 0 {
+		t.Errorf("con otro prefijo, #kb/doing ya no es del tablero: %d", got)
+	}
+	if tags := s.extractTags("x #board/doing y #kb/doing"); len(tags) != 1 || tags[0] == "board/doing" {
+		t.Errorf("la etiqueta de columna no es una categoría; la de otro prefijo sí: %v", tags)
+	}
+}
+
+// TestRetagKanban (ORD-025 O6): `kanban retag` cambia #kb/<columna> por #<nuevo>/<columna> solo en líneas de tarea, sin tocar código en línea, enlaces, párrafos ni bloques de
+// código; --dry-run no escribe; es idempotente y conserva CRLF.
+func TestRetagKanban(t *testing.T) {
+	dir := t.TempDir()
+	note := "# N\n- [ ] a #kb/doing\n- [ ] b `#kb/doing` en código\n- [ ] c [[nota#kb/doing]] enlace\n- [ ] d [txt](http://x/#kb/doing) url\n" +
+		"párrafo con #kb/doing\n```\n- [ ] e #kb/doing\n```\n- [ ] f #KB/Todo y #kb/doing/otro\n- [x] g #kb/done 📅 2026-01-01\n- [ ] h sin etiqueta\n"
+	crlf := "- [ ] i #kb/doing\r\n- [ ] j\r\n"
+	os.WriteFile(filepath.Join(dir, "n.md"), []byte(note), 0o644)
+	os.WriteFile(filepath.Join(dir, "w.md"), []byte(crlf), 0o644)
+	s := New(dir)
+	before, _ := os.ReadFile(filepath.Join(dir, "n.md"))
+	dry, err := s.RetagKanban("kb", "board", true)
+	if err != nil || len(dry) != 4 { // a, f, g, i
+		t.Fatalf("dry-run: %d cambios (%v): %+v", len(dry), err, dry)
+	}
+	if after, _ := os.ReadFile(filepath.Join(dir, "n.md")); string(after) != string(before) {
+		t.Fatal("--dry-run no escribe nada")
+	}
+	done, err := s.RetagKanban("kb", "board", false)
+	if err != nil || len(done) != 4 {
+		t.Fatalf("retag: %d cambios (%v)", len(done), err)
+	}
+	got, _ := os.ReadFile(filepath.Join(dir, "n.md"))
+	want := strings.NewReplacer("- [ ] a #kb/doing", "- [ ] a #board/doing", "#KB/Todo y", "#board/Todo y", "- [x] g #kb/done", "- [x] g #board/done").Replace(note)
+	if string(got) != want {
+		t.Errorf("solo las etiquetas de tareas, sin código ni enlaces:\n%s\n--- esperado\n%s", got, want)
+	}
+	if w, _ := os.ReadFile(filepath.Join(dir, "w.md")); string(w) != "- [ ] i #board/doing\r\n- [ ] j\r\n" {
+		t.Errorf("conserva CRLF: %q", w)
+	}
+	again, err := s.RetagKanban("kb", "board", false)
+	if err != nil || len(again) != 0 {
+		t.Errorf("idempotente: una segunda corrida no cambia nada (%d, %v)", len(again), err)
+	}
+}

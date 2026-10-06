@@ -161,3 +161,20 @@ func TestReplaceDateEmojiLeavesLinksAlone(t *testing.T) {
 		t.Errorf("el campo se dibuja con glifo: %q", got)
 	}
 }
+
+// TestSortTasksByDue (ORD-025 O7): por vencimiento: primero las pendientes con vencimiento (la más vencida arriba), después las sin vencimiento y al final las hechas; dentro de
+// cada grupo se conserva el orden previo.
+func TestSortTasksByDue(t *testing.T) {
+	mk := func(text, due string, done bool) FlatTask {
+		return FlatTask{Task: storage.Task{Text: text, Done: done, Dates: storage.Dates{Due: due}}}
+	}
+	tasks := []FlatTask{mk("sin1", "", false), mk("lejos", "2999-01-01", false), mk("hecha", "2020-01-01", true), mk("vencida", "2020-05-05", false), mk("sin2", "", false), mk("hoy", "2026-10-06", false), mk("rara", "no-es-fecha", false)}
+	SortTasksByDue(tasks)
+	var got []string
+	for _, k := range tasks {
+		got = append(got, k.Task.Text)
+	}
+	if want := "vencida,hoy,lejos,sin1,sin2,rara,hecha"; strings.Join(got, ",") != want {
+		t.Errorf("orden por vencimiento = %v, se esperaba %s", got, want)
+	}
+}

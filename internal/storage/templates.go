@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
+	"github.com/MathiasDrizzy/lazymark/internal/config"
 	"github.com/MathiasDrizzy/lazymark/internal/i18n"
 	"os"
 	"path/filepath"
@@ -14,7 +15,7 @@ import (
 	"unicode/utf8"
 )
 
-// Carpetas especiales dentro de la carpeta de notas.
+// Carpetas especiales dentro de la carpeta de notas (los valores por defecto: `templates_folder`, `daily_folder` y `daily_name` en la configuración los cambian).
 const (
 	TemplatesDir  = "templates" // las plantillas de nota: templates/<nombre>.md
 	JournalDir    = "journal"   // las notas diarias: journal/AAAA-MM-DD.md
@@ -55,7 +56,7 @@ var ErrTemplateNotFound = i18n.NewError("no existe la plantilla", "template does
 
 // Templates lista los nombres (sin ".md") de las plantillas de templates/, en orden alfabético. Sin carpeta, lista vacía.
 func (s *Storage) Templates() []string {
-	dir, err := s.ResolveFolder(TemplatesDir)
+	dir, err := s.ResolveFolder(filepath.FromSlash(s.templatesRel()))
 	if err != nil {
 		return nil
 	}
@@ -153,8 +154,8 @@ func (s *Storage) CreateNoteFromTemplate(dir, title, template string, now time.T
 // DailyNote devuelve la nota diaria de now (journal/AAAA-MM-DD.md) y si la acaba de crear. Si no existe la crea con la plantilla
 // templates/daily.md (o, sin ella, con el título de la fecha), y crea journal/ si falta. Si ya existe, no la toca.
 func (s *Storage) DailyNote(now time.Time) (*Note, bool, error) {
-	name := now.Format("2006-01-02")
-	path := filepath.Join(s.BaseDir, JournalDir, name+".md")
+	name := slugDaily(config.FormatDailyName(s.dailyName(), now)) // el nombre que tendrá el archivo (CreateNoteInDirWithBody lo pasa por slug)
+	path := filepath.Join(s.BaseDir, filepath.FromSlash(s.dailyRel()), name+".md")
 	existing := func() (*Note, bool, error) {
 		if _, err := s.ResolveNote(path); err != nil { // confinada: un enlace simbólico hacia fuera no se lee
 			return nil, false, err
@@ -181,7 +182,7 @@ func (s *Storage) DailyNote(now time.Time) (*Note, bool, error) {
 	if strings.TrimSpace(body) == "" {
 		body = "# " + name + "\n"
 	}
-	dir, err := s.EnsureFolder(JournalDir)
+	dir, err := s.EnsureFolder(s.dailyRel())
 	if err != nil {
 		return nil, false, err
 	}
@@ -202,12 +203,13 @@ func (s *Storage) InTemplates(path string) bool { return s.inTemplates(path) }
 // inTemplates dice si path está dentro de templates/ (en la raíz de la carpeta de notas).
 func (s *Storage) inTemplates(path string) bool {
 	rel, err := filepath.Rel(s.BaseDir, path)
-	return err == nil && (rel == TemplatesDir || strings.HasPrefix(filepath.ToSlash(rel), TemplatesDir+"/"))
+	tpl := s.templatesRel()
+	return err == nil && (filepath.ToSlash(rel) == tpl || strings.HasPrefix(filepath.ToSlash(rel), tpl+"/"))
 }
 
 // templateFile es el archivo de la plantilla name: el que existe con ".md" en cualquier combinación de mayúsculas (diario.MD), o name.md.
 func (s *Storage) templateFile(name string) string {
-	dir := filepath.Join(s.BaseDir, TemplatesDir)
+	dir := filepath.Join(s.BaseDir, filepath.FromSlash(s.templatesRel()))
 	if entries, err := os.ReadDir(dir); err == nil {
 		for _, e := range entries {
 			if !e.IsDir() && strings.EqualFold(e.Name(), name+".md") {
@@ -217,3 +219,29 @@ func (s *Storage) templateFile(name string) string {
 	}
 	return filepath.Join(dir, name+".md")
 }
+
+// templatesRel, dailyRel y dailyName son la carpeta de plantillas, la de las notas diarias y el formato del nombre diario con la configuración (o, sin ella o con un valor
+// inválido, los de siempre). Las rutas son relativas a la carpeta de notas y van con "/".
+func (s *Storage) templatesRel() string {
+	if f, ok := config.CleanRelFolder(s.TemplatesFolder); ok {
+		return f
+	}
+	return TemplatesDir
+}
+
+func (s *Storage) dailyRel() string {
+	if f, ok := config.CleanRelFolder(s.DailyFolder); ok {
+		return f
+	}
+	return JournalDir
+}
+
+func (s *Storage) dailyName() string {
+	if config.ValidDailyName(s.DailyNameFormat) {
+		return s.DailyNameFormat
+	}
+	return "YYYY-MM-DD"
+}
+
+// slugDaily es el nombre de archivo (sin .md) que sale de un nombre diario: el mismo que CreateNoteInDirWithBody le pondría.
+func slugDaily(name string) string { return slug(name) }

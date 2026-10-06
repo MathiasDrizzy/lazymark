@@ -7,6 +7,7 @@ import (
 	"runtime/debug"
 	"strings"
 	"testing"
+	"time"
 )
 
 // isolate apunta HOME y XDG_CONFIG_HOME a un directorio temporal para que
@@ -479,5 +480,84 @@ func TestNerdFontDefault(t *testing.T) {
 	writeDiskConfig(t, `{"keymap_version":2,"nerd_font":false}`)
 	if got, _ := Load(t.TempDir()); got.NerdFont {
 		t.Error("false se conserva")
+	}
+}
+
+// TestOptionsDefaultsAndValidation (ORD-025): las 8 opciones nuevas valen, por defecto, el comportamiento de siempre; un valor cambiado se respeta; uno inválido o fuera de
+// rango vuelve al defecto sin romper la lectura.
+func TestOptionsDefaultsAndValidation(t *testing.T) {
+	d := DefaultConfig("")
+	if !d.DateWarnings || !d.DateFormatNotice || d.ClickHintIdleSeconds != 20 || d.ClickHintShowSeconds != 15 || d.ClickHintEverySeconds != 60 || d.TrashDays != 20 ||
+		d.DailyFolder != "journal" || d.DailyName != "YYYY-MM-DD" || d.TemplatesFolder != "templates" || d.KanbanTag != "kb" || d.NotesSort != "name" || d.TasksSort != "note" || len(d.DateGlyphs) != 0 {
+		t.Errorf("los valores por defecto cambiaron: %+v", d)
+	}
+	load := func(js string) *Config {
+		t.Helper()
+		home := t.TempDir()
+		t.Setenv("HOME", home)
+		t.Setenv("XDG_CONFIG_HOME", filepath.Join(home, ".config"))
+		t.Setenv("AppData", filepath.Join(home, "AppData"))
+		base, _ := os.UserConfigDir()
+		os.MkdirAll(filepath.Join(base, "lazymark"), 0o755)
+		os.WriteFile(filepath.Join(base, "lazymark", "config.json"), []byte(js), 0o644)
+		cfg, err := Load(t.TempDir())
+		if err != nil {
+			t.Fatal(err)
+		}
+		return cfg
+	}
+	// ausente: los defectos
+	if c := load(`{}`); c.TrashDays != 20 || c.DailyFolder != "journal" || c.KanbanTag != "kb" || !c.DateWarnings {
+		t.Errorf("un archivo sin las claves da los defectos: %+v", c)
+	}
+	// cambiados
+	c := load(`{"date_warnings":false,"date_format_notice":false,"click_hint_idle_seconds":30,"click_hint_show_seconds":10,"click_hint_every_seconds":120,"trash_days":0,
+	"daily_folder":"diario/2026","daily_name":"AAAA.MM.DD","templates_folder":"moldes","kanban_tag":"board","notes_sort":"modified","tasks_sort":"due",
+	"date_glyphs":{"due":"D","start":"→"}}`)
+	if c.DateWarnings || c.DateFormatNotice || c.ClickHintIdleSeconds != 30 || c.ClickHintShowSeconds != 10 || c.ClickHintEverySeconds != 120 || c.TrashDays != 0 ||
+		c.DailyFolder != "diario/2026" || c.DailyName != "AAAA.MM.DD" || c.TemplatesFolder != "moldes" || c.KanbanTag != "board" || c.NotesSort != "modified" || c.TasksSort != "due" ||
+		c.DateGlyphs["due"] != "D" || c.DateGlyphs["start"] != "→" {
+		t.Errorf("los valores cambiados se respetan: %+v", c)
+	}
+	// inválidos: vuelven al defecto
+	c = load(`{"click_hint_idle_seconds":1,"click_hint_show_seconds":9999,"click_hint_every_seconds":-3,"trash_days":9999,"daily_folder":"../fuera","daily_name":"nota","templates_folder":"/abs",
+	"kanban_tag":"1 mal!","notes_sort":"zzz","tasks_sort":"???","date_glyphs":{"due":"ab","start":"","done":"\u0007","scheduled":" ","created":"日"}}`)
+	if c.ClickHintIdleSeconds != 20 || c.ClickHintShowSeconds != 15 || c.ClickHintEverySeconds != 60 || c.TrashDays != 20 || c.DailyFolder != "journal" || c.DailyName != "YYYY-MM-DD" ||
+		c.TemplatesFolder != "templates" || c.KanbanTag != "kb" || c.NotesSort != "name" || c.TasksSort != "note" {
+		t.Errorf("los valores inválidos vuelven al defecto: %+v", c)
+	}
+	if len(c.DateGlyphs) != 1 || c.DateGlyphs["created"] != "日" { // solo vale un carácter de ancho 1 o 2: "日" mide 2
+		t.Errorf("date_glyphs: solo el glifo válido se queda: %v", c.DateGlyphs)
+	}
+	// la visibilidad "se va antes de volver a salir": show >= every vuelve a los dos defectos
+	if c := load(`{"click_hint_show_seconds":100,"click_hint_every_seconds":50}`); c.ClickHintShowSeconds != 15 || c.ClickHintEverySeconds != 60 {
+		t.Errorf("show >= every: %d %d", c.ClickHintShowSeconds, c.ClickHintEverySeconds)
+	}
+}
+
+// TestCleanRelFolderAndDailyName: las rutas se validan dentro de la carpeta de notas; el nombre diario lleva año, mes y día.
+func TestCleanRelFolderAndDailyName(t *testing.T) {
+	for in, want := range map[string]string{"journal": "journal", "a/b": "a/b", "a\\b": "a/b", " diario ": "diario", "a/b/": "a/b", "año/mes": "año/mes"} {
+		if got, ok := CleanRelFolder(in); !ok || got != want {
+			t.Errorf("CleanRelFolder(%q) = %q %v, se esperaba %q", in, got, ok, want)
+		}
+	}
+	for _, bad := range []string{"", "/abs", "C:\\x", "C:x", "..", "a/../b", "../x", ".oculta", "a/.git", "assets", "a//b", "a/./b", "x:y", "a|b", "a\x00b", string(make([]byte, 101))} {
+		if _, ok := CleanRelFolder(bad); ok {
+			t.Errorf("CleanRelFolder(%q) debe rechazarse", bad)
+		}
+	}
+	for _, ok := range []string{"YYYY-MM-DD", "AAAA-MM-DD", "DD.MM.YYYY", "diario YYYY MM DD"} {
+		if !ValidDailyName(ok) {
+			t.Errorf("%q es un nombre diario válido", ok)
+		}
+	}
+	for _, bad := range []string{"", "nota", "YYYY-MM", "YYYY/MM/DD", "..YYYY-MM-DD", "YYYY-MM-DD\n", ".YYYY-MM-DD"} {
+		if ValidDailyName(bad) {
+			t.Errorf("%q no es un nombre diario válido", bad)
+		}
+	}
+	if got := FormatDailyName("AAAA.MM.DD", time.Date(2026, 10, 6, 0, 0, 0, 0, time.UTC)); got != "2026.10.06" {
+		t.Errorf("FormatDailyName = %q", got)
 	}
 }

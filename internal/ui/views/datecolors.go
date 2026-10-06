@@ -7,6 +7,7 @@ import (
 	"math"
 	"regexp"
 	"strings"
+	"sync"
 	"time"
 
 	"charm.land/lipgloss/v2"
@@ -229,9 +230,44 @@ var (
 	// dateOnLine reconoce, en una línea ya dibujada (con sus códigos ANSI), un glifo de fecha (de los dos juegos: Nerd Font y texto, también si está escrito a mano) con su
 	// marcador de tarea hecha opcional delante, un espacio y una fecha AAAA-MM-DD.
 	// Glamour parte el glifo, el espacio y la fecha en tramos distintos con códigos de estilo entre medio, así que se admiten (cero o más) entre las tres partes.
-	dateOnLine = regexp.MustCompile(`(\x{2060})?(?:\x1b\[[0-9;:]*m)*([\x{f135}\x{f073}\x{f00c}\x{f252}\x{f067}▸◷✓◑+])(?:\x1b\[[0-9;:]*m)*( )(?:\x1b\[[0-9;:]*m)*(\d{4}-\d{2}-\d{2})`)
-	ansiSeq    = regexp.MustCompile(`\x1b\[[0-9;:]*m`)
+	ansiSeq = regexp.MustCompile(`\x1b\[[0-9;:]*m`)
 )
+
+var (
+	dateReMu  sync.Mutex
+	dateReKey string
+	dateReVal *regexp.Regexp
+)
+
+// allGlyphs son todos los glifos que se reconocen como el de una fecha: los dos juegos y los propios de la configuración.
+func allGlyphs() []string {
+	out := append([]string{}, glyphSets[0][:]...)
+	out = append(out, glyphSets[1][:]...)
+	for _, g := range DateGlyphs {
+		if g != "" {
+			out = append(out, g)
+		}
+	}
+	return out
+}
+
+// dateRe es la expresión que reconoce, en una línea ya dibujada, "[marcador] glifo espacio fecha" con códigos de estilo entre las partes; se rehace si cambian los glifos
+// propios (`date_glyphs`).
+func dateRe() *regexp.Regexp {
+	dateReMu.Lock()
+	defer dateReMu.Unlock()
+	glyphs := allGlyphs()
+	key := strings.Join(glyphs, "\x00")
+	if dateReVal == nil || key != dateReKey {
+		var alt []string
+		for _, g := range glyphs {
+			alt = append(alt, regexp.QuoteMeta(g))
+		}
+		dateReVal = regexp.MustCompile(`(\x{2060})?(?:\x1b\[[0-9;:]*m)*(` + strings.Join(alt, "|") + `)(?:\x1b\[[0-9;:]*m)*( )(?:\x1b\[[0-9;:]*m)*(\d{4}-\d{2}-\d{2})`)
+		dateReKey = key
+	}
+	return dateReVal
+}
 
 // MarkDoneDates pone DoneMark delante de cada "glifo fecha" de las líneas de content (1-based) que son tareas hechas. No cambia el número de líneas.
 func MarkDoneDates(content string, doneLines map[int]bool) string {
@@ -241,7 +277,7 @@ func MarkDoneDates(content string, doneLines map[int]bool) string {
 	lines := strings.Split(content, "\n")
 	for n := range doneLines {
 		if n >= 1 && n <= len(lines) {
-			lines[n-1] = dateOnLine.ReplaceAllString(lines[n-1], string(DoneMark)+"$2$3$4")
+			lines[n-1] = dateRe().ReplaceAllString(lines[n-1], string(DoneMark)+"$2$3$4")
 		}
 	}
 	return strings.Join(lines, "\n")
@@ -254,12 +290,12 @@ func ColorDateLines(lines []string, today string) []string {
 	out := make([]string, len(lines))
 	for i, l := range lines {
 		out[i] = l
-		if !strings.ContainsAny(l, "\uf135\uf073\uf00c\uf252\uf067▸◷✓◑+") {
+		if !containsAnyGlyph(l) {
 			out[i] = strings.ReplaceAll(l, string(DoneMark), "")
 			continue
 		}
-		out[i] = dateOnLine.ReplaceAllStringFunc(l, func(m string) string {
-			sm := dateOnLine.FindStringSubmatch(m)
+		out[i] = dateRe().ReplaceAllStringFunc(l, func(m string) string {
+			sm := dateRe().FindStringSubmatch(m)
 			done := sm[1] != ""
 			f, ok := fieldOfGlyph(sm[2])
 			if !ok {
@@ -296,9 +332,19 @@ func ColorDateLines(lines []string, today string) []string {
 // fieldOfGlyph dice qué campo de fecha es un glifo, de cualquiera de los dos juegos (Nerd Font y texto): lo escrito a mano en una nota con el otro juego también cuenta.
 func fieldOfGlyph(g string) (storage.DateField, bool) {
 	for f := storage.DateStart; f <= storage.DateCreated; f++ {
-		if g == glyphSets[0][f] || g == glyphSets[1][f] {
+		if g == glyphSets[0][f] || g == glyphSets[1][f] || (DateGlyphs[f] != "" && g == DateGlyphs[f]) {
 			return f, true
 		}
 	}
 	return 0, false
+}
+
+// containsAnyGlyph dice si la línea lleva algún glifo de fecha (filtro rápido antes de la expresión).
+func containsAnyGlyph(l string) bool {
+	for _, g := range allGlyphs() {
+		if strings.Contains(l, g) {
+			return true
+		}
+	}
+	return false
 }

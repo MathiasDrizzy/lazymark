@@ -81,6 +81,13 @@ type Storage struct {
 	DateFormatPref string
 	// DateNoticeSeen indica que el aviso del formato ya se mostró alguna vez (se guarda en la configuración).
 	DateNoticeSeen bool
+	// DateNoticeOff apaga ese aviso del todo (`date_format_notice = false`): no aparece nunca.
+	DateNoticeOff bool
+	// TemplatesFolder, DailyFolder y DailyNameFormat son `templates_folder`, `daily_folder` y `daily_name` de la configuración; vacíos o inválidos valen los de siempre
+	// (templates, journal y YYYY-MM-DD).
+	TemplatesFolder, DailyFolder, DailyNameFormat string
+	// NotesSort es `notes_sort`: "modified" ordena las notas del árbol de la más reciente a la más antigua; cualquier otro valor, por nombre (como siempre).
+	NotesSort string
 
 	fmtMu     sync.Mutex
 	fmtKnown  bool
@@ -222,6 +229,9 @@ func (s *Storage) ListTreeEntries(expanded map[string]bool) ([]NoteEntry, error)
 		})
 
 		sort.Slice(noteEntries, func(i, j int) bool {
+			if s.NotesSort == "modified" && !noteEntries[i].ModTime.Equal(noteEntries[j].ModTime) {
+				return noteEntries[i].ModTime.After(noteEntries[j].ModTime)
+			}
 			return strings.ToLower(noteEntries[i].Name) < strings.ToLower(noteEntries[j].Name)
 		})
 
@@ -317,7 +327,7 @@ func (s *Storage) extractTags(content string) []string {
 	tagMap := make(map[string]bool)
 	for _, m := range matches {
 		if len(m) > 1 {
-			if strings.EqualFold(m[1], "kb") && len(m) > 2 && m[2] != "" {
+			if strings.EqualFold(m[1], KanbanTag) && len(m) > 2 && m[2] != "" {
 				continue // #kb/<columna> es del tablero, no una categoría
 			}
 			tagMap[strings.ToLower(m[1])] = true

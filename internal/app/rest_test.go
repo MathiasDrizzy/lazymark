@@ -469,11 +469,11 @@ func TestHintWait(t *testing.T) {
 		{hintIdleAfter + hintShowFor, hintEvery - hintShowFor}, // se fue: se espera a la próxima vez
 		{hintIdleAfter + hintEvery - time.Second, time.Second},
 	} {
-		if got := hintWait(c.idle); got != c.want {
+		if got := hintWait(c.idle, defaultHintTimes); got != c.want {
 			t.Errorf("hintWait(%v) = %v, se esperaba %v", c.idle, got, c.want)
 		}
 	}
-	if got := hintWait(-time.Hour); got < time.Second {
+	if got := hintWait(-time.Hour, defaultHintTimes); got < time.Second {
 		t.Errorf("un reloj que retrocede no genera un tick inmediato: %v", got)
 	}
 }
@@ -686,5 +686,41 @@ func TestHeadMetricsAreRobust(t *testing.T) {
 				t.Errorf("ancho %d, cabeza %d: el aviso (columna %d, %d de largo) se pasa del panel", inner, head, col, len(hintText))
 			}
 		}
+	}
+}
+
+// TestHintCadenceOption (ORD-025 O3): la cadencia del "click me!" sale de la configuración (click_hint_*_seconds): con 5/3/10 s aparece a los 5 s, se ve 3 s y vuelve cada 10 s;
+// los valores por defecto son 20/15/60; uno fuera de rango cae en el defecto.
+func TestHintCadenceOption(t *testing.T) {
+	base := time.Date(2026, 10, 6, 12, 0, 0, 0, time.UTC)
+	old := hintNow
+	t.Cleanup(func() { hintNow = old })
+	now := base
+	hintNow = func() time.Time { return now }
+	r := newEmptyRig(t, 120, 35, false)
+	r.c.cfg.MouseClick = true
+	r.mascot.lastInput = base
+	if r.hintTimes() != defaultHintTimes || defaultHintTimes != (hintTimes{20 * time.Second, 15 * time.Second, 60 * time.Second}) {
+		t.Fatalf("la cadencia por defecto es 20/15/60: %+v", r.hintTimes())
+	}
+	shows := func() bool {
+		for _, l := range strings.Split(ansi.Strip(r.View().Content), "\n") {
+			if strings.Contains(l, hintText) {
+				return true
+			}
+		}
+		return false
+	}
+	r.c.cfg.ClickHintIdleSeconds, r.c.cfg.ClickHintShowSeconds, r.c.cfg.ClickHintEverySeconds = 5, 6, 10
+	for at, want := range map[time.Duration]bool{4 * time.Second: false, 6 * time.Second: true, 10 * time.Second: true, 12 * time.Second: false, 16 * time.Second: true, 22 * time.Second: false} {
+		now = base.Add(at)
+		if got := shows(); got != want {
+			t.Errorf("5/6/10 s, a los %v: aviso visible=%v, se esperaba %v", at, got, want)
+		}
+	}
+	// fuera de rango: el defecto
+	r.c.cfg.ClickHintIdleSeconds, r.c.cfg.ClickHintShowSeconds, r.c.cfg.ClickHintEverySeconds = 1, 99, 3
+	if r.hintTimes() != defaultHintTimes {
+		t.Errorf("fuera de rango cae en el defecto: %+v", r.hintTimes())
 	}
 }

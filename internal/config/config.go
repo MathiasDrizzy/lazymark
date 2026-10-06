@@ -3,11 +3,16 @@ package config
 import (
 	"encoding/json"
 	"github.com/MathiasDrizzy/lazymark/internal/safeio"
+	"github.com/MathiasDrizzy/lazymark/internal/ui/textwidth"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"runtime/debug"
 	"strings"
+	"time"
+	"unicode"
+	"unicode/utf8"
 
 	"github.com/MathiasDrizzy/lazymark/internal/i18n"
 )
@@ -144,6 +149,30 @@ type Config struct {
 	DueSoonDays int `json:"due_soon_days"`
 	// DateColorNames: el color de la paleta del tema que usa cada estado: overdue, soon, ontime, started, notstarted y done, con un valor de DateColorChoices.
 	DateColorNames map[string]string `json:"date_color_names"`
+	// DateWarnings: el aviso de que el inicio de una tarea es posterior a su vencimiento (popup de Fechas y CLI). Por defecto sí.
+	DateWarnings bool `json:"date_warnings"`
+	// DateFormatNotice: el aviso único que explica que las fechas se escriben con emojis porque el vault ya las tiene así. Por defecto sí; con no, nunca aparece.
+	DateFormatNotice bool `json:"date_format_notice"`
+	// ClickHintIdleSeconds, ClickHintShowSeconds y ClickHintEverySeconds: la cadencia del "click me!" sobre la mascota: segundos de quietud antes de que aparezca (20),
+	// cuánto se ve (15) y cada cuánto vuelve mientras sigas quieto (60). Cada uno de 5 a 600; el segundo va siempre por debajo del tercero.
+	ClickHintIdleSeconds  int `json:"click_hint_idle_seconds"`
+	ClickHintShowSeconds  int `json:"click_hint_show_seconds"`
+	ClickHintEverySeconds int `json:"click_hint_every_seconds"`
+	// TrashDays: cuántos días se guarda lo que se borra en la papelera (0 a 365; 20 por defecto). 0 = sin papelera: borrar elimina de inmediato y pide siempre confirmación.
+	TrashDays int `json:"trash_days"`
+	// DailyFolder, DailyName y TemplatesFolder: dónde viven las notas diarias (`journal`), cómo se llaman (`YYYY-MM-DD`: lleva YYYY o AAAA, MM y DD) y dónde están las
+	// plantillas (`templates`). Rutas relativas a la carpeta de notas, sin ".." ni rutas absolutas.
+	DailyFolder     string `json:"daily_folder"`
+	DailyName       string `json:"daily_name"`
+	TemplatesFolder string `json:"templates_folder"`
+	// KanbanTag: el prefijo de la etiqueta de columna del tablero (`kb`: `#kb/doing`). Cambiarlo no migra las notas que ya tienen otro prefijo: `lazymark kanban retag`.
+	KanbanTag string `json:"kanban_tag"`
+	// NotesSort ("name" por defecto, como siempre, o "modified": las notas más recientes primero, las carpetas siguen por nombre) y TasksSort ("note" por defecto: en el orden de
+	// las notas, o "due": primero las pendientes con vencimiento, de la más vencida a la más lejana; después las sin fecha y al final las hechas) ordenan los paneles Notas y Tareas.
+	NotesSort string `json:"notes_sort"`
+	TasksSort string `json:"tasks_sort"`
+	// DateGlyphs reemplaza el glifo de cada campo de fecha (claves start, due, done, scheduled, created): un solo carácter de ancho 1 o 2. Lo que falta o no vale usa el de Nerd Font o de texto.
+	DateGlyphs map[string]string `json:"date_glyphs"`
 	// ScreenBackground: "theme" (por defecto) o "terminal". Ver ScreenBackgroundTheme.
 	ScreenBackground string `json:"screen_background"`
 	configPath       string `json:"-"`
@@ -185,30 +214,42 @@ func DefaultConfig(notesDir string) *Config {
 	}
 
 	return &Config{
-		NotesDir:           notesDir,
-		Editor:             editor,
-		MouseClick:         true,
-		Theme:              "catppuccin-mocha",
-		Language:           "auto",
-		ShowTagsTab:        true,
-		ShowTasksTab:       true,
-		ConfirmDelete:      true,
-		HideCompletedTasks: false,
-		SidebarRatio:       0.33,
-		KeybindingMode:     KeybindingModeDual,
-		Keybindings:        DefaultKeybindings(),
-		KeymapVersion:      KeymapVersion,
-		TaskScope:          "all",
-		PopupBackground:    PopupBackgroundTheme,
-		KanbanCards:        KanbanCardsRects,
-		ScreenBackground:   ScreenBackgroundTheme,
-		Mascot:             true,
-		ClickHint:          true,
-		MaxNoteMB:          10,
-		DateColors:         true,
-		DateColorNames:     DefaultDateColorNames(),
-		NerdFont:           true,
-		KanbanColumns:      DefaultKanbanColumns(),
+		NotesDir:              notesDir,
+		Editor:                editor,
+		MouseClick:            true,
+		Theme:                 "catppuccin-mocha",
+		Language:              "auto",
+		ShowTagsTab:           true,
+		ShowTasksTab:          true,
+		ConfirmDelete:         true,
+		HideCompletedTasks:    false,
+		SidebarRatio:          0.33,
+		KeybindingMode:        KeybindingModeDual,
+		Keybindings:           DefaultKeybindings(),
+		KeymapVersion:         KeymapVersion,
+		TaskScope:             "all",
+		PopupBackground:       PopupBackgroundTheme,
+		KanbanCards:           KanbanCardsRects,
+		ScreenBackground:      ScreenBackgroundTheme,
+		Mascot:                true,
+		ClickHint:             true,
+		MaxNoteMB:             10,
+		DateColors:            true,
+		DateWarnings:          true,
+		DateFormatNotice:      true,
+		ClickHintIdleSeconds:  20,
+		ClickHintShowSeconds:  15,
+		ClickHintEverySeconds: 60,
+		TrashDays:             20,
+		DailyFolder:           "journal",
+		DailyName:             "YYYY-MM-DD",
+		TemplatesFolder:       "templates",
+		KanbanTag:             "kb",
+		NotesSort:             "name",
+		TasksSort:             "note",
+		DateColorNames:        DefaultDateColorNames(),
+		NerdFont:              true,
+		KanbanColumns:         DefaultKanbanColumns(),
 	}
 }
 
@@ -287,6 +328,7 @@ func load(customDir string, create bool) (*Config, error) {
 				disk.DateFormat = "" // ausente o desconocido: el de por defecto
 			}
 			disk.DueSoonDays = min(max(disk.DueSoonDays, 0), 30)
+			disk.normalizeOptions()
 			disk.DateColorNames = normalizeDateColorNames(disk.DateColorNames)
 			if disk.KanbanCards != KanbanCardsCompact {
 				disk.KanbanCards = KanbanCardsRects // ausente o desconocido
@@ -522,6 +564,125 @@ func normalizeDateColorNames(in map[string]string) map[string]string {
 				out[k] = c
 			}
 		}
+	}
+	return out
+}
+
+// Los rangos y los valores por defecto de las opciones de ORD-025.
+const (
+	minHintSeconds, maxHintSeconds = 5, 600
+	maxTrashDays                   = 365
+)
+
+var KanbanTagRe = regexp.MustCompile(`^[A-Za-z][A-Za-z0-9_-]{0,19}$`)
+
+// normalizeOptions lleva cada opción a un valor válido: uno inválido o fuera de rango vuelve a su valor por defecto (nunca rompe la app).
+func (c *Config) normalizeOptions() {
+	d := DefaultConfig("")
+	c.ClickHintIdleSeconds = hintSecondsOr(c.ClickHintIdleSeconds, d.ClickHintIdleSeconds)
+	c.ClickHintShowSeconds = hintSecondsOr(c.ClickHintShowSeconds, d.ClickHintShowSeconds)
+	c.ClickHintEverySeconds = hintSecondsOr(c.ClickHintEverySeconds, d.ClickHintEverySeconds)
+	if c.ClickHintShowSeconds >= c.ClickHintEverySeconds { // se tiene que ir antes de volver a salir
+		c.ClickHintShowSeconds, c.ClickHintEverySeconds = d.ClickHintShowSeconds, d.ClickHintEverySeconds
+		if c.ClickHintShowSeconds >= c.ClickHintEverySeconds {
+			c.ClickHintEverySeconds = c.ClickHintShowSeconds + 1
+		}
+	}
+	if c.TrashDays < 0 || c.TrashDays > maxTrashDays {
+		c.TrashDays = d.TrashDays
+	}
+	c.DailyFolder = folderOr(c.DailyFolder, d.DailyFolder)
+	c.TemplatesFolder = folderOr(c.TemplatesFolder, d.TemplatesFolder)
+	if !ValidDailyName(c.DailyName) {
+		c.DailyName = d.DailyName
+	}
+	if !KanbanTagRe.MatchString(c.KanbanTag) {
+		c.KanbanTag = d.KanbanTag
+	}
+	if c.NotesSort != "modified" {
+		c.NotesSort = d.NotesSort
+	}
+	if c.TasksSort != "due" {
+		c.TasksSort = d.TasksSort
+	}
+	glyphs := map[string]string{}
+	for _, k := range []string{"start", "due", "done", "scheduled", "created"} {
+		if g := c.DateGlyphs[k]; ValidDateGlyph(g) {
+			glyphs[k] = g
+		}
+	}
+	c.DateGlyphs = glyphs
+}
+
+func hintSecondsOr(v, def int) int {
+	if v < minHintSeconds || v > maxHintSeconds {
+		return def
+	}
+	return v
+}
+
+// folderOr devuelve la carpeta normalizada (con "/") si es válida, o def.
+func folderOr(v, def string) string {
+	if f, ok := CleanRelFolder(v); ok {
+		return f
+	}
+	return def
+}
+
+// CleanRelFolder valida una carpeta relativa a la carpeta de notas: sin ruta absoluta, sin "..", sin segmentos vacíos ni ocultos (que empiezan con ".") y sin caracteres de
+// control ni los que no valen en un nombre de archivo. Devuelve la ruta con "/".
+func CleanRelFolder(v string) (string, bool) {
+	v = strings.TrimSpace(v)
+	if v == "" || len(v) > 100 || strings.HasPrefix(v, "/") || strings.HasPrefix(v, `\`) || filepath.IsAbs(v) || regexp.MustCompile(`^[A-Za-z]:`).MatchString(v) {
+		return "", false
+	}
+	parts := strings.Split(strings.ReplaceAll(v, `\`, "/"), "/")
+	for i, p := range parts {
+		if p == "" && i == len(parts)-1 { // una barra final se tolera
+			parts = parts[:i]
+			break
+		}
+		if p == "" || p == "." || p == ".." || strings.HasPrefix(p, ".") || strings.EqualFold(p, "assets") || strings.ContainsAny(p, "<>:\"|?*") || strings.IndexFunc(p, unicode.IsControl) >= 0 {
+			return "", false
+		}
+	}
+	if len(parts) == 0 {
+		return "", false
+	}
+	return strings.Join(parts, "/"), true
+}
+
+// ValidDailyName dice si v sirve de formato del nombre de la nota diaria: lleva el año (YYYY o AAAA), el mes (MM) y el día (DD), un nombre de archivo sin separadores,
+// sin ".." ni caracteres de control, y no más de 60 caracteres.
+func ValidDailyName(v string) bool {
+	if v == "" || len(v) > 60 || strings.ContainsAny(v, "/\\:*?\"<>|") || strings.Contains(v, "..") || strings.HasPrefix(v, ".") || strings.IndexFunc(v, unicode.IsControl) >= 0 {
+		return false
+	}
+	return (strings.Contains(v, "YYYY") || strings.Contains(v, "AAAA")) && strings.Contains(v, "MM") && strings.Contains(v, "DD")
+}
+
+// FormatDailyName es el nombre (sin .md) de la nota diaria de t con el formato v (YYYY o AAAA, MM, DD).
+func FormatDailyName(v string, t time.Time) string {
+	r := strings.NewReplacer("YYYY", t.Format("2006"), "AAAA", t.Format("2006"), "MM", t.Format("01"), "DD", t.Format("02"))
+	return r.Replace(v)
+}
+
+// ValidDateGlyph dice si g sirve de glifo de fecha: un solo carácter (sin control ni espacio) de ancho 1 o 2 celdas. El vacío (sin glifo propio) es válido solo para quien
+// llama (se trata como "no está").
+func ValidDateGlyph(g string) bool {
+	rs := []rune(g)
+	if len(rs) != 1 || unicode.IsControl(rs[0]) || unicode.IsSpace(rs[0]) || !utf8.ValidString(g) {
+		return false
+	}
+	w := textwidth.Width(g)
+	return w == 1 || w == 2
+}
+
+// DateGlyphArray son los glifos propios de las fechas (date_glyphs) en el orden de los campos: inicio, vencimiento, completada, programada y creada; un vacío es "sin glifo propio".
+func (c *Config) DateGlyphArray() [5]string {
+	var out [5]string
+	for f, k := range []string{"start", "due", "done", "scheduled", "created"} {
+		out[f] = c.DateGlyphs[k]
 	}
 	return out
 }

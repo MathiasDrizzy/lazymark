@@ -304,3 +304,60 @@ func TestTemplatesAgainstOracleFixtures(t *testing.T) {
 		}
 	}
 }
+
+// TestDailyAndTemplatesOptions (ORD-025 O5): por defecto la nota diaria es journal/AAAA-MM-DD.md con templates/daily.md; con daily_folder, daily_name y templates_folder
+// va a su sitio y con su nombre; los valores inválidos (.., rutas absolutas, nombre sin fecha) vuelven a los de siempre y nada se escribe fuera de la carpeta de notas.
+func TestDailyAndTemplatesOptions(t *testing.T) {
+	day := time.Date(2026, 10, 6, 9, 0, 0, 0, time.UTC)
+	mk := func(opts func(*Storage)) (*Storage, string) {
+		root := t.TempDir()
+		dir := filepath.Join(root, "notas")
+		os.MkdirAll(dir, 0o755)
+		s := New(dir)
+		opts(s)
+		return s, root
+	}
+	// por defecto
+	s, _ := mk(func(*Storage) {})
+	os.MkdirAll(filepath.Join(s.BaseDir, "templates"), 0o755)
+	os.WriteFile(filepath.Join(s.BaseDir, "templates", "daily.md"), []byte("# {{date}}\n\nplantilla de siempre\n"), 0o644)
+	n, created, err := s.DailyNote(day)
+	if err != nil || !created || n.Path != filepath.Join(s.BaseDir, "journal", "2026-10-06.md") || !strings.Contains(n.Content, "plantilla de siempre") {
+		t.Fatalf("por defecto: %v %v %+v", err, created, n)
+	}
+	// configurado
+	s, _ = mk(func(s *Storage) {
+		s.DailyFolder, s.DailyNameFormat, s.TemplatesFolder = "diario/2026", "AAAA.MM.DD", "moldes"
+	})
+	os.MkdirAll(filepath.Join(s.BaseDir, "moldes"), 0o755)
+	os.WriteFile(filepath.Join(s.BaseDir, "moldes", "daily.md"), []byte("# {{date}}\n\ndel molde propio\n"), 0o644)
+	n, created, err = s.DailyNote(day)
+	if err != nil || !created || n.Path != filepath.Join(s.BaseDir, "diario", "2026", "2026.10.06.md") || !strings.Contains(n.Content, "del molde propio") {
+		t.Fatalf("configurado: %v %v %+v", err, created, n)
+	}
+	if n2, created2, err := s.DailyNote(day); err != nil || created2 || n2.Path != n.Path {
+		t.Errorf("la segunda vez abre la misma sin crear: %v %v", err, created2)
+	}
+	if !s.InTemplates(filepath.Join(s.BaseDir, "moldes", "daily.md")) || s.InTemplates(filepath.Join(s.BaseDir, "templates", "x.md")) {
+		t.Error("InTemplates sigue la carpeta configurada")
+	}
+	if got := s.Templates(); len(got) != 1 || got[0] != "daily" {
+		t.Errorf("Templates lee la carpeta configurada: %v", got)
+	}
+	// un nombre con letras pasa por slug y la segunda vez se encuentra (no se duplica ni falla)
+	s, _ = mk(func(s *Storage) { s.DailyNameFormat = "Diario YYYY MM DD" })
+	a, c1, err := s.DailyNote(day)
+	b, c2, err2 := s.DailyNote(day)
+	if err != nil || err2 != nil || !c1 || c2 || a.Path != b.Path || !strings.HasSuffix(a.Path, "diario-2026-10-06.md") {
+		t.Errorf("nombre con letras: %v %v %v %v %q", err, err2, c1, c2, a.Path)
+	}
+	// inválidos: los de siempre y nada fuera
+	s, root := mk(func(s *Storage) { s.DailyFolder, s.DailyNameFormat, s.TemplatesFolder = "../fuera", "nota", "/abs" })
+	n, _, err = s.DailyNote(day)
+	if err != nil || n.Path != filepath.Join(s.BaseDir, "journal", "2026-10-06.md") {
+		t.Errorf("inválidos vuelven a los de siempre: %v %+v", err, n)
+	}
+	if _, err := os.Stat(filepath.Join(root, "fuera")); err == nil {
+		t.Error("no se escribe fuera de la carpeta de notas")
+	}
+}

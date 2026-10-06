@@ -51,8 +51,12 @@ type AppModel struct {
 // New crea el modelo con la configuración dada y carga las notas.
 func New(cfg *config.Config) (*AppModel, error) {
 	storage.MaxNoteBytes = cfg.MaxNoteBytes()
+	storage.TrashDays = cfg.TrashDays
+	storage.KanbanTag = cfg.KanbanTag
 	store := storage.New(cfg.NotesDir)
-	store.DateFormatPref, store.DateNoticeSeen = cfg.DateFormat, cfg.DateFormatNoticeShown
+	store.DateFormatPref, store.DateNoticeSeen, store.DateNoticeOff = cfg.DateFormat, cfg.DateFormatNoticeShown, !cfg.DateFormatNotice
+	store.TemplatesFolder, store.DailyFolder, store.DailyNameFormat = cfg.TemplatesFolder, cfg.DailyFolder, cfg.DailyName
+	store.NotesSort = cfg.NotesSort
 	if _, err := store.ListNotes(); err != nil {
 		return nil, err
 	}
@@ -433,6 +437,7 @@ func (m *AppModel) afterChange() {
 func (m *AppModel) onSettingsChange() {
 	theme.PopupSolid = m.c.cfg.PopupBackground == config.PopupBackgroundTheme
 	m.c.keys = NewKeymap(m.c.cfg)
+	m.notes.reload() // notes_sort
 	m.c.reload()
 	m.tasks.list.set(m.tasks.list.cursor, len(m.c.tasks))
 	m.relayout()

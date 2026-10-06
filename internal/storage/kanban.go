@@ -59,8 +59,8 @@ func scanTags(text string) []tagHit {
 		}
 		tok := strings.ToLower(text[loc[0]:loc[1]])
 		switch {
-		case strings.HasPrefix(tok, "#kb/") && len(tok) > 4 && !strings.ContainsRune(tok[4:], '/'):
-			hits = append(hits, tagHit{start: loc[0], end: loc[1], id: tok[4:]})
+		case strings.HasPrefix(tok, kanbanPrefix()) && len(tok) > len(kanbanPrefix()) && !strings.ContainsRune(tok[len(kanbanPrefix()):], '/'):
+			hits = append(hits, tagHit{start: loc[0], end: loc[1], id: tok[len(kanbanPrefix()):]})
 		case legacyDoing[tok]:
 			hits = append(hits, tagHit{start: loc[0], end: loc[1], id: "doing", legacy: true})
 		}
@@ -162,7 +162,7 @@ func RewriteForColumnIn(line string, cols Columns, target int, fm DateFormat) (s
 	hits := scanTags(rest)
 	tag := ""
 	if target != 0 && target != cols.DoneIndex() {
-		tag = "#kb/" + cols[target]
+		tag = "#" + KanbanTag + "/" + cols[target]
 	}
 	// la que se reemplaza en su sitio: el primer #kb/, o si no el primero del formato anterior
 	keep := -1
@@ -436,4 +436,45 @@ func (s *Storage) SwapTasks(notePath string, lineA, lineB int, expected time.Tim
 		return 0, 0, err
 	}
 	return newA, newB, nil
+}
+
+// KanbanTag es el prefijo de la etiqueta de columna del tablero (`kanban_tag` en la configuración; `kb` por defecto: `#kb/doing`). Lo fija la app o la CLI al arrancar.
+var KanbanTag = "kb"
+
+// kanbanPrefix es el comienzo, en minúscula, de la etiqueta de columna: "#kb/".
+func kanbanPrefix() string { return "#" + strings.ToLower(KanbanTag) + "/" }
+
+var linkSpanRe = regexp.MustCompile(`\[\[[^\]\n]*\]\]|\[[^\]\n]*\]\([^)\n]*\)`)
+
+// retagLine cambia, en una línea de tarea, las etiquetas de columna `#from/<id>` por `#to/<id>`: solo las que son etiquetas de verdad (al principio o tras un espacio), no las
+// que están dentro de código en línea ni de un enlace ([[…]] o [texto](url)); lo demás de la línea no se toca. Es idempotente: sin etiquetas `from`, no cambia nada.
+func retagLine(line, from, to string) string {
+	prefix := "#" + strings.ToLower(from) + "/"
+	mask := inlineCodeMask(line)
+	for _, loc := range linkSpanRe.FindAllStringIndex(line, -1) {
+		for i := loc[0]; i < loc[1] && i < len(mask); i++ {
+			mask[i] = true
+		}
+	}
+	var b strings.Builder
+	last := 0
+	for _, loc := range tokenRe.FindAllStringIndex(line, -1) {
+		if (loc[0] > 0 && line[loc[0]-1] != ' ' && line[loc[0]-1] != '\t') || mask[loc[0]] {
+			continue
+		}
+		tok := line[loc[0]:loc[1]]
+		if lt := strings.ToLower(tok); strings.HasPrefix(lt, prefix) && len(lt) > len(prefix) && !strings.ContainsRune(lt[len(prefix):], '/') {
+			b.WriteString(line[last:loc[0]])
+			b.WriteString("#" + to + "/" + tok[len(prefix):])
+			last = loc[1]
+		}
+	}
+	b.WriteString(line[last:])
+	return b.String()
+}
+
+// RetagKanban cambia el prefijo de la etiqueta de columna en todas las tareas del vault: `#from/<columna>` pasa a `#to/<columna>`. Solo toca líneas de tarea, sin tocar código
+// en línea ni enlaces; escribe cada nota de forma atómica y es idempotente. Con dryRun no escribe nada. Devuelve las líneas cambiadas.
+func (s *Storage) RetagKanban(from, to string, dryRun bool) ([]DateChange, error) {
+	return s.rewriteTaskLines(func(l string) string { return retagLine(l, from, to) }, dryRun)
 }

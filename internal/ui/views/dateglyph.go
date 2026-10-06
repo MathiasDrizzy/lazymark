@@ -26,8 +26,14 @@ var glyphSets = [2][5]string{
 	{textStart, textDue, textDone, textScheduled, textCreated},
 }
 
+// DateGlyphs son los glifos propios de la configuración (`date_glyphs`), por campo; un vacío es "sin glifo propio": se usa el de Nerd Font o el de texto.
+var DateGlyphs [5]string
+
 // DateGlyph es el glifo con el que se dibuja el campo f.
 func DateGlyph(f storage.DateField) string {
+	if g := DateGlyphs[f]; g != "" {
+		return g
+	}
 	g := [2]string{glyphSets[0][f], glyphSets[1][f]}
 	if DateIcons {
 		return g[0]

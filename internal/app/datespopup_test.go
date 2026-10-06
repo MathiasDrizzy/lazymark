@@ -605,3 +605,131 @@ func TestHandWrittenGlyphsOfBothSetsAreColored(t *testing.T) {
 		}
 	}
 }
+
+// TestDateWarningsOption (ORD-025 O1): con date_warnings en false el popup de Fechas no avisa que el inicio es posterior al vencimiento (y guarda igual); por defecto avisa.
+func TestDateWarningsOption(t *testing.T) {
+	for _, on := range []bool{true, false} {
+		m, _, _ := datesRig(t)
+		m.c.cfg.DateWarnings = on
+		press(m, "d")
+		typeText(m, "2026-10-08")
+		press(m, "tab")
+		typeText(m, "2026-10-05")
+		if got := strings.Contains(plain(m), "posterior al vencimiento"); got != on {
+			t.Errorf("date_warnings=%v: aviso visible=%v", on, got)
+		}
+	}
+}
+
+// TestDateFormatNoticeOption (ORD-025 O2): con date_format_notice en false el aviso único del vault con emojis no aparece nunca; por defecto aparece una vez.
+func TestDateFormatNoticeOption(t *testing.T) {
+	dir := t.TempDir()
+	os.WriteFile(filepath.Join(dir, "n.md"), []byte("- [ ] a 📅 2026-01-01\n- [ ] b\n"), 0o644)
+	for _, off := range []bool{false, true} {
+		s := storage.New(dir)
+		s.DateNoticeOff = off
+		s.WriteDateFormat() // en un vault solo con emojis activa la excepción y prepara el aviso
+		got := s.TakeDateFormatNotice()
+		if off && got != "" {
+			t.Errorf("apagado no avisa nunca: %q", got)
+		}
+		if !off && got == "" {
+			t.Error("por defecto avisa una vez")
+		}
+	}
+}
+
+// TestSettingsOptionRows (ORD-025 UI): Ajustes muestra las 13 filas nuevas (la lista se desplaza), cada una cambia su valor, se aplica a la capa de datos y queda en el archivo
+// de configuración; los de texto validan lo escrito (uno inválido no cambia nada) y el prefijo del tablero avisa que no migra las notas.
+func TestSettingsOptionRows(t *testing.T) {
+	oldG, oldTD, oldKT := views.DateGlyphs, storage.TrashDays, storage.KanbanTag
+	t.Cleanup(func() { views.DateGlyphs, storage.TrashDays, storage.KanbanTag = oldG, oldTD, oldKT })
+	m := newTestModel(t, 120, 40)
+	press(m, ",")
+	sp := m.c.top().(*settingsPopup)
+	cfg := m.c.cfg
+	// las filas existen, con texto y valor, y se alcanzan con el cursor (la lista se desplaza)
+	for id := setDateWarnings; id <= setDateGlyphs; id++ {
+		if sp.label(id) == "" || strings.TrimSpace(sp.value(id)) == "" {
+			t.Errorf("la fila %d de Ajustes debe tener texto y valor", id)
+		}
+	}
+	sp.list.set(int(setDateGlyphs), sp.n)
+	if out := plain(m); !strings.Contains(out, "Glifos de las fechas") {
+		t.Errorf("la última fila se ve al bajar el cursor:\n%s", out)
+	}
+	// interruptores y presets
+	sp.change(setDateWarnings, 1)
+	sp.change(setDateFormatNotice, 1)
+	sp.change(setHintIdle, 1)  // 20 → 30
+	sp.change(setHintShow, -1) // 15 → 10
+	sp.change(setHintEvery, 1) // 60 → 90
+	sp.change(setTrashDays, 1) // 20 → 30
+	sp.change(setNotesSort, 1)
+	sp.change(setTasksSort, 1)
+	if cfg.DateWarnings || cfg.DateFormatNotice || cfg.ClickHintIdleSeconds != 30 || cfg.ClickHintShowSeconds != 10 || cfg.ClickHintEverySeconds != 90 || cfg.TrashDays != 30 || cfg.NotesSort != "modified" || cfg.TasksSort != "due" {
+		t.Errorf("los cambios de las filas: %+v", cfg)
+	}
+	if storage.TrashDays != 30 || !m.c.store.DateNoticeOff || m.c.store.NotesSort != "modified" {
+		t.Errorf("se aplican a la capa de datos: días=%d aviso apagado=%v orden=%q", storage.TrashDays, m.c.store.DateNoticeOff, m.c.store.NotesSort)
+	}
+	// show nunca llega a every: subir show por encima de every sube every
+	for i := 0; i < 12; i++ {
+		sp.change(setHintShow, 1)
+	}
+	if cfg.ClickHintShowSeconds >= cfg.ClickHintEverySeconds {
+		t.Errorf("visible (%d) debe ser menor que cada (%d)", cfg.ClickHintShowSeconds, cfg.ClickHintEverySeconds)
+	}
+	// texto: válido
+	typeInto := func(id settingID, text string) {
+		sp.change(id, 1)
+		press(m, "ctrl+u")
+		typeText(m, text)
+		press(m, "enter")
+	}
+	typeInto(setDailyFolder, "diario/2026")
+	typeInto(setTemplatesFolder, "moldes")
+	typeInto(setDailyName, "AAAA.MM.DD")
+	typeInto(setDateGlyphs, "- D - - 日")
+	if cfg.DailyFolder != "diario/2026" || cfg.TemplatesFolder != "moldes" || cfg.DailyName != "AAAA.MM.DD" || cfg.DateGlyphs["due"] != "D" || cfg.DateGlyphs["created"] != "日" || len(cfg.DateGlyphs) != 2 {
+		t.Errorf("los textos válidos se guardan: %+v %v", cfg, cfg.DateGlyphs)
+	}
+	if m.c.store.DailyFolder != "diario/2026" || views.DateGlyph(storage.DateDue) != "D" {
+		t.Errorf("y se aplican: %q %q", m.c.store.DailyFolder, views.DateGlyph(storage.DateDue))
+	}
+	// texto: inválido (nada cambia)
+	typeInto(setDailyFolder, "../fuera")
+	typeInto(setDailyName, "nota")
+	typeInto(setTemplatesFolder, "/abs")
+	typeInto(setDateGlyphs, "ab")
+	if cfg.DailyFolder != "diario/2026" || cfg.DailyName != "AAAA.MM.DD" || cfg.TemplatesFolder != "moldes" || cfg.DateGlyphs["due"] != "D" {
+		t.Errorf("un valor inválido no cambia nada: %+v", cfg)
+	}
+	if !strings.Contains(lastRow(m), "no válido") && !strings.Contains(lastRow(m), "Invalid") {
+		t.Errorf("y lo dice: %q", lastRow(m))
+	}
+	// prefijo del tablero: avisa del retag
+	typeInto(setKanbanTag, "board")
+	if cfg.KanbanTag != "board" || storage.KanbanTag != "board" || !strings.Contains(lastRow(m), "kanban retag") {
+		t.Errorf("kanban_tag: %q %q fila=%q", cfg.KanbanTag, storage.KanbanTag, lastRow(m))
+	}
+	typeInto(setKanbanTag, "1 mal")
+	if cfg.KanbanTag != "board" {
+		t.Errorf("un prefijo inválido no cambia nada: %q", cfg.KanbanTag)
+	}
+	// quedó en el archivo y se lee de vuelta
+	data, err := os.ReadFile(cfg.Path())
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, want := range []string{`"date_warnings": false`, `"date_format_notice": false`, `"click_hint_idle_seconds": 30`, `"trash_days": 30`, `"notes_sort": "modified"`, `"tasks_sort": "due"`,
+		`"daily_folder": "diario/2026"`, `"daily_name": "AAAA.MM.DD"`, `"templates_folder": "moldes"`, `"kanban_tag": "board"`, `"due": "D"`} {
+		if !strings.Contains(string(data), want) {
+			t.Errorf("el archivo de configuración debe llevar %s", want)
+		}
+	}
+	back, err := config.LoadReadOnly(m.c.store.BaseDir)
+	if err != nil || back.KanbanTag != "board" || back.TrashDays != 30 || back.DailyName != "AAAA.MM.DD" || back.DateGlyphs["due"] != "D" {
+		t.Errorf("al reabrir se lee lo guardado: %v %+v", err, back)
+	}
+}

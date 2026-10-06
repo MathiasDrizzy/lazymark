@@ -329,3 +329,39 @@ func TestImageRefsWithEscapes(t *testing.T) {
 		}
 	}
 }
+
+// TestNotesSortOption (ORD-025 O7): el árbol ordena las notas por nombre por defecto; con notes_sort = "modified" las más recientes primero (las carpetas siguen por nombre).
+func TestNotesSortOption(t *testing.T) {
+	dir := t.TempDir()
+	os.MkdirAll(filepath.Join(dir, "zeta"), 0o755)
+	os.MkdirAll(filepath.Join(dir, "alfa"), 0o755)
+	for name, age := range map[string]int{"a.md": 3, "b.md": 1, "c.md": 2} {
+		p := filepath.Join(dir, name)
+		os.WriteFile(p, []byte("# "+name+"\n"), 0o644)
+		mt := time.Now().Add(-time.Duration(age) * time.Hour)
+		os.Chtimes(p, mt, mt)
+	}
+	names := func(s *Storage) string {
+		es, err := s.ListTreeEntries(map[string]bool{})
+		if err != nil {
+			t.Fatal(err)
+		}
+		var out []string
+		for _, e := range es {
+			out = append(out, e.Name)
+		}
+		return strings.Join(out, ",")
+	}
+	s := New(dir)
+	if got := names(s); got != "alfa,zeta,a.md,b.md,c.md" {
+		t.Errorf("por defecto, por nombre: %s", got)
+	}
+	s.NotesSort = "modified"
+	if got := names(s); got != "alfa,zeta,b.md,c.md,a.md" {
+		t.Errorf("modified: las más recientes primero: %s", got)
+	}
+	s.NotesSort = "cualquier cosa"
+	if got := names(s); got != "alfa,zeta,a.md,b.md,c.md" {
+		t.Errorf("un valor desconocido es por nombre: %s", got)
+	}
+}

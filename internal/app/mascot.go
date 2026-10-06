@@ -81,22 +81,38 @@ var hintNow = time.Now
 type hintTickMsg struct{}
 
 // hintWait es cuánto falta, con idle de quietud, para la próxima frontera: aparecer tras hintIdleAfter, irse hintShowFor después y volver cada hintEvery.
-func hintWait(idle time.Duration) time.Duration {
+func hintWait(idle time.Duration, ht hintTimes) time.Duration {
 	if idle < 0 {
-		return hintIdleAfter // un reloj que retrocede: se vuelve a mirar tras hintIdleAfter, nunca en un bucle de ticks inmediatos
+		return ht.Idle // un reloj que retrocede: se vuelve a mirar tras la quietud, nunca en un bucle de ticks inmediatos
 	}
-	if idle < hintIdleAfter {
-		return hintIdleAfter - idle
+	if idle < ht.Idle {
+		return ht.Idle - idle
 	}
-	phase := (idle - hintIdleAfter) % hintEvery
-	if phase < hintShowFor {
-		return hintShowFor - phase
+	phase := (idle - ht.Idle) % ht.Every
+	if phase < ht.Show {
+		return ht.Show - phase
 	}
-	return hintEvery - phase
+	return ht.Every - phase
+}
+
+// hintTimes es la cadencia del "click me!": quietud antes de aparecer, cuánto se ve y cada cuánto vuelve (click_hint_*_seconds en la configuración).
+type hintTimes struct{ Idle, Show, Every time.Duration }
+
+// defaultHintTimes es la cadencia por defecto (las constantes de arriba).
+var defaultHintTimes = hintTimes{hintIdleAfter, hintShowFor, hintEvery}
+
+// hintTimes lee la cadencia de la configuración; un valor fuera de rango (config a mano sin validar) cae en el de por defecto.
+func (m *AppModel) hintTimes() hintTimes {
+	c := m.c.cfg
+	idle, show, every := time.Duration(c.ClickHintIdleSeconds)*time.Second, time.Duration(c.ClickHintShowSeconds)*time.Second, time.Duration(c.ClickHintEverySeconds)*time.Second
+	if idle < 5*time.Second || show < 5*time.Second || every <= show {
+		return defaultHintTimes
+	}
+	return hintTimes{idle, show, every}
 }
 
 func (m *AppModel) hintTickCmd() tea.Cmd {
-	wait := hintWait(hintNow().Sub(m.mascot.lastInput)) + 50*time.Millisecond // un poco después de la frontera, ya del otro lado
+	wait := hintWait(hintNow().Sub(m.mascot.lastInput), m.hintTimes()) + 50*time.Millisecond // un poco después de la frontera, ya del otro lado
 	return tea.Tick(wait, func(time.Time) tea.Msg { return hintTickMsg{} })
 }
 
@@ -107,8 +123,9 @@ func (m *AppModel) hintShowing(kind string, r Rect) bool {
 	if st.clicked || st.playing || !m.c.cfg.ClickHint || !m.c.cfg.MouseClick || len(m.c.popups) > 0 || !m.mascotShows(kind, r) {
 		return false
 	}
-	idle := hintNow().Sub(st.lastInput) - hintIdleAfter
-	return idle >= 0 && idle%hintEvery < hintShowFor
+	ht := m.hintTimes()
+	idle := hintNow().Sub(st.lastInput) - ht.Idle
+	return idle >= 0 && idle%ht.Every < ht.Show
 }
 
 // mascotTickMsg avanza un cuadro de la animación de la generación gen.

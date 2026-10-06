@@ -212,7 +212,7 @@ func (p *datesPopup) render(l Layout) string {
 	switch {
 	case p.err != "":
 		lines = append(lines, lipgloss.NewStyle().Foreground(theme.ColorRed).Render(textwidth.Truncate(p.err, w-6, "…")))
-	case p.startAfterDue():
+	case p.c.cfg.DateWarnings && p.startAfterDue():
 		lines = append(lines, lipgloss.NewStyle().Foreground(theme.ColorYellow).Render(textwidth.Truncate(i18n.T("Aviso: el inicio es posterior al vencimiento (se guarda igual)", "Warning: the start is after the due date (it is saved anyway)"), w-6, "…")))
 	default:
 		lines = append(lines, "")

@@ -107,8 +107,12 @@ func newService(notesDir string, agent bool) (*Service, error) {
 		titles[i] = c.DisplayTitle(lang)
 	}
 	storage.MaxNoteBytes = cfg.MaxNoteBytes()
+	storage.TrashDays = cfg.TrashDays
+	storage.KanbanTag = cfg.KanbanTag
 	store := storage.New(cfg.NotesDir)
-	store.DateFormatPref, store.DateNoticeSeen = cfg.DateFormat, cfg.DateFormatNoticeShown
+	store.DateFormatPref, store.DateNoticeSeen, store.DateNoticeOff = cfg.DateFormat, cfg.DateFormatNoticeShown, !cfg.DateFormatNotice
+	store.TemplatesFolder, store.DailyFolder, store.DailyNameFormat = cfg.TemplatesFolder, cfg.DailyFolder, cfg.DailyName
+	store.NotesSort = cfg.NotesSort
 	return &Service{Store: store, cfg: cfg, Cols: storage.Columns(cfg.KanbanIDs()), Titles: titles, Config: cfg.KanbanColumns}, nil
 }
 
@@ -615,4 +619,37 @@ func SetAgentLanguage(notesDir string) {
 	} else {
 		i18n.SetLanguage("en")
 	}
+}
+
+// RetagDTO es el resultado de `kanban retag`.
+type RetagDTO struct {
+	From    string          `json:"from"`
+	To      string          `json:"to"`
+	DryRun  bool            `json:"dry_run"`
+	Notes   int             `json:"notes"`
+	Lines   int             `json:"lines"`
+	Changes []DateChangeDTO `json:"changes"`
+	Error   string          `json:"error,omitempty"`
+}
+
+// RetagKanban cambia el prefijo de la etiqueta de columna de las tareas del vault (`#from/<columna>` pasa a `#to/<columna>`); con dryRun solo cuenta y muestra el cambio.
+func (s *Service) RetagKanban(from, to string, dryRun bool) (RetagDTO, error) {
+	if !config.KanbanTagRe.MatchString(from) || !config.KanbanTagRe.MatchString(to) {
+		return RetagDTO{}, usage("--from y --to deben empezar con una letra y llevar solo letras, cifras, - o _ (hasta 20 caracteres)", "--from and --to must start with a letter and use only letters, digits, - or _ (up to 20 characters)")
+	}
+	if strings.EqualFold(from, to) {
+		return RetagDTO{}, usage("--from y --to son iguales: no hay nada que cambiar", "--from and --to are the same: nothing to change")
+	}
+	changes, err := s.Store.RetagKanban(from, to, dryRun)
+	out := RetagDTO{From: from, To: to, DryRun: dryRun, Changes: []DateChangeDTO{}}
+	seen := map[string]bool{}
+	for _, c := range changes {
+		out.Changes = append(out.Changes, DateChangeDTO{Note: c.Rel, Line: c.Line, Before: c.Before, After: c.After})
+		seen[c.Path] = true
+	}
+	out.Lines, out.Notes = len(changes), len(seen)
+	if err != nil {
+		out.Error = err.Error()
+	}
+	return out, err
 }

@@ -71,6 +71,7 @@ func (p *parser) service() (*ops.Service, error) {
 	if err != nil {
 		return nil, err
 	}
+	views.DateGlyphs = svc.UserConfig().DateGlyphArray() // los glifos propios de las fechas (date_glyphs) también valen en la salida de texto
 	svc.Notice = func(msg string) { fmt.Fprintln(Stderr, plain(i18n.T("aviso: ", "note: ")+msg)) }
 	return svc, nil
 }
@@ -252,7 +253,7 @@ func finishMove(w io.Writer, p *parser, svc *ops.Service, do func() (ops.TaskDTO
 	if err != nil {
 		return err
 	}
-	if t.Start != "" && t.Due != "" && t.Start > t.Due { // el inicio después del vencimiento: se avisa por stderr, no bloquea
+	if svc.UserConfig().DateWarnings && t.Start != "" && t.Due != "" && t.Start > t.Due { // (con date_warnings activo) el inicio después del vencimiento: se avisa por stderr, no bloquea
 		fmt.Fprintln(Stderr, plain(fmt.Sprintf(i18n.T("aviso: el inicio (%s) es posterior al vencimiento (%s)", "warning: the start (%s) is after the due date (%s)"), t.Start, t.Due)))
 	}
 	if p.json {
@@ -271,9 +272,13 @@ func finishMove(w io.Writer, p *parser, svc *ops.Service, do func() (ops.TaskDTO
 // los emojis del archivo: "  ▸ 2026-05-01 ◷ 2026-05-10 (vencida)". `--json` lleva las fechas en sus campos.
 func datesSuffix(t ops.TaskDTO) string {
 	var parts []string
-	for _, d := range [][2]string{{"▸", t.Start}, {"◑", t.Scheduled}, {"◷", t.Due}, {"✓", t.Completed}, {"+", t.Created}} {
-		if d[1] != "" {
-			parts = append(parts, d[0]+" "+d[1])
+	for _, d := range []struct {
+		g    string
+		f    storage.DateField
+		date string
+	}{{"▸", storage.DateStart, t.Start}, {"◑", storage.DateScheduled, t.Scheduled}, {"◷", storage.DateDue, t.Due}, {"✓", storage.DateDone, t.Completed}, {"+", storage.DateCreated, t.Created}} {
+		if d.date != "" {
+			parts = append(parts, cliGlyph(d.f, d.g)+" "+d.date)
 		}
 	}
 	if len(parts) == 0 {
@@ -646,7 +651,7 @@ func datesSuffixColored(t ops.TaskDTO, today string) string {
 		date string
 	}{{"▸", storage.DateStart, t.Start}, {"◑", storage.DateScheduled, t.Scheduled}, {"◷", storage.DateDue, t.Due}, {"✓", storage.DateDone, t.Completed}, {"+", storage.DateCreated, t.Created}} {
 		if d.date != "" {
-			parts = append(parts, views.DateStyleFor(d.f, d.date, t.Done, today).Render(d.g+" "+d.date))
+			parts = append(parts, views.DateStyleFor(d.f, d.date, t.Done, today).Render(cliGlyph(d.f, d.g)+" "+d.date))
 		}
 	}
 	if len(parts) == 0 {
@@ -657,4 +662,98 @@ func datesSuffixColored(t ops.TaskDTO, today string) string {
 		out += " (" + i18n.T("vencida", "overdue") + ")"
 	}
 	return out
+}
+
+const kanbanUsageES = `uso: lazymark kanban retag --from <prefijo> --to <prefijo> [--dry-run] [--json] [--dir <carpeta>]
+Cambia el prefijo de la etiqueta de columna del tablero en todas las tareas: #kb/doing pasa a #<nuevo>/doing. Úsalo después de cambiar kanban_tag en la configuración, porque cambiar el ajuste NO migra las notas que ya tienen otro prefijo. Solo toca líneas de tarea (no párrafos, código en línea ni enlaces), escribe cada nota de forma
+atómica y es idempotente: una segunda corrida no cambia nada. Con --dry-run muestra el cambio sin escribir nada. códigos de salida: 0 ok · 1 falló · 2 argumentos inválidos · 4 una nota cambió mientras se cambiaba (esa no se escribió)
+
+`
+
+const kanbanUsageEN = `usage: lazymark kanban retag --from <prefix> --to <prefix> [--dry-run] [--json] [--dir <folder>]
+Changes the prefix of the board's column tag in every task: #kb/doing becomes #<new>/doing. Use it after changing kanban_tag in the configuration, because changing the setting does NOT migrate the notes that already have another prefix. It only touches task lines (not paragraphs, inline code or links), writes each note atomically and is
+idempotent: a second run changes nothing. With --dry-run it shows the change without writing anything. exit codes: 0 ok · 1 failed · 2 invalid arguments · 4 a note changed while it was being changed (that one was not written)
+
+`
+
+// RunKanban ejecuta `lazymark kanban …` (retag).
+func RunKanban(args []string, defaultNotesDir string) error {
+	return RunKanbanWithWriter(os.Stdout, args, defaultNotesDir)
+}
+
+// RunKanbanWithWriter ejecuta `lazymark kanban retag` escribiendo la salida en w.
+func RunKanbanWithWriter(w io.Writer, args []string, defaultNotesDir string) error {
+	help := usageText(kanbanUsageES, kanbanUsageEN)
+	if len(args) == 0 {
+		return &ops.Error{Code: ExitUsage, Err: errors.New(i18n.E("falta el subcomando (retag)", "missing subcommand (retag)") + "\n" + help)}
+	}
+	if args[0] == "-h" || args[0] == "--help" {
+		fmt.Fprint(w, help)
+		return nil
+	}
+	if args[0] != "retag" {
+		return &ops.Error{Code: ExitUsage, Err: fmt.Errorf(i18n.E("subcomando desconocido: %q (retag)", "unknown subcommand: %q (retag)"), args[0])}
+	}
+	p := newParser("kanban retag", defaultNotesDir)
+	var from, to string
+	var dry bool
+	p.fs.StringVar(&from, "from", "", "")
+	p.fs.StringVar(&to, "to", "", "")
+	p.fs.BoolVar(&dry, "dry-run", false, "")
+	if err := p.parse(args[1:]); err != nil {
+		return err
+	}
+	if p.help {
+		fmt.Fprint(w, help)
+		return nil
+	}
+	if err := p.need(0, "lazymark kanban retag --from <prefix> --to <prefix> [--dry-run]"); err != nil {
+		return err
+	}
+	svc, err := p.service()
+	if err != nil {
+		return err
+	}
+	res, err := svc.RetagKanban(from, to, dry)
+	if err != nil {
+		if res.Lines > 0 {
+			if p.json {
+				_ = printJSON(w, res)
+			} else {
+				fmt.Fprintln(w, plain(fmt.Sprintf(i18n.E("Cambio interrumpido: ya se escribieron %d línea(s) en %d nota(s):", "Change interrupted: %d line(s) in %d note(s) were already written:"), res.Lines, res.Notes)))
+				seen := map[string]bool{}
+				for _, c := range res.Changes {
+					if !seen[c.Note] {
+						seen[c.Note] = true
+						fmt.Fprintln(w, "  "+plain(c.Note))
+					}
+				}
+			}
+		}
+		return err
+	}
+	if p.json {
+		return printJSON(w, res)
+	}
+	for _, c := range res.Changes {
+		fmt.Fprintf(w, "%s\n", plain(fmt.Sprintf("%s:%d", c.Note, c.Line)))
+		fmt.Fprintf(w, "- %s\n+ %s\n", plain(c.Before), plain(c.After))
+	}
+	msg := i18n.E("%d línea(s) en %d nota(s): #%s/ pasa a #%s/", "%d line(s) in %d note(s): #%s/ becomes #%s/")
+	if dry {
+		msg += " (" + i18n.E("simulación: no se escribió nada", "dry run: nothing was written") + ")"
+	}
+	fmt.Fprintf(w, msg+"\n", res.Lines, res.Notes, from, to)
+	if !dry && res.Lines > 0 {
+		fmt.Fprintln(w, i18n.E("Recuerda poner kanban_tag = \""+to+"\" en la configuración (Ajustes) para que el tablero lea el nuevo prefijo.", "Remember to set kanban_tag = \""+to+"\" in the configuration (Settings) so the board reads the new prefix."))
+	}
+	return nil
+}
+
+// cliGlyph es el glifo de un campo de fecha en la salida de texto: el propio de la configuración (date_glyphs) o el símbolo de texto de siempre.
+func cliGlyph(f storage.DateField, def string) string {
+	if g := views.DateGlyphs[f]; g != "" {
+		return g
+	}
+	return def
 }

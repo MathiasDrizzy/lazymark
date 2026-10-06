@@ -63,7 +63,7 @@ func (c *core) reload() {
 	c.links = links.NewIndex(c.store.BaseDir, c.notes)
 	c.gen++
 	c.tags = views.CollectTags(c.notes)
-	c.tasks = views.CollectTasks(c.scopedNotes(), c.taskFilter)
+	c.collectTasks()
 	c.board = views.CollectKanban(c.notes, c.cols(), c.columnTitles())
 	c.trashCount = c.store.CountTrash()
 	if issues := c.store.TrashIssues(); len(issues) > 0 && len(issues) != c.trashWarned {
@@ -268,4 +268,12 @@ func (c *core) columnTitles() []string {
 		titles[i] = col.DisplayTitle(lang)
 	}
 	return titles
+}
+
+// collectTasks arma la lista del panel Tareas (con el alcance y el filtro de ahora) en el orden de tasks_sort: el de las notas (por defecto) o por vencimiento.
+func (c *core) collectTasks() {
+	c.tasks = views.CollectTasks(c.scopedNotes(), c.taskFilter)
+	if c.cfg.TasksSort == "due" {
+		views.SortTasksByDue(c.tasks)
+	}
 }
