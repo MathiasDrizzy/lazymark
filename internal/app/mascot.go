@@ -63,12 +63,12 @@ type mascotState struct {
 	lastInput time.Time // la última tecla o clic: el "click me!" cuenta el tiempo sin interacción desde aquí
 }
 
-// El "click me!" sobre la mascota (pedido de Mathias: muy sutil y solo algunas veces). Cadencia: tras 2 minutos sin tocar nada aparece 3 segundos y se repite cada
-// 4 minutos de quietud; cualquier tecla o clic reinicia la cuenta, así nunca sale mientras se trabaja, y tras el primer clic en la mascota no vuelve más.
+// El "click me!" sobre la mascota (pedido de Mathias: muy sutil y solo algunas veces). Cadencia: tras 20 segundos sin tocar nada aparece 6 segundos y se repite cada
+// 90 segundos de quietud (antes 2 min / 3 s / 4 min: en la práctica nadie lo veía); cualquier tecla o clic reinicia la cuenta, así nunca sale mientras se trabaja, y tras el primer clic en la mascota no vuelve más.
 const (
-	hintIdleAfter = 2 * time.Minute
-	hintEvery     = 4 * time.Minute
-	hintShowFor   = 3 * time.Second
+	hintIdleAfter = 20 * time.Second
+	hintEvery     = 90 * time.Second
+	hintShowFor   = 6 * time.Second
 	hintText      = "click me!"
 )
 
@@ -79,10 +79,10 @@ var hintNow = time.Now
 // No es un tick fijo: en quietud son un par de avisos por ciclo.
 type hintTickMsg struct{}
 
-// hintWait es cuánto falta, con idle de quietud, para la próxima frontera: aparecer a los 2 min, irse 3 s después y volver cada 4 min.
+// hintWait es cuánto falta, con idle de quietud, para la próxima frontera: aparecer tras hintIdleAfter, irse hintShowFor después y volver cada hintEvery.
 func hintWait(idle time.Duration) time.Duration {
 	if idle < 0 {
-		return hintIdleAfter // un reloj que retrocede: se vuelve a mirar en 2 min, nunca en un bucle de ticks inmediatos
+		return hintIdleAfter // un reloj que retrocede: se vuelve a mirar tras hintIdleAfter, nunca en un bucle de ticks inmediatos
 	}
 	if idle < hintIdleAfter {
 		return hintIdleAfter - idle

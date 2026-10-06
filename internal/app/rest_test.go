@@ -376,12 +376,12 @@ func TestClickMeHintCycle(t *testing.T) {
 	at := func(d time.Duration) { now = base.Add(d) }
 
 	r := newRig()
-	at(time.Minute)
+	at(hintIdleAfter / 2)
 	if shows(r) {
-		t.Error("tras 1 minuto de quietud todavía no")
+		t.Error("antes de hintIdleAfter todavía no")
 	}
 	hidden := rows(r)
-	at(2*time.Minute + time.Second)
+	at(hintIdleAfter + time.Second)
 	if !shows(r) {
 		t.Fatalf("tras 2 min sin interacción aparece:\n%s", strings.Join(rows(r), "\n"))
 	}
@@ -391,11 +391,11 @@ func TestClickMeHintCycle(t *testing.T) {
 			t.Errorf("el aviso no mueve nada: la fila %d cambió:\n%q\n%q", i, hidden[i], shown[i])
 		}
 	}
-	at(2*time.Minute + 4*time.Second)
+	at(hintIdleAfter + hintShowFor + time.Second)
 	if shows(r) {
-		t.Error("a los 3 s desaparece")
+		t.Error("pasados hintShowFor desaparece")
 	}
-	at(6*time.Minute + time.Second)
+	at(hintIdleAfter + hintEvery + time.Second)
 	if !shows(r) {
 		t.Error("se repite 4 min después")
 	}
@@ -404,19 +404,19 @@ func TestClickMeHintCycle(t *testing.T) {
 	if shows(r) {
 		t.Error("tras una tecla no se muestra")
 	}
-	at(6*time.Minute + 2*time.Minute + 2*time.Second)
+	at(hintIdleAfter + hintEvery + hintIdleAfter + 2*time.Second)
 	if !shows(r) {
 		t.Error("2 min después de la última tecla vuelve")
 	}
 	// con un popup abierto no
 	press(r.AppModel, "?")
-	at(8*time.Minute + 5*time.Minute)
+	at(hintIdleAfter + hintEvery + hintIdleAfter + 5*time.Minute)
 	press(r.AppModel, "esc")
 
 	// con click_hint apagado en la configuración no aparece (la mascota sigue)
 	r1 := newRig()
 	r1.c.cfg.ClickHint = false
-	at(2*time.Minute + time.Second)
+	at(hintIdleAfter + time.Second)
 	if shows(r1) {
 		t.Error("con click_hint apagado no hay aviso")
 	}
@@ -424,14 +424,14 @@ func TestClickMeHintCycle(t *testing.T) {
 	// sin mouse no
 	r2 := newRig()
 	r2.c.cfg.MouseClick = false
-	at(2*time.Minute + time.Second)
+	at(hintIdleAfter + time.Second)
 	if shows(r2) {
 		t.Error("sin mouse no hay aviso")
 	}
 
 	// tras el primer clic en la mascota, nunca más
 	r3 := newRig()
-	at(2*time.Minute + time.Second)
+	at(hintIdleAfter + time.Second)
 	if !shows(r3) {
 		t.Fatal("antes del clic aparece")
 	}
@@ -455,7 +455,7 @@ func TestHintWait(t *testing.T) {
 		want time.Duration
 	}{
 		{0, hintIdleAfter},
-		{time.Minute, hintIdleAfter - time.Minute},
+		{hintIdleAfter / 2, hintIdleAfter / 2},
 		{hintIdleAfter, hintShowFor}, // acaba de aparecer: se espera a que se vaya
 		{hintIdleAfter + time.Second, hintShowFor - time.Second},
 		{hintIdleAfter + hintShowFor, hintEvery - hintShowFor}, // se fue: se espera a la próxima vez
