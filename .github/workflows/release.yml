@@ -20,7 +20,7 @@ jobs:
       - uses: goreleaser/goreleaser-action@e435ccd777264be153ace6237001ef4d979d3a7a # v6
         with:
           distribution: goreleaser
-          version: "~> v2"
+          version: v2.18.2 # exacta (la de la release v0.7.0): un "~> v2" tomaría una versión nueva sin que nadie la revise
           args: release --clean
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

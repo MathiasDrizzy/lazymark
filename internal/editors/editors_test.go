@@ -221,3 +221,27 @@ func TestWarnsWhenKeyIsTaken(t *testing.T) {
 		t.Errorf("nano: el error debe explicar cómo usar otra tecla: %v", err)
 	}
 }
+
+// TestNanoUninstallWithoutClosingMark (ORD-019 C.4 / H4): si el usuario borró la línea de cierre del bloque, desinstalar no sabe dónde acaba y NO borra lo que
+// sigue (antes se llevaba el resto del nanorc): avisa con un error, deja el archivo como estaba y el CLI sale con un código distinto de 0.
+func TestNanoUninstallWithoutClosingMark(t *testing.T) {
+	e := env(t)
+	rc := filepath.Join(e.Home, ".nanorc")
+	text := "set linenumbers\n" + nanoBegin + "\nbind M-7 \"{execute}x{enter}\" main\nset tabsize 4\nset mouse\n"
+	os.WriteFile(rc, []byte(text), 0o644)
+	done, err := Uninstall("nano", e)
+	if err == nil || !strings.Contains(err.Error(), nanoEnd) {
+		t.Fatalf("debe avisar que falta la línea de cierre: %v %v", done, err)
+	}
+	if b, _ := os.ReadFile(rc); string(b) != text {
+		t.Errorf("el nanorc no se toca:\n%s", b)
+	}
+	// con el cierre sí se quita solo el bloque
+	os.WriteFile(rc, []byte(text+nanoEnd+"\nset smooth\n"), 0o644)
+	if _, err := Uninstall("nano", e); err != nil {
+		t.Fatal(err)
+	}
+	if b, _ := os.ReadFile(rc); !strings.Contains(string(b), "set linenumbers") || !strings.Contains(string(b), "set smooth") || strings.Contains(string(b), "lazymark") {
+		t.Errorf("con el cierre se quita solo el bloque:\n%s", b)
+	}
+}

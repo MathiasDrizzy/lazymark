@@ -9,7 +9,6 @@ package image
 
 import (
 	"bytes"
-	"errors"
 	"fmt"
 	goimage "image"
 	_ "image/gif"
@@ -362,11 +361,11 @@ func (c *Client) isWanted(key string) bool {
 const MaxPixels = 40_000_000
 
 // ErrTooLarge es el error de una imagen con más de MaxPixels.
-var ErrTooLarge = errors.New("la imagen tiene demasiados píxeles")
+var ErrTooLarge = i18n.NewError("la imagen tiene demasiados píxeles", "image has too many pixels")
 
 func checkPixels(w, h int) error {
 	if w <= 0 || h <= 0 || int64(w)*int64(h) > MaxPixels {
-		return fmt.Errorf("%w (%dx%d, máximo %d)", ErrTooLarge, w, h, MaxPixels)
+		return i18n.Errorf("%w (%dx%d, máximo %d)", "%w (%dx%d, maximum %d)", ErrTooLarge, w, h, MaxPixels)
 	}
 	return nil
 }

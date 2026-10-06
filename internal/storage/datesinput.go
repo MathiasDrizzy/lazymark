@@ -1,7 +1,6 @@
 package storage
 
 import (
-	"errors"
 	"fmt"
 	"regexp"
 	"strconv"
@@ -12,7 +11,7 @@ import (
 )
 
 // ErrBadDateInput es el error de ParseDateInput cuando el texto no es una fecha que se entienda.
-var ErrBadDateInput = errors.New("no entiendo esa fecha")
+var ErrBadDateInput = i18n.NewError("no entiendo esa fecha", "not a date I understand")
 
 // weekdayNames son los nombres de los días de la semana en cada idioma de la interfaz, de domingo (0) a sábado (6), con sus variantes.
 // El primero de cada día es el que se muestra.

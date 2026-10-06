@@ -3,6 +3,7 @@ package storage
 import (
 	"encoding/json"
 	"fmt"
+	"github.com/MathiasDrizzy/lazymark/internal/i18n"
 	"github.com/MathiasDrizzy/lazymark/internal/safeio"
 	"os"
 	"path/filepath"
@@ -189,7 +190,7 @@ func (s *Storage) RestoreTrashItem(id string) error {
 	}
 
 	if target == nil {
-		return fmt.Errorf("elemento no encontrado en la papelera")
+		return i18n.Errorf("elemento no encontrado en la papelera", "item not found in trash")
 	}
 
 	srcPath := filepath.Join(s.trashDir(), target.ID)
@@ -220,7 +221,7 @@ func (s *Storage) RestoreTrashItem(id string) error {
 // DeleteTrashItem elimina permanentemente un elemento específico de la papelera
 func (s *Storage) DeleteTrashItem(id string) error {
 	if !validTrashID(id) {
-		return fmt.Errorf("id de papelera inválido: %q", id)
+		return i18n.Errorf("id de papelera inválido: %q", "invalid trash id: %q", id)
 	}
 	items, err := s.readTrashMeta()
 	if err != nil {

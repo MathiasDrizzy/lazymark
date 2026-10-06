@@ -6,7 +6,7 @@ package search
 import (
 	"bytes"
 	"context"
-	"fmt"
+	"github.com/MathiasDrizzy/lazymark/internal/i18n"
 	"io"
 	"os"
 	"path/filepath"
@@ -72,7 +72,7 @@ type Result struct {
 // Compile arma la expresión de la búsqueda; con Regex devuelve el error de sintaxis tal cual.
 func Compile(query string, opts Options) (*regexp.Regexp, error) {
 	if query == "" {
-		return nil, fmt.Errorf("la búsqueda está vacía")
+		return nil, i18n.Errorf("la búsqueda está vacía", "search is empty")
 	}
 	expr := query
 	if !opts.Regex {
@@ -83,12 +83,12 @@ func Compile(query string, opts Options) (*regexp.Regexp, error) {
 	}
 	if opts.Regex {
 		if tree, err := syntax.Parse(expr, syntax.Perl); err == nil && regexCost(tree) > maxRegexCost {
-			return nil, fmt.Errorf("expresión regular demasiado costosa: reduce las repeticiones ({n}) o las clases Unicode")
+			return nil, i18n.Errorf("expresión regular demasiado costosa: reduce las repeticiones ({n}) o las clases Unicode", "regular expression too costly: reduce the repetitions ({n}) or the Unicode classes")
 		}
 	}
 	re, err := regexp.Compile(expr)
 	if err != nil {
-		return nil, fmt.Errorf("expresión regular inválida: %w", err)
+		return nil, i18n.Errorf("expresión regular inválida: %w", "invalid regular expression: %w", err)
 	}
 	return re, nil
 }

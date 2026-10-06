@@ -53,7 +53,7 @@ func (p *parser) parse(args []string) error {
 // need exige exactamente n argumentos posicionales.
 func (p *parser) need(n int, usage string) error {
 	if len(p.posArgs) != n {
-		return &ops.Error{Code: ExitUsage, Err: fmt.Errorf("uso: %s", usage)}
+		return &ops.Error{Code: ExitUsage, Err: i18n.Errorf("uso: %s", "usage: %s", usage)}
 	}
 	return nil
 }
@@ -132,7 +132,7 @@ func RunTask(args []string, defaultNotesDir string) error {
 func RunTaskWithWriter(w io.Writer, args []string, defaultNotesDir string) error {
 	help := usageText(taskUsageES, taskUsageEN)
 	if len(args) == 0 {
-		return &ops.Error{Code: ExitUsage, Err: errors.New("falta el subcomando (list, toggle, move)\n" + help)}
+		return &ops.Error{Code: ExitUsage, Err: errors.New(i18n.E("falta el subcomando (list, toggle, move)", "missing subcommand (list, toggle, move)") + "\n" + help)}
 	}
 	action := args[0]
 	if action == "-h" || action == "--help" {
@@ -156,7 +156,7 @@ func RunTaskWithWriter(w io.Writer, args []string, defaultNotesDir string) error
 		p.fs.IntVar(&line, "line", 0, "")
 	case "move", "due", "start":
 	default:
-		return &ops.Error{Code: ExitUsage, Err: fmt.Errorf("subcomando de tarea desconocido: %q (list, toggle, move, due, start)", action)}
+		return &ops.Error{Code: ExitUsage, Err: i18n.Errorf("subcomando de tarea desconocido: %q (list, toggle, move, due, start)", "unknown task subcommand: %q (list, toggle, move, due, start)", action)}
 	}
 	if err := p.parse(args[1:]); err != nil {
 		return err
@@ -195,7 +195,7 @@ func RunTaskWithWriter(w io.Writer, args []string, defaultNotesDir string) error
 		var id string
 		if path != "" || line != 0 { // forma anterior
 			if path == "" || line <= 0 || len(p.posArgs) != 0 {
-				return &ops.Error{Code: ExitUsage, Err: errors.New("uso: lazymark task toggle --path <nota> --line <n>")}
+				return &ops.Error{Code: ExitUsage, Err: i18n.NewError("uso: lazymark task toggle --path <nota> --line <n>", "usage: lazymark task toggle --path <note> --line <n>")}
 			}
 			svc, err := p.service()
 			if err != nil {
@@ -280,7 +280,7 @@ func RunNote(args []string, defaultNotesDir string) error {
 func RunNoteWithWriter(w io.Writer, args []string, defaultNotesDir string) error {
 	help := usageText(noteUsageES, noteUsageEN)
 	if len(args) == 0 {
-		return &ops.Error{Code: ExitUsage, Err: errors.New("falta el subcomando (list, show, new)\n" + help)}
+		return &ops.Error{Code: ExitUsage, Err: errors.New(i18n.E("falta el subcomando (list, show, new)", "missing subcommand (list, show, new)") + "\n" + help)}
 	}
 	action := args[0]
 	if action == "-h" || action == "--help" {
@@ -303,7 +303,7 @@ func RunNoteWithWriter(w io.Writer, args []string, defaultNotesDir string) error
 		p.fs.BoolVar(&empty, "empty", false, "")
 		p.fs.StringVar(&template, "template", "", "")
 	default:
-		return &ops.Error{Code: ExitUsage, Err: fmt.Errorf("subcomando de nota desconocido: %q (list, show, new)", action)}
+		return &ops.Error{Code: ExitUsage, Err: i18n.Errorf("subcomando de nota desconocido: %q (list, show, new)", "unknown note subcommand: %q (list, show, new)", action)}
 	}
 	if err := p.parse(args[1:]); err != nil {
 		return err
@@ -354,7 +354,7 @@ func RunNoteWithWriter(w io.Writer, args []string, defaultNotesDir string) error
 
 	default: // new
 		if len(p.posArgs) == 0 {
-			return &ops.Error{Code: ExitUsage, Err: errors.New("uso: lazymark note new <título> [--folder <subcarpeta>] [--empty] [--template <nombre>]")}
+			return &ops.Error{Code: ExitUsage, Err: i18n.NewError("uso: lazymark note new <título> [--folder <subcarpeta>] [--empty] [--template <nombre>]", "usage: lazymark note new <title> [--folder <subfolder>] [--empty] [--template <name>]")}
 		}
 		svc, err := p.service()
 		if err != nil {
@@ -419,7 +419,7 @@ func RunSearchWithWriter(w io.Writer, args []string, defaultNotesDir string) err
 		return nil
 	}
 	if len(p.posArgs) == 0 {
-		return &ops.Error{Code: ExitUsage, Err: errors.New("uso: lazymark search <texto> [--regex] [--case] [--limit <n>] [--json]")}
+		return &ops.Error{Code: ExitUsage, Err: i18n.NewError("uso: lazymark search <texto> [--regex] [--case] [--limit <n>] [--json]", "usage: lazymark search <text> [--regex] [--case] [--limit <n>] [--json]")}
 	}
 	svc, err := p.service()
 	if err != nil {

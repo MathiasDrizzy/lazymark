@@ -314,3 +314,18 @@ func TestSlugDropsWikilinkBreakers(t *testing.T) {
 		t.Errorf("el nombre renombrado conserva caracteres de enlace: %q", b)
 	}
 }
+
+// TestImageRefsWithEscapes (ORD-019 C.5 / H6): lo que escribe `lazymark paste` (paréntesis, corchetes y espacios escapados) se lee de vuelta como la ruta real.
+func TestImageRefsWithEscapes(t *testing.T) {
+	s := New(t.TempDir())
+	imgs := s.extractImages("a ![](assets/foto-\\(1\\)-\\[x\\].png) b ![alt](assets/a%20b.png) c ![](assets/plano.png) d ![](assets/con(par.png)")
+	want := []string{"assets/foto-(1)-[x].png", "assets/a b.png", "assets/plano.png", "assets/con(par.png"}
+	if len(imgs) != len(want) {
+		t.Fatalf("imágenes: %q", imgs)
+	}
+	for i := range want {
+		if imgs[i] != want[i] {
+			t.Errorf("imagen %d = %q, se esperaba %q", i, imgs[i], want[i])
+		}
+	}
+}

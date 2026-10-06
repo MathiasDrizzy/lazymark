@@ -1,7 +1,6 @@
 package app
 
 import (
-	"fmt"
 	"os"
 	"path/filepath"
 	"sort"
@@ -179,7 +178,7 @@ func (m *AppModel) applyNotesDir(path string) tea.Cmd {
 		return nil
 	}
 	if !isDir(abs) {
-		m.c.errStatus("Carpeta no válida", "Invalid folder", fmt.Errorf("%s no es una carpeta", abs))
+		m.c.errStatus("Carpeta no válida", "Invalid folder", i18n.Errorf("%s no es una carpeta", "%s is not a folder", abs))
 		return nil
 	}
 	store := newStore(abs)

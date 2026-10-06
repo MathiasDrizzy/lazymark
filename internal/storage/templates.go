@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
+	"github.com/MathiasDrizzy/lazymark/internal/i18n"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -25,7 +26,7 @@ const maxTemplateBytes = 256 << 10
 
 // ErrTemplateInvalid es el error de una plantilla que no se puede usar: no es texto UTF-8 (bytes nulos, UTF-16, otra codificación) o pesa
 // más de maxTemplateBytes. No se crea ninguna nota con ella.
-var ErrTemplateInvalid = errors.New("plantilla no válida")
+var ErrTemplateInvalid = i18n.NewError("plantilla no válida", "invalid template")
 
 // templateVar reconoce una {{variable}}: el nombre es lo que haya entre las llaves, sin llaves ni saltos de línea.
 var templateVar = regexp.MustCompile(`\{\{[^{}\n]{1,40}\}\}`)
@@ -37,7 +38,7 @@ func (s *Storage) templatePath(name string) (string, error) {
 		name = name[:len(name)-3]
 	}
 	if name == "" || name == "." || name == ".." || strings.ContainsAny(name, `/\:`) || strings.IndexFunc(name, func(r rune) bool { return r < 0x20 || r == 0x7f }) >= 0 {
-		return "", fmt.Errorf("%w: nombre de plantilla no válido %q", ErrTemplateNotFound, name)
+		return "", i18n.Errorf("%w: nombre de plantilla no válido %q", "%w: invalid template name %q", ErrTemplateNotFound, name)
 	}
 	p, err := s.ResolveNote(s.templateFile(name))
 	if err != nil {
@@ -50,7 +51,7 @@ func (s *Storage) templatePath(name string) (string, error) {
 }
 
 // ErrTemplateNotFound es el error cuando la plantilla pedida no existe en templates/ (o su nombre no vale).
-var ErrTemplateNotFound = errors.New("no existe la plantilla")
+var ErrTemplateNotFound = i18n.NewError("no existe la plantilla", "template does not exist")
 
 // Templates lista los nombres (sin ".md") de las plantillas de templates/, en orden alfabético. Sin carpeta, lista vacía.
 func (s *Storage) Templates() []string {
@@ -97,20 +98,20 @@ func (s *Storage) renderTemplate(name, title string, now time.Time) (string, []s
 		return "", nil, err
 	}
 	if !fi.Mode().IsRegular() { // una tubería o un dispositivo no es una plantilla (y leerlo podría bloquear)
-		return "", nil, fmt.Errorf("%w: %q no es un archivo", ErrTemplateInvalid, name)
+		return "", nil, i18n.Errorf("%w: %q no es un archivo", "%w: %q is not a file", ErrTemplateInvalid, name)
 	}
 	if fi.Size() > maxTemplateBytes {
-		return "", nil, fmt.Errorf("%w: %q pesa más de %d KB", ErrTemplateInvalid, name, maxTemplateBytes>>10)
+		return "", nil, i18n.Errorf("%w: %q pesa más de %d KB", "%w: %q is larger than %d KB", ErrTemplateInvalid, name, maxTemplateBytes>>10)
 	}
 	data, err := os.ReadFile(p)
 	if err != nil {
 		return "", nil, err
 	}
 	if len(data) > maxTemplateBytes { // creció entre el Stat y la lectura
-		return "", nil, fmt.Errorf("%w: %q pesa más de %d KB", ErrTemplateInvalid, name, maxTemplateBytes>>10)
+		return "", nil, i18n.Errorf("%w: %q pesa más de %d KB", "%w: %q is larger than %d KB", ErrTemplateInvalid, name, maxTemplateBytes>>10)
 	}
 	if bytes.IndexByte(data, 0) >= 0 || !utf8.Valid(data) {
-		return "", nil, fmt.Errorf("%w: %q no es texto UTF-8", ErrTemplateInvalid, name)
+		return "", nil, i18n.Errorf("%w: %q no es texto UTF-8", "%w: %q is not UTF-8 text", ErrTemplateInvalid, name)
 	}
 	data = bytes.TrimPrefix(data, []byte("\xef\xbb\xbf")) // el BOM de UTF-8 no pasa a la nota
 	var unknown []string

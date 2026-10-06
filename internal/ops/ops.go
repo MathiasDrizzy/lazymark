@@ -6,7 +6,6 @@ package ops
 import (
 	"context"
 	"errors"
-	"fmt"
 	"github.com/MathiasDrizzy/lazymark/internal/safeio"
 	"os"
 	"path/filepath"
@@ -39,8 +38,8 @@ type Error struct {
 func (e *Error) Error() string { return e.Err.Error() }
 func (e *Error) Unwrap() error { return e.Err }
 
-func usage(format string, a ...any) error {
-	return &Error{ExitUsage, fmt.Errorf(format, a...)}
+func usage(spanish, english string, a ...any) error {
+	return &Error{ExitUsage, i18n.Errorf(spanish, english, a...)}
 }
 
 // Code devuelve el código de salida de err: el de un *Error, 2 para una ruta fuera de la carpeta de notas, 3 para
@@ -88,11 +87,17 @@ func (s *Service) afterDateWrite() {
 
 // New crea el servicio para una carpeta de notas ("" es la de por defecto), con las columnas de la config del
 // usuario. No crea nada en disco.
-func New(notesDir string) (*Service, error) {
+func New(notesDir string) (*Service, error) { return newService(notesDir, false) }
+
+// NewForAgent es New para el servidor MCP: sin un idioma en la configuración, los mensajes salen en inglés (no se mira LANG).
+func NewForAgent(notesDir string) (*Service, error) { return newService(notesDir, true) }
+
+func newService(notesDir string, agent bool) (*Service, error) {
 	cfg, err := config.LoadReadOnly(notesDir)
 	if err != nil {
 		return nil, err
 	}
+	applyLanguage(cfg, agent)
 	lang := string(i18n.CurrentLanguage())
 	titles := make([]string, len(cfg.KanbanColumns))
 	for i, c := range cfg.KanbanColumns {
@@ -225,13 +230,13 @@ func (s *Service) NewNote(title, folder string, empty bool) (NoteDTO, error) {
 // reemplazan); con template vacío es NewNote. Una plantilla que no existe es "no existe" (código 3), sin crear nada.
 func (s *Service) NewNoteFromTemplate(title, folder, template string, empty bool) (NoteDTO, error) {
 	if strings.TrimSpace(title) == "" {
-		return NoteDTO{}, usage("falta el título de la nota")
+		return NoteDTO{}, usage("falta el título de la nota", "missing note title")
 	}
 	if strings.ContainsFunc(title, unicode.IsControl) { // un salto de línea en el título escribiría contenido arbitrario
-		return NoteDTO{}, usage("el título no puede llevar saltos de línea ni caracteres de control")
+		return NoteDTO{}, usage("el título no puede llevar saltos de línea ni caracteres de control", "title cannot contain line breaks or control characters")
 	}
 	if len([]rune(title)) > 200 {
-		return NoteDTO{}, usage("el título es demasiado largo (máximo 200 caracteres)")
+		return NoteDTO{}, usage("el título es demasiado largo (máximo 200 caracteres)", "title is too long (maximum 200 characters)")
 	}
 	dir, err := s.Store.ResolveFolder(folder)
 	if err != nil {
@@ -249,7 +254,7 @@ func (s *Service) NewNoteFromTemplate(title, folder, template string, empty bool
 	}
 	if err != nil {
 		if errors.Is(err, storage.ErrNoteExists) || strings.Contains(err.Error(), "vacío") {
-			return NoteDTO{}, usage("%v", err)
+			return NoteDTO{}, usage("%v", "%v", err)
 		}
 		return NoteDTO{}, err
 	}
@@ -320,7 +325,7 @@ func (s *Service) ColumnIndex(name string) (int, error) {
 			}
 		}
 	}
-	return 0, usage("la columna %q no existe (hay: %s)", name, strings.Join(s.Cols, ", "))
+	return 0, usage("la columna %q no existe (hay: %s)", "column %q does not exist (available: %s)", name, strings.Join(s.Cols, ", "))
 }
 
 // MoveTask lleva la tarea con ese id a una columna. Escribe solo la línea de la tarea y no pisa una nota que cambió
@@ -367,13 +372,13 @@ func (s *Service) SetDate(id, field, date string) (TaskDTO, error) {
 	case "due":
 		f = storage.DateDue
 	default:
-		return TaskDTO{}, usage("el campo de fecha %q no existe (start o due)", field)
+		return TaskDTO{}, usage("el campo de fecha %q no existe (start o due)", "date field %q does not exist (start or due)", field)
 	}
 	if strings.EqualFold(date, "none") {
 		date = ""
 	}
 	if date != "" && !storage.ValidDate(date) {
-		return TaskDTO{}, usage("%q no es una fecha válida: se espera AAAA-MM-DD (o none para quitarla)", date)
+		return TaskDTO{}, usage("%q no es una fecha válida: se espera AAAA-MM-DD (o none para quitarla)", "%q is not a valid date: expected YYYY-MM-DD (or none to remove it)", date)
 	}
 	n, t, err := s.Store.FindTask(id)
 	if err != nil {
@@ -419,7 +424,7 @@ func (s *Service) afterWrite(path string, line int) (TaskDTO, error) {
 			}
 		}
 	}
-	return TaskDTO{}, fmt.Errorf("%w: la tarea de la línea %d de %s ya no está tras escribirla", storage.ErrTaskNotFound, line, path)
+	return TaskDTO{}, i18n.Errorf("%w: la tarea de la línea %d de %s ya no está tras escribirla", "%w: task at line %d of %s is no longer there after writing", storage.ErrTaskNotFound, line, path)
 }
 
 // SearchMatchDTO es una coincidencia de la búsqueda en la salida JSON (esquema estable, docs/cli.md).
@@ -447,11 +452,11 @@ type SearchDTO struct {
 // limit 0 es el tope por defecto (500). Una búsqueda vacía, una expresión inválida o un límite negativo son errores de uso.
 func (s *Service) Search(query string, regex, caseSensitive bool, limit int) (SearchDTO, error) {
 	if limit < 0 {
-		return SearchDTO{}, usage("el límite no puede ser negativo")
+		return SearchDTO{}, usage("el límite no puede ser negativo", "limit cannot be negative")
 	}
 	res, err := search.Run(context.Background(), s.Store, query, search.Options{Regex: regex, CaseSensitive: caseSensitive, MaxResults: limit})
 	if err != nil {
-		return SearchDTO{}, usage("%v", err)
+		return SearchDTO{}, usage("%v", "%v", err)
 	}
 	out := SearchDTO{Query: query, Matches: []SearchMatchDTO{}, Files: res.Files, Skipped: res.Skipped, Truncated: res.Truncated, TimedOut: res.TimedOut}
 	for _, m := range res.Matches {
@@ -480,7 +485,7 @@ func (s *Service) IDByLine(path string, line int) (string, error) {
 			}
 		}
 	}
-	return "", fmt.Errorf("%w: no hay una tarea en la línea %d de %s", storage.ErrTaskNotFound, line, path)
+	return "", i18n.Errorf("%w: no hay una tarea en la línea %d de %s", "%w: there is no task at line %d of %s", storage.ErrTaskNotFound, line, path)
 }
 
 // ColumnDTO y BoardDTO son el tablero en la salida JSON.
@@ -565,7 +570,7 @@ func (s *Service) MigrateDates(to string, dryRun bool) (MigrationDTO, error) {
 	case "emoji":
 		fm = storage.FormatEmoji
 	default:
-		return MigrationDTO{}, usage("--to debe ser dataview o emoji")
+		return MigrationDTO{}, usage("--to debe ser dataview o emoji", "--to must be dataview or emoji")
 	}
 	changes, err := s.Store.MigrateDates(fm, dryRun)
 	out := MigrationDTO{To: to, DryRun: dryRun, Changes: []DateChangeDTO{}}
@@ -586,3 +591,25 @@ func (s *Service) MigrateDates(to string, dryRun bool) (MigrationDTO, error) {
 
 // DateFormatCounts dice cuántas tareas del vault tienen fechas en emoji y cuántas en Dataview (una con los dos formatos cuenta en ambos).
 func (s *Service) DateFormatCounts() (emoji, dataview int) { return s.Store.CountDateFormats() }
+
+// applyLanguage fija el idioma de los mensajes (errores y avisos): el de la configuración si hay uno explícito; si está en "auto", el del sistema (LANG), y
+// con agent (el servidor MCP) inglés, porque un agente no tiene un LANG que lo guíe.
+func applyLanguage(cfg *config.Config, agent bool) {
+	switch lang := strings.ToLower(strings.TrimSpace(cfg.Language)); {
+	case lang != "" && lang != "auto":
+		i18n.SetLanguage(lang)
+	case agent:
+		i18n.SetLanguage("en")
+	}
+	// sin idioma en la configuración la CLI queda con el del sistema (LANG), que i18n ya detectó al arrancar
+}
+
+// SetAgentLanguage fija el idioma de los mensajes del servidor MCP para la carpeta de notas dada: el de su configuración o, sin uno, inglés. Se llama al
+// arrancar el servidor, antes de la primera petición (los errores de protocolo no pasan por New).
+func SetAgentLanguage(notesDir string) {
+	if cfg, err := config.LoadReadOnly(notesDir); err == nil {
+		applyLanguage(cfg, true)
+	} else {
+		i18n.SetLanguage("en")
+	}
+}

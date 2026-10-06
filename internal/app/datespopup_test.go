@@ -421,3 +421,41 @@ func TestSearchFragmentsKeepLinksRaw(t *testing.T) {
 		t.Errorf("el campo de verdad se dibuja como glifo + fecha:\n%s", scr)
 	}
 }
+
+// TestNoC1ControlsReachTheTerminal (ORD-019 C.1 / H1): ningún carácter U+0080–U+009F (el C1 de 8 bits: U+009D es OSC y U+009B es CSI) llega a la terminal desde el
+// texto de una nota: vista previa, Tareas, Kanban, búsqueda, avisos de la barra de estado y títulos de nota.
+func TestNoC1ControlsReachTheTerminal(t *testing.T) {
+	m := newTestModel(t, 200, 40)
+	dir := m.c.store.BaseDir
+	for _, n := range m.c.notes {
+		os.Remove(n.Path)
+	}
+	evil := "\u009d52;c;cHduZWQ=\u009c\u009d0;PWNED\u009c\u009b31m"
+	path := filepath.Join(dir, "evil.md")
+	os.WriteFile(path, []byte("# Título "+evil+"\n\ntexto "+evil+" fin #etiqueta"+evil+"\n\n- [ ] TAREA_MALA "+evil+" fin\n- [ ] otra #kb/doing "+evil+"\n"), 0o644)
+	m.c.reload()
+	m.afterChange()
+	m.notes.selectPath(path)
+	check := func(where string) {
+		t.Helper()
+		for _, r := range m.View().Content {
+			if r >= 0x80 && r <= 0x9f {
+				t.Fatalf("%s: llega a la terminal U+%04X", where, r)
+			}
+		}
+	}
+	check("vista previa")
+	press(m, "2")
+	check("Tareas")
+	press(m, "space")
+	check("aviso al marcar")
+	press(m, "space")
+	press(m, "W")
+	check("Kanban")
+	press(m, "W", "/")
+	typeSearch(m, "TAREA_MALA")
+	check("búsqueda")
+	press(m, "esc")
+	m.c.setStatus("%s", "aviso "+evil)
+	check("barra de estado")
+}

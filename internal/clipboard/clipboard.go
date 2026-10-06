@@ -4,8 +4,8 @@
 package clipboard
 
 import (
-	"errors"
 	"fmt"
+	"github.com/MathiasDrizzy/lazymark/internal/i18n"
 	"io"
 	"net/url"
 	"os"
@@ -30,7 +30,7 @@ type FileReader interface {
 }
 
 // ErrNoImage es lo que devuelve Paste cuando el portapapeles no tiene una imagen.
-var ErrNoImage = errors.New("no hay una imagen copiada (ni una captura ni un archivo de imagen)")
+var ErrNoImage = i18n.NewError("no hay una imagen copiada (ni una captura ni un archivo de imagen)", "no image is copied (neither a screenshot nor an image file)")
 
 // Saver guarda imágenes en la carpeta assets/ que hay junto a una nota.
 type Saver struct {
@@ -104,7 +104,7 @@ func (s *Saver) SaveFromClipboard(noteDir, noteName string) (string, error) {
 	fi, err := os.Stat(dest)
 	if err != nil || fi.Size() == 0 {
 		_ = os.Remove(dest)
-		return "", errors.New("no hay una imagen en el portapapeles")
+		return "", i18n.NewError("no hay una imagen en el portapapeles", "there is no image on the clipboard")
 	}
 	return ref(name), nil
 }
@@ -124,14 +124,22 @@ func (s *Saver) ImportFile(noteDir, noteName, src string) (string, error) {
 	return ref(name), nil
 }
 
-func ref(name string) string { return filepath.ToSlash(filepath.Join("assets", name)) }
+// ref es la referencia markdown de name dentro de assets/: escapa ( ) [ ] con barra invertida y los espacios con %20, para que el nombre no rompa
+// `![](…)` (storage.UnescapeRef lo deshace al leerla).
+func ref(name string) string {
+	esc := strings.NewReplacer(`(`, `\(`, `)`, `\)`, `[`, `\[`, `]`, `\]`, " ", "%20").Replace(name)
+	return "assets/" + esc
+}
 
 // target prepara <noteDir>/assets y elige un nombre libre:
 // <nota>-AAAAMMDD-HHMMSS[-n].<ext>.
 func (s *Saver) target(noteDir, noteName, ext string) (assetsDir, name string, err error) {
 	assetsDir = filepath.Join(noteDir, "assets")
+	if fi, err := os.Lstat(assetsDir); err == nil && fi.Mode()&os.ModeSymlink != 0 { // por un assets/ enlazado se escribiría en otra carpeta
+		return "", "", i18n.Errorf("assets/ es un enlace simbólico: no se escribe en él", "assets/ is a symbolic link: nothing is written through it")
+	}
 	if err := os.MkdirAll(assetsDir, 0o755); err != nil {
-		return "", "", fmt.Errorf("no se pudo crear assets/: %w", err)
+		return "", "", i18n.Errorf("no se pudo crear assets/: %w", "could not create assets/: %w", err)
 	}
 	base := strings.TrimSuffix(strings.ToLower(noteName), ".md")
 	base = strings.Join(strings.Fields(strings.Map(func(r rune) rune {
@@ -149,7 +157,7 @@ func (s *Saver) target(noteDir, noteName, ext string) (assetsDir, name string, e
 	stamp := s.now().Format("20060102-150405")
 	name = fmt.Sprintf("%s-%s%s", base, stamp, ext)
 	for n := 2; ; n++ {
-		if _, err := os.Stat(filepath.Join(assetsDir, name)); os.IsNotExist(err) {
+		if _, err := os.Lstat(filepath.Join(assetsDir, name)); os.IsNotExist(err) { // Lstat: un enlace colgante con ese nombre también está ocupado
 			return assetsDir, name, nil
 		}
 		name = fmt.Sprintf("%s-%s-%d%s", base, stamp, n, ext)
@@ -284,7 +292,7 @@ func (SystemReader) ReadImage(dest string) error {
 		if path, err := exec.LookPath("xclip"); err == nil {
 			return runToFile(exec.Command(path, "-selection", "clipboard", "-t", "image/png", "-o"), dest)
 		}
-		return errors.New("se requiere 'wl-paste' o 'xclip' para pegar imágenes en Linux")
+		return i18n.NewError("se requiere 'wl-paste' o 'xclip' para pegar imágenes en Linux", "'wl-paste' or 'xclip' is required to paste images on Linux")
 	case "windows":
 		ps := fmt.Sprintf(`
 			Add-Type -AssemblyName System.Windows.Forms
@@ -294,7 +302,7 @@ func (SystemReader) ReadImage(dest string) error {
 		`, psQuote(dest))
 		return run(exec.Command("powershell", "-NoProfile", "-NonInteractive", "-Command", ps))
 	}
-	return fmt.Errorf("sistema operativo no soportado: %s", runtime.GOOS)
+	return i18n.Errorf("sistema operativo no soportado: %s", "unsupported operating system: %s", runtime.GOOS)
 }
 
 // ReadFiles devuelve las rutas de los archivos copiados en el portapapeles: osascript
@@ -311,16 +319,16 @@ func (SystemReader) ReadFiles() ([]string, error) {
 		} else if path, lerr := exec.LookPath("xclip"); lerr == nil {
 			out, err = exec.Command(path, "-selection", "clipboard", "-t", "text/uri-list", "-o").Output()
 		} else {
-			return nil, errors.New("se requiere 'wl-paste' o 'xclip' para leer archivos copiados en Linux")
+			return nil, i18n.NewError("se requiere 'wl-paste' o 'xclip' para leer archivos copiados en Linux", "'wl-paste' or 'xclip' is required to read copied files on Linux")
 		}
 	case "windows":
 		out, err = exec.Command("powershell", "-NoProfile", "-NonInteractive", "-Command",
 			`Get-Clipboard -Format FileDropList | ForEach-Object { $_.FullName }`).Output()
 	default:
-		return nil, fmt.Errorf("sistema operativo no soportado: %s", runtime.GOOS)
+		return nil, i18n.Errorf("sistema operativo no soportado: %s", "unsupported operating system: %s", runtime.GOOS)
 	}
 	if err != nil {
-		return nil, fmt.Errorf("no hay archivos copiados (%v)", err)
+		return nil, i18n.Errorf("no hay archivos copiados (%v)", "no files are copied (%v)", err)
 	}
 	var paths []string
 	for _, line := range strings.Split(string(out), "\n") {
@@ -338,7 +346,7 @@ func (SystemReader) ReadFiles() ([]string, error) {
 
 func run(cmd *exec.Cmd) error {
 	if out, err := cmd.CombinedOutput(); err != nil {
-		return fmt.Errorf("no hay una imagen en el portapapeles (%v: %s)", err, strings.TrimSpace(string(out)))
+		return i18n.Errorf("no hay una imagen en el portapapeles (%v: %s)", "there is no image on the clipboard (%v: %s)", err, strings.TrimSpace(string(out)))
 	}
 	return nil
 }
@@ -351,7 +359,7 @@ func runToFile(cmd *exec.Cmd, dest string) error {
 	defer f.Close() //nolint:errcheck
 	cmd.Stdout = f
 	if err := cmd.Run(); err != nil {
-		return fmt.Errorf("no hay una imagen en el portapapeles (%v)", err)
+		return i18n.Errorf("no hay una imagen en el portapapeles (%v)", "there is no image on the clipboard (%v)", err)
 	}
 	return nil
 }

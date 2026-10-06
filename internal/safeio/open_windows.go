@@ -4,6 +4,7 @@ package safeio
 
 import (
 	"fmt"
+	"github.com/MathiasDrizzy/lazymark/internal/i18n"
 	"os"
 )
 
@@ -11,7 +12,7 @@ import (
 // lo que Stat dice que no es un archivo regular (una tubería con nombre, un dispositivo), para no quedarse esperando en la apertura o la lectura.
 func openNonBlocking(path string) (*os.File, error) {
 	if ReservedWindowsName(path) {
-		return nil, fmt.Errorf("%w: %s es un nombre de dispositivo de Windows", ErrNotRegular, path)
+		return nil, i18n.Errorf("%w: %s es un nombre de dispositivo de Windows", "%w: %s is a Windows device name", ErrNotRegular, path)
 	}
 	if fi, err := os.Stat(path); err == nil && !fi.Mode().IsRegular() {
 		return nil, fmt.Errorf("%w: %s", ErrNotRegular, path)

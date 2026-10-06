@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/MathiasDrizzy/lazymark/internal/i18n"
 	"os"
 	"path/filepath"
 	"strings"
@@ -54,7 +55,7 @@ func Install(editor string, e Env) ([]string, error) {
 	case "nano":
 		return installNano(e)
 	}
-	return nil, fmt.Errorf("editor desconocido %q (micro, vim o nano)", editor)
+	return nil, i18n.Errorf("editor desconocido %q (micro, vim o nano)", "unknown editor %q (micro, vim or nano)", editor)
 }
 
 // Uninstall deshace Install y devuelve lo que hizo. Si el plugin no está, no hace nada.
@@ -67,7 +68,7 @@ func Uninstall(editor string, e Env) ([]string, error) {
 	case "nano":
 		return uninstallNano(e)
 	}
-	return nil, fmt.Errorf("editor desconocido %q (micro, vim o nano)", editor)
+	return nil, i18n.Errorf("editor desconocido %q (micro, vim o nano)", "unknown editor %q (micro, vim or nano)", editor)
 }
 
 func asset(name string) string {
@@ -98,7 +99,7 @@ func writeOwned(path, content string) (changed bool, err error) {
 		return false, err
 	}
 	if exists && !ours {
-		return false, fmt.Errorf("%s ya existe y no es de lazymark: no se toca", path)
+		return false, i18n.Errorf("%s ya existe y no es de lazymark: no se toca", "%s already exists and is not lazymark's: left alone", path)
 	}
 	if exists {
 		if b, _ := os.ReadFile(path); string(b) == content {
@@ -118,7 +119,7 @@ func removeOwned(path string) (removed bool, err error) {
 		return false, err
 	}
 	if !ours {
-		return false, fmt.Errorf("%s no es de lazymark: no se borra", path)
+		return false, i18n.Errorf("%s no es de lazymark: no se borra", "%s is not lazymark's: not deleted", path)
 	}
 	return true, os.Remove(path)
 }
@@ -178,7 +179,7 @@ func installMicroFiles(e Env) ([]string, error) {
 	// un plug/lazymark/ con repo.json pero sin nuestro .lua es de otro plugin: no se toca
 	if exists, _, _ := isOurs(lua); !exists {
 		if _, err := os.Stat(repo); err == nil {
-			return nil, fmt.Errorf("%s ya existe y no es de lazymark: no se toca", repo)
+			return nil, i18n.Errorf("%s ya existe y no es de lazymark: no se toca", "%s already exists and is not lazymark's: left alone", repo)
 		}
 	}
 	var done []string
@@ -208,7 +209,7 @@ func uninstallMicro(e Env) ([]string, error) {
 		return nil, err
 	}
 	if !ours {
-		return nil, fmt.Errorf("%s no es de lazymark: no se borra", lua)
+		return nil, i18n.Errorf("%s no es de lazymark: no se borra", "%s is not lazymark's: not deleted", lua)
 	}
 	var done []string
 	for _, f := range []string{"lazymark.lua", "repo.json"} {
@@ -325,7 +326,7 @@ func installNano(e Env) ([]string, error) {
 		return nil, nil // ya está
 	}
 	if bindsKey(text, "M-7") {
-		return nil, fmt.Errorf("%s ya enlaza M-7 y no se pisa, así que no se instaló. Quita o cambia ese bind y vuelve a instalar, o agrega a mano con otra tecla libre: bind <tecla> \"{execute}lazymark paste --no-newline 2>/dev/null{enter}\" main", rc)
+		return nil, i18n.Errorf("%s ya enlaza M-7 y no se pisa, así que no se instaló. Quita o cambia ese bind y vuelve a instalar, o agrega a mano con otra tecla libre: bind <tecla> \"{execute}lazymark paste --no-newline 2>/dev/null{enter}\" main", "%s already binds M-7 and it is not overridden, so nothing was installed. Remove or change that bind and install again, or add it by hand with another free key: bind <key> \"{execute}lazymark paste --no-newline 2>/dev/null{enter}\" main", rc)
 	}
 	block := asset("nano/lazymark.nanorc")
 	add := block
@@ -361,16 +362,19 @@ func uninstallNano(e Env) ([]string, error) {
 		text = strings.Replace(text, block, "", 1)
 	default: // el usuario tocó el bloque: se quitan las líneas entre las dos marcas
 		var keep []string
-		inside := false
+		inside, closed := false, false
 		for _, line := range strings.SplitAfter(text, "\n") {
 			switch {
 			case strings.HasPrefix(line, "# >>> lazymark ("):
 				inside = true
 			case inside && strings.HasPrefix(line, nanoEnd):
-				inside = false
+				inside, closed = false, true
 			case !inside:
 				keep = append(keep, line)
 			}
+		}
+		if !closed { // sin la línea de cierre no se sabe dónde acaba el bloque: borrar hasta el final se llevaría el resto del nanorc del usuario
+			return nil, i18n.Errorf("%s: el bloque de lazymark no tiene su línea de cierre (%q): no se borra nada; quita el bloque a mano", "%s: lazymark's block has no closing line (%q): nothing is deleted; remove the block by hand", rc, nanoEnd)
 		}
 		text = strings.Join(keep, "")
 	}

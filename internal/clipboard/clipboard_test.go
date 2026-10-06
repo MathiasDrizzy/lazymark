@@ -2,6 +2,7 @@ package clipboard
 
 import (
 	"errors"
+	"github.com/MathiasDrizzy/lazymark/internal/storage"
 	"net/url"
 	"os"
 	"path/filepath"
@@ -170,5 +171,72 @@ func TestPSQuote(t *testing.T) {
 		if got := psQuote(in); got != want {
 			t.Errorf("psQuote(%q) = %q, se esperaba %q", in, got, want)
 		}
+	}
+}
+
+// TestPasteDoesNotFollowSymlinks (ORD-019 C.5 / H5): si assets/ es un enlace simbólico no se escribe (ni por él se llega a otra carpeta), y un enlace colgante con
+// el nombre que tocaba cuenta como ocupado (se usa otro nombre) en vez de escribir en su destino.
+func TestPasteDoesNotFollowSymlinks(t *testing.T) {
+	root := t.TempDir()
+	outside := filepath.Join(root, "fuera")
+	os.MkdirAll(outside, 0o755)
+	noteDir := filepath.Join(root, "notas")
+	os.MkdirAll(noteDir, 0o755)
+	if err := os.Symlink(outside, filepath.Join(noteDir, "assets")); err != nil {
+		t.Skip("sin enlaces simbólicos:", err)
+	}
+	s := newSaver(fakeReader{data: []byte("PNG")})
+	if _, err := s.SaveFromClipboard(noteDir, "n.md"); err == nil || !strings.Contains(err.Error(), "enlace") {
+		t.Errorf("assets/ es un enlace simbólico: debe rechazarse con un error claro: %v", err)
+	}
+	src := filepath.Join(root, "foto.png")
+	os.WriteFile(src, []byte("PNG"), 0o644)
+	if _, err := s.ImportFile(noteDir, "n.md", src); err == nil {
+		t.Error("ImportFile tampoco escribe a través de un assets/ enlazado")
+	}
+	if entries, _ := os.ReadDir(outside); len(entries) != 0 {
+		t.Errorf("no se escribió nada fuera de la carpeta de la nota: %v", entries)
+	}
+
+	// un enlace colgante con el nombre que tocaba
+	noteDir2 := filepath.Join(root, "notas2")
+	os.MkdirAll(filepath.Join(noteDir2, "assets"), 0o755)
+	victim := filepath.Join(root, "victima.png")
+	os.Symlink(victim, filepath.Join(noteDir2, "assets", "n-20261001-153045.png"))
+	got, err := s.SaveFromClipboard(noteDir2, "n.md")
+	if err != nil || !strings.HasSuffix(got, "-2.png") {
+		t.Errorf("el nombre ocupado por un enlace colgante se salta: %q %v", got, err)
+	}
+	if _, err := os.Lstat(victim); err == nil {
+		t.Error("se creó el destino del enlace colgante")
+	}
+	got, err = s.ImportFile(noteDir2, "n.md", src)
+	if err != nil || strings.HasSuffix(got, "153045.png") {
+		t.Errorf("ImportFile: %q %v", got, err)
+	}
+	if _, err := os.Lstat(victim); err == nil {
+		t.Error("ImportFile creó el destino del enlace colgante")
+	}
+}
+
+// TestPasteRefEscapesBrackets (ORD-019 C.5 / H6): la referencia escapa ( ) [ ] y los espacios del nombre para no romper el markdown.
+func TestPasteRefEscapesBrackets(t *testing.T) {
+	dir := t.TempDir()
+	s := newSaver(fakeReader{data: []byte("PNG")})
+	got, err := s.SaveFromClipboard(dir, "Foto (1) [x].md")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if want := `assets/foto-\(1\)-\[x\]-20261001-153045.png`; got != want {
+		t.Errorf("referencia = %q, se esperaba %q", got, want)
+	}
+	if _, err := os.Stat(filepath.Join(dir, "assets", "foto-(1)-[x]-20261001-153045.png")); err != nil {
+		t.Errorf("el archivo se llama sin escapes: %v", err)
+	}
+	if ref("a b.png") != "assets/a%20b.png" {
+		t.Errorf("un espacio va como %%20: %q", ref("a b.png"))
+	}
+	if storage.UnescapeRef(got) != "assets/foto-(1)-[x]-20261001-153045.png" || storage.UnescapeRef("assets/a%20b.png") != "assets/a b.png" {
+		t.Errorf("UnescapeRef deshace el escape: %q", storage.UnescapeRef(got))
 	}
 }

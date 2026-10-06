@@ -5,6 +5,7 @@ package textwidth
 
 import (
 	"strings"
+	"unicode/utf8"
 
 	"github.com/charmbracelet/x/ansi"
 )
@@ -107,4 +108,27 @@ func NoControl(s string) string {
 		}
 	}
 	return s
+}
+
+// NoC1 quita de lo que se va a dibujar los caracteres de control de 8 bits (U+0080–U+009F): U+009B es CSI y U+009D es OSC, y algunas terminales los ejecutan
+// aunque estén en UTF-8. Los quita (no los cambia por "?") para que el ancho de lo dibujado no cambie. Los ESC de los colores propios no se tocan.
+func NoC1(s string) string {
+	if !utf8.ValidString(s) { // un 0x9B o 0x9D suelto (no UTF-8) también es un control para algunas terminales: se quitan los bytes inválidos
+		s = strings.ToValidUTF8(s, "")
+	}
+	i := 0
+	for ; i < len(s)-1; i++ { // en UTF-8 un C1 son los bytes C2 80..9F
+		if s[i] == 0xC2 && s[i+1] >= 0x80 && s[i+1] <= 0x9F {
+			break
+		}
+	}
+	if i >= len(s)-1 {
+		return s
+	}
+	return strings.Map(func(r rune) rune {
+		if r >= 0x80 && r <= 0x9f {
+			return -1
+		}
+		return r
+	}, s)
 }

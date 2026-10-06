@@ -17,7 +17,7 @@ import (
 	"github.com/MathiasDrizzy/lazymark/internal/ui/views"
 )
 
-var mdImage = regexp.MustCompile(`!\[(.*?)\]\((.*?)\)`)
+var mdImage = regexp.MustCompile(`!\[(.*?)\]\(((?:\\.|[^\\)])*?)\)`) // el destino admite \( \) escapados (lo que escribe `lazymark paste`)
 
 // previewPanel es el panel derecho: markdown renderizado con scroll vertical y
 // horizontal. El render se cachea por nota, fecha, ancho y tema.
@@ -209,7 +209,7 @@ func renderMarkdown(note *storage.Note, width int, imgs *image.Client) string {
 		if before := content[last:m[0]]; strings.TrimSpace(before) != "" {
 			sections = append(sections, renderKeep(before))
 		}
-		src := content[m[4]:m[5]]
+		src := storage.UnescapeRef(content[m[4]:m[5]])
 		last = m[1]
 		if !filepath.IsAbs(src) {
 			src = filepath.Join(filepath.Dir(note.Path), src)

@@ -42,3 +42,30 @@ func TestEditorEnv(t *testing.T) {
 		t.Errorf("el comando del editor no lleva LAZYMARK_NOTE: %q", cmd.Env)
 	}
 }
+
+// TestEditorGetsAnAbsolutePath (ORD-019 C.2 / H2): con `--dir .` el nombre de una nota puede empezar con `+` o `-` (`+!cmd.md`, `-c.md`): el editor lo tomaría como
+// una opción o un comando (vim ejecuta `+!cmd`). La nota se le pasa siempre como ruta absoluta.
+func TestEditorGetsAnAbsolutePath(t *testing.T) {
+	m := newTestModel(t, 100, 30)
+	for _, name := range []string{"+!cmd.md", "-c.md", "--servername.md", "+5.md"} {
+		for _, line := range []int{1, 7} {
+			cmd := m.c.editorCommand(name, line)
+			last := cmd.Args[len(cmd.Args)-1]
+			if !filepath.IsAbs(last) || !strings.HasSuffix(last, string(filepath.Separator)+name) {
+				t.Errorf("%q (línea %d): el editor recibe %q, debe ser una ruta absoluta que termina en el nombre", name, line, last)
+			}
+			for _, a := range cmd.Args[1:] {
+				if a == name {
+					t.Errorf("%q llega tal cual al editor: %v", name, cmd.Args)
+				}
+			}
+			found := false
+			for _, kv := range cmd.Env {
+				found = found || (strings.HasPrefix(kv, "LAZYMARK_NOTE=") && filepath.IsAbs(strings.TrimPrefix(kv, "LAZYMARK_NOTE=")))
+			}
+			if !found {
+				t.Errorf("%q: LAZYMARK_NOTE debe ser absoluta", name)
+			}
+		}
+	}
+}

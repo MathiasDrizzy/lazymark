@@ -1,8 +1,7 @@
 package storage
 
 import (
-	"errors"
-	"fmt"
+	"github.com/MathiasDrizzy/lazymark/internal/i18n"
 	"github.com/MathiasDrizzy/lazymark/internal/safeio"
 	"regexp"
 	"sort"
@@ -139,11 +138,11 @@ func RewriteForColumn(line string, cols Columns, target int) (string, error) {
 // RewriteForColumnIn es RewriteForColumn que escribe la fecha de completada en el formato fm.
 func RewriteForColumnIn(line string, cols Columns, target int, fm DateFormat) (string, error) {
 	if target < 0 || target >= len(cols) {
-		return "", fmt.Errorf("la columna %d no existe (hay %d)", target, len(cols))
+		return "", i18n.Errorf("la columna %d no existe (hay %d)", "column %d does not exist (there are %d)", target, len(cols))
 	}
 	m := toggleTaskRegex.FindStringSubmatch(line)
 	if len(m) != 4 {
-		return "", fmt.Errorf("la línea no es una tarea válida de markdown")
+		return "", i18n.Errorf("la línea no es una tarea válida de markdown", "line is not a valid markdown task")
 	}
 	cr := ""
 	if strings.HasSuffix(m[3], "\r") {
@@ -205,7 +204,7 @@ func (s *Storage) MoveTask(notePath string, line int, cols Columns, target int, 
 	return rewriteLine(notePath, line, expected, func(l string) (string, error) {
 		out, err := RewriteForColumnIn(l, cols, target, s.WriteDateFormat())
 		if err != nil {
-			return "", fmt.Errorf("la línea %d: %w", line, err)
+			return "", i18n.Errorf("la línea %d: %w", "line %d: %w", line, err)
 		}
 		return out, nil
 	})
@@ -232,7 +231,7 @@ func withCompletionIn(line string, done bool, fm DateFormat) string {
 
 // ErrNotSiblings es el error de SwapTasks cuando las dos tareas no se pueden intercambiar: no son hermanas (otra sangría), una cuelga
 // de la otra o alguna de las líneas ya no es una tarea.
-var ErrNotSiblings = errors.New("las tareas no son hermanas")
+var ErrNotSiblings = i18n.NewError("las tareas no son hermanas", "tasks are not siblings")
 
 // itemMarker reconoce el comienzo de un ítem de lista (viñeta o número) y devuelve el ancho donde empieza su contenido, que es la sangría
 // que deben tener las líneas siguientes para pertenecerle (CommonMark 5.2).
@@ -296,7 +295,7 @@ func (s *Storage) BlockEnd(notePath string, line int) (int, error) {
 	}
 	lines := strings.Split(string(data), "\n")
 	if line < 1 || line > len(lines) {
-		return 0, fmt.Errorf("índice de línea %d fuera de rango", line)
+		return 0, i18n.Errorf("índice de línea %d fuera de rango", "line index %d out of range", line)
 	}
 	_, end := taskBlock(lines, line-1)
 	return end + 1, nil
@@ -367,21 +366,21 @@ func (s *Storage) SwapTasks(notePath string, lineA, lineB int, expected time.Tim
 	err = rewriteLines(notePath, expected, func(lines []string) ([]string, error) {
 		a, b := first-1, second-1
 		if first == second || a < 0 || b >= len(lines) {
-			return nil, fmt.Errorf("%w: líneas %d y %d", ErrNotSiblings, lineA, lineB)
+			return nil, i18n.Errorf("%w: líneas %d y %d", "%w: lines %d and %d", ErrNotSiblings, lineA, lineB)
 		}
 		for _, i := range []int{a, b} {
 			if !taskRegex.MatchString(strings.TrimSuffix(strings.TrimLeft(lines[i], " \t"), "\r")) {
-				return nil, fmt.Errorf("%w: la línea %d no es una tarea", ErrNotSiblings, i+1)
+				return nil, i18n.Errorf("%w: la línea %d no es una tarea", "%w: line %d is not a task", ErrNotSiblings, i+1)
 			}
 		}
 		indent := indentWidth(leadingSpace(lines[a]))
 		if indent != indentWidth(leadingSpace(lines[b])) {
-			return nil, fmt.Errorf("%w: sangrías distintas", ErrNotSiblings)
+			return nil, i18n.Errorf("%w: sangrías distintas", "%w: different indentations", ErrNotSiblings)
 		}
 		_, ea := taskBlock(lines, a)
 		_, eb := taskBlock(lines, b)
 		if ea >= b { // la segunda es parte del bloque de la primera
-			return nil, fmt.Errorf("%w: una cuelga de la otra", ErrNotSiblings)
+			return nil, i18n.Errorf("%w: una cuelga de la otra", "%w: one is nested under the other", ErrNotSiblings)
 		}
 		// son hermanas solo si son ítems de la misma lista: entre las dos, cada línea es un blanco, un ítem de la misma sangría o algo
 		// con más sangría (contenido de otro ítem hermano). Una línea con menos sangría (otro padre), un encabezado, un párrafo o un
@@ -393,7 +392,7 @@ func (s *Storage) SwapTasks(notePath string, lineA, lineB int, expected time.Tim
 			}
 			w := indentWidth(leadingSpace(t))
 			if w < indent || (w == indent && !itemMarker.MatchString(t)) {
-				return nil, fmt.Errorf("%w: hay otro contenido entre las dos", ErrNotSiblings)
+				return nil, i18n.Errorf("%w: hay otro contenido entre las dos", "%w: there is other content between the two", ErrNotSiblings)
 			}
 		}
 		// cada línea conserva SU terminación (\r o no) en su posición: así un archivo CRLF sin salto final no mezcla terminaciones

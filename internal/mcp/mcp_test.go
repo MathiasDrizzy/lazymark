@@ -174,7 +174,7 @@ func TestMCPSession(t *testing.T) {
 	if txt, isErr := toolText(t, r[3]); isErr || !strings.Contains(txt, `"column": "done"`) {
 		t.Errorf("toggle_task por path+line: %v %s", isErr, txt)
 	}
-	for id, want := range map[float64]string{4: "código 2", 5: "código 3", 6: "código 2", 7: "código 2", 8: "código 2"} {
+	for id, want := range map[float64]string{4: "code 2", 5: "code 3", 6: "code 2", 7: "code 2", 8: "code 2"} {
 		if txt, isErr := toolText(t, r[id]); !isErr || !strings.Contains(txt, want) {
 			t.Errorf("respuesta %v debía ser un error con %q: %v %s", id, want, isErr, txt)
 		}
@@ -188,7 +188,7 @@ func TestMCPSession(t *testing.T) {
 	if txt, isErr := toolText(t, r[11]); isErr || !strings.Contains(txt, `"due": "2026-01-02"`) || !strings.Contains(txt, `"overdue": false`) /* está hecha: no vence */ || !strings.Contains(txt, `"completed": "`) {
 		t.Errorf("set_task_date due: %v %s", isErr, txt)
 	}
-	for id, want := range map[float64]string{12: "código 2", 13: "código 2"} {
+	for id, want := range map[float64]string{12: "code 2", 13: "code 2"} {
 		if txt, isErr := toolText(t, r[id]); !isErr || !strings.Contains(txt, want) {
 			t.Errorf("respuesta %v debía ser un error con %q: %v %s", id, want, isErr, txt)
 		}
@@ -205,7 +205,7 @@ func TestMCPSession(t *testing.T) {
 	if txt, isErr := toolText(t, r[17]); isErr || !strings.Contains(txt, `"truncated": true`) {
 		t.Errorf("search_notes con regex y límite 1 debía truncar: %v %s", isErr, txt)
 	}
-	if txt, isErr := toolText(t, r[18]); !isErr || !strings.Contains(txt, "código 2") {
+	if txt, isErr := toolText(t, r[18]); !isErr || !strings.Contains(txt, "code 2") {
 		t.Errorf("search_notes con regex inválida: %v %s", isErr, txt)
 	}
 	if txt, isErr := toolText(t, r[19]); isErr || !strings.Contains(txt, `"matches": []`) {
@@ -545,6 +545,36 @@ func TestNoteIDIsRelativePathMCP(t *testing.T) {
 		txt, isErr := toolText(t, rr[float64(10+i)]) // read_note devuelve el contenido
 		if isErr || !strings.Contains(txt, want) {
 			t.Errorf("read_note(id) debe leer su nota (%q): %v %s", want, isErr, txt)
+		}
+	}
+}
+
+// TestMCPErrorsLanguage (ORD-019 C.7 / L14): el MCP responde en inglés por defecto (un agente no tiene LANG) y en el idioma de la configuración si hay uno.
+func TestMCPErrorsLanguage(t *testing.T) {
+	for _, c := range []struct {
+		cfg, want, other string
+	}{
+		{"", "Error (code 3): no such task", "no existe"},
+		{`{"language":"en"}`, "Error (code 3): no such task", "no existe"},
+		{`{"language":"es"}`, "Error (código 3): no existe esa tarea", "no such task"},
+	} {
+		home := t.TempDir()
+		t.Setenv("HOME", home)
+		t.Setenv("XDG_CONFIG_HOME", filepath.Join(home, ".config"))
+		t.Setenv("AppData", filepath.Join(home, "AppData"))
+		t.Setenv("LANG", "es_ES.UTF-8") // el idioma del sistema no manda en el MCP
+		if c.cfg != "" {
+			base, _ := os.UserConfigDir()
+			os.MkdirAll(filepath.Join(base, "lazymark"), 0o755)
+			os.WriteFile(filepath.Join(base, "lazymark", "config.json"), []byte(c.cfg), 0o644)
+		}
+		notes := filepath.Join(home, "notas")
+		os.MkdirAll(notes, 0o755)
+		os.WriteFile(filepath.Join(notes, "a.md"), []byte("- [ ] x\n"), 0o644)
+		r := session(t, notes, call(1, "toggle_task", map[string]interface{}{"id": "a.md#00000000"}))
+		txt, isErr := toolText(t, r[1])
+		if !isErr || !strings.Contains(txt, c.want) || strings.Contains(txt, c.other) {
+			t.Errorf("config %q: se esperaba %q: %v %s", c.cfg, c.want, isErr, txt)
 		}
 	}
 }

@@ -1032,3 +1032,72 @@ func TestDatesMigrateWithoutToTellsTheVaultFormat(t *testing.T) {
 		t.Errorf("sin subcomando, en inglés: %v", err)
 	}
 }
+
+// TestCLIErrorsFollowTheLanguage (ORD-019 C.7 / L14): los errores de la CLI salen en el idioma de la interfaz, como los avisos: tarea inexistente, regex costosa,
+// ruta fuera de la carpeta, nota que cambió afuera y argumentos inválidos; y la configuración (language) manda sobre el idioma del sistema.
+func TestCLIErrorsFollowTheLanguage(t *testing.T) {
+	dir := fixture(t)
+	defer i18n.SetLanguage("es")
+	cases := []struct {
+		name string
+		args []string
+		es   string
+		en   string
+	}{
+		{"tarea inexistente", []string{"task", "toggle", "ideas.md#00000000"}, "no existe esa tarea", "no such task"},
+		{"regex costosa", []string{"search", `\w{1000}x`, "--regex"}, "expresión regular demasiado costosa", "regular expression too costly"},
+		{"ruta fuera", []string{"note", "show", "../../etc/passwd.md"}, "la ruta no es una nota de la carpeta de notas", "the path is not a note in the notes folder"},
+		{"argumentos inválidos", []string{"task", "due", "ideas.md#00000000", "no-es-fecha"}, "no es una fecha válida", "is not a valid date"},
+		{"columna inexistente", []string{"task", "move", "ideas.md#00000000", "cancelada"}, "no existe", "does not exist"},
+	}
+	for _, lang := range []string{"es", "en"} {
+		i18n.SetLanguage(lang)
+		for _, c := range cases {
+			_, err := run(t, dir, c.args...)
+			want := c.es
+			other := c.en
+			if lang == "en" {
+				want, other = c.en, c.es
+			}
+			if err == nil || !strings.Contains(err.Error(), want) {
+				t.Errorf("%s (%s): el error debe decir %q: %v", c.name, lang, want, err)
+			} else if strings.Contains(err.Error(), other) {
+				t.Errorf("%s (%s): no mezcla idiomas (%q): %v", c.name, lang, other, err)
+			}
+		}
+	}
+}
+
+// TestNoteChangedErrorFollowsTheLanguage: "la nota cambió por fuera" también sale en el idioma de la interfaz.
+func TestNoteChangedErrorFollowsTheLanguage(t *testing.T) {
+	defer i18n.SetLanguage("es")
+	for lang, want := range map[string]string{"es": "la nota cambió por fuera", "en": "the note changed outside"} {
+		i18n.SetLanguage(lang)
+		if got := storage.ErrNoteChanged.Error(); !strings.Contains(got, want) {
+			t.Errorf("%s: %q", lang, got)
+		}
+	}
+}
+
+// TestConfigLanguageBeatsSystem (ORD-019 C.7): con `language` explícito en la configuración, los errores de la CLI salen en ese idioma aunque el sistema diga otro.
+func TestConfigLanguageBeatsSystem(t *testing.T) {
+	dir := fixture(t)
+	defer i18n.SetLanguage("es")
+	i18n.SetLanguage("es") // el sistema
+	base, err := os.UserConfigDir()
+	if err != nil {
+		t.Skip(err)
+	}
+	cfgDir := filepath.Join(base, "lazymark")
+	os.MkdirAll(cfgDir, 0o755)
+	cfgFile := filepath.Join(cfgDir, "config.json")
+	if _, err := os.Stat(cfgFile); err == nil {
+		t.Skip("ya hay una configuración en el HOME aislado")
+	}
+	os.WriteFile(cfgFile, []byte(`{"language":"en"}`), 0o644)
+	t.Cleanup(func() { os.Remove(cfgFile) })
+	_, err = run(t, dir, "task", "toggle", "ideas.md#00000000")
+	if err == nil || !strings.Contains(err.Error(), "no such task") {
+		t.Errorf("language=en en la configuración manda: %v", err)
+	}
+}

@@ -161,6 +161,11 @@ func (c *core) editorCommand(path string, line int) *exec.Cmd {
 	if path == "" {
 		return nil
 	}
+	// Siempre una ruta absoluta: con `--dir .` el nombre de una nota puede empezar con "+" o "-" (`+!cmd.md`) y el editor lo tomaría por una opción o un comando
+	// (vim ejecuta `+!cmd`).
+	if abs, err := filepath.Abs(path); err == nil {
+		path = abs
+	}
 	// El editor puede traer argumentos ("code --wait") y una ruta con espacios.
 	name, extra := config.SplitEditor(c.cfg.Editor)
 	if name == "" {

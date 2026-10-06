@@ -3,7 +3,7 @@
 package image
 
 import (
-	"fmt"
+	"github.com/MathiasDrizzy/lazymark/internal/i18n"
 	"os"
 	"syscall"
 )
@@ -28,10 +28,10 @@ func checkRegular(f *os.File) error {
 		return err
 	}
 	if !fi.Mode().IsRegular() {
-		return fmt.Errorf("%s no es un archivo regular", f.Name())
+		return i18n.Errorf("%s no es un archivo regular", "%s is not a regular file", f.Name())
 	}
 	if fi.Size() > MaxFileBytes {
-		return fmt.Errorf("%s pesa más de %d MB", f.Name(), MaxFileBytes>>20)
+		return i18n.Errorf("%s pesa más de %d MB", "%s is larger than %d MB", f.Name(), MaxFileBytes>>20)
 	}
 	return nil
 }

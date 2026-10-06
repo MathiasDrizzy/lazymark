@@ -3,8 +3,8 @@
 package safeio
 
 import (
-	"errors"
 	"fmt"
+	"github.com/MathiasDrizzy/lazymark/internal/i18n"
 	"io"
 	"os"
 	"path/filepath"
@@ -13,9 +13,9 @@ import (
 
 var (
 	// ErrNotRegular: el archivo no es regular (FIFO, dispositivo, socket, carpeta).
-	ErrNotRegular = errors.New("no es un archivo regular")
+	ErrNotRegular = i18n.NewError("no es un archivo regular", "not a regular file")
 	// ErrTooLarge: el archivo pesa más que el tope.
-	ErrTooLarge = errors.New("el archivo es demasiado grande")
+	ErrTooLarge = i18n.NewError("el archivo es demasiado grande", "the file is too large")
 )
 
 // ReadRegular lee path entero si es un archivo regular de como mucho max bytes (max <= 0: sin tope). La comprobación se hace sobre el archivo ya
@@ -34,7 +34,7 @@ func ReadRegular(path string, max int64) ([]byte, error) {
 		return nil, fmt.Errorf("%w: %s", ErrNotRegular, path)
 	}
 	if max > 0 && fi.Size() > max {
-		return nil, fmt.Errorf("%w (%d MB, máximo %d MB): %s", ErrTooLarge, fi.Size()>>20, max>>20, path)
+		return nil, i18n.Errorf("%w (%d MB, máximo %d MB): %s", "%w (%d MB, maximum %d MB): %s", ErrTooLarge, fi.Size()>>20, max>>20, path)
 	}
 	var r io.Reader = f
 	if max > 0 {
@@ -64,7 +64,7 @@ func WriteFileAtomicIf(path string, data []byte, perm os.FileMode, check func() 
 	if fi, err := os.Lstat(path); err == nil && fi.Mode()&os.ModeSymlink != 0 {
 		real, err := filepath.EvalSymlinks(path)
 		if err != nil { // un enlace roto: escribir a ciegas lo reemplazaría por un archivo; se rechaza
-			return fmt.Errorf("%s es un enlace simbólico roto: no se escribe", filepath.Base(path))
+			return i18n.Errorf("%s es un enlace simbólico roto: no se escribe", "%s is a broken symlink: will not write", filepath.Base(path))
 		}
 		path = real
 	}
@@ -73,12 +73,12 @@ func WriteFileAtomicIf(path string, data []byte, perm os.FileMode, check func() 
 	}
 	tmp, err := os.CreateTemp(filepath.Dir(path), ".lazymark-*.tmp")
 	if err != nil {
-		return fmt.Errorf("error al crear archivo temporal: %w", err)
+		return i18n.Errorf("error al crear archivo temporal: %w", "could not create the temporary file: %w", err)
 	}
 	name := tmp.Name()
 	_, werr := tmp.Write(data)
 	if werr == nil {
-		werr = tmp.Sync()
+		werr = SyncFile(tmp)
 	}
 	if cerr := tmp.Close(); werr == nil {
 		werr = cerr
@@ -97,7 +97,7 @@ func WriteFileAtomicIf(path string, data []byte, perm os.FileMode, check func() 
 	}
 	if werr != nil {
 		_ = os.Remove(name)
-		return fmt.Errorf("error al escribir %s: %w", filepath.Base(path), werr)
+		return i18n.Errorf("error al escribir %s: %w", "error writing %s: %w", filepath.Base(path), werr)
 	}
 	return nil
 }
@@ -133,3 +133,7 @@ func ReservedWindowsName(path string) bool {
 		return false
 	}
 }
+
+// SyncFile fuerza a disco lo escrito en f. Toda escritura atómica lo llama sobre el temporal ANTES de renombrarlo: si se corta la luz entre medio, el archivo
+// queda con su contenido viejo o con el nuevo completo, nunca truncado. Es una variable para que las pruebas vean que se llama.
+var SyncFile = func(f *os.File) error { return f.Sync() }

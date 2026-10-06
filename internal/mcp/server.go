@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/MathiasDrizzy/lazymark/internal/i18n"
 	"io"
 	"math"
 	"os"
@@ -71,13 +72,14 @@ func RunServer(notesDir string) error {
 
 // Serve procesa el stream de JSON-RPC línea por línea
 func (s *Server) Serve(r io.Reader, w io.Writer) error {
+	ops.SetAgentLanguage(s.notesDir) // el idioma de la configuración o, sin uno, inglés
 	reader := bufio.NewReaderSize(r, 64*1024)
 	encoder := json.NewEncoder(w)
 
 	for {
 		line, tooLong, rerr := readLine(reader, maxLineBytes)
 		if tooLong { // una línea de más de 1 MiB no cierra el servidor: se contesta con un error y se sigue con la siguiente
-			if err := encoder.Encode(rpcError(nil, -32600, "Invalid Request: la petición pasa de 1 MiB", nil)); err != nil {
+			if err := encoder.Encode(rpcError(nil, -32600, i18n.E("Invalid Request: la petición pasa de 1 MiB", "Invalid Request: the request is over 1 MiB"), nil)); err != nil {
 				return err
 			}
 			if rerr != nil {
@@ -103,7 +105,7 @@ func (s *Server) Serve(r io.Reader, w io.Writer) error {
 		}
 
 		if bad := invalidID(line); bad {
-			if err := encoder.Encode(rpcError(nil, -32600, "Invalid Request: el id debe ser un texto o un número", nil)); err != nil {
+			if err := encoder.Encode(rpcError(nil, -32600, i18n.E("Invalid Request: el id debe ser un texto o un número", "Invalid Request: the id must be a string or a number"), nil)); err != nil {
 				return err
 			}
 			continue
@@ -222,11 +224,11 @@ func (s *Server) handleRequest(req *JSONRPCRequest) *JSONRPCResponse {
 
 	if modern { // época moderna: la versión y las capacidades vienen en cada petición
 		if !hasVersion {
-			return rpcError(req.ID, errInvalidParam, "Invalid params: falta _meta."+metaVersionKey, nil)
+			return rpcError(req.ID, errInvalidParam, i18n.E("Invalid params: falta _meta.", "Invalid params: missing _meta.")+metaVersionKey, nil)
 		}
 		var version string
 		if err := json.Unmarshal(meta[metaVersionKey], &version); err != nil {
-			return rpcError(req.ID, errInvalidParam, "Invalid params: _meta."+metaVersionKey+" debe ser un texto", nil)
+			return rpcError(req.ID, errInvalidParam, fmt.Sprintf(i18n.E("Invalid params: _meta.%s debe ser un texto", "Invalid params: _meta.%s must be a string"), metaVersionKey), nil)
 		}
 		if version != modernVersion {
 			if !contains(legacyVersions, version) || req.Method != "server/discover" {
@@ -234,7 +236,7 @@ func (s *Server) handleRequest(req *JSONRPCRequest) *JSONRPCResponse {
 			}
 		}
 		if _, ok := meta[metaCapsKey]; !ok {
-			return rpcError(req.ID, errInvalidParam, "Invalid params: falta _meta."+metaCapsKey, nil)
+			return rpcError(req.ID, errInvalidParam, i18n.E("Invalid params: falta _meta.", "Invalid params: missing _meta.")+metaCapsKey, nil)
 		}
 	}
 	ok := func(result obj) *JSONRPCResponse {
@@ -409,7 +411,7 @@ func (s *Server) getToolsList() []obj {
 }
 
 func fail(err error) CallToolResult {
-	return CallToolResult{IsError: true, Content: []ToolContent{{Type: "text", Text: fmt.Sprintf("Error (código %d): %v", ops.Code(err), err)}}}
+	return CallToolResult{IsError: true, Content: []ToolContent{{Type: "text", Text: fmt.Sprintf(i18n.E("Error (código %d): %v", "Error (code %d): %v"), ops.Code(err), err)}}}
 }
 
 func ok(v interface{}) CallToolResult {
@@ -418,11 +420,11 @@ func ok(v interface{}) CallToolResult {
 }
 
 func missing(names string) CallToolResult {
-	return CallToolResult{IsError: true, Content: []ToolContent{{Type: "text", Text: "Error: " + names + " requerido(s)"}}}
+	return CallToolResult{IsError: true, Content: []ToolContent{{Type: "text", Text: "Error: " + names + i18n.E(" requerido(s)", " required")}}}
 }
 
 func (s *Server) callTool(name string, args map[string]interface{}) CallToolResult {
-	svc, err := ops.New(s.notesDir)
+	svc, err := ops.NewForAgent(s.notesDir)
 	if err != nil {
 		return fail(err)
 	}
@@ -567,7 +569,11 @@ func checkArgs(args map[string]interface{}) string {
 			ok = isNum && f == math.Trunc(f) && f >= 0 && f <= 1e9
 		}
 		if !ok {
-			return fmt.Sprintf("el argumento '%s' debe ser %s", k, map[string]string{"texto": "un texto", "booleano": "verdadero o falso", "entero": "un número entero (0 o mayor)"}[kind])
+			return fmt.Sprintf(i18n.E("el argumento '%s' debe ser %s", "the argument '%s' must be %s"), k, map[string]string{
+				"texto":    i18n.E("un texto", "a string"),
+				"booleano": i18n.E("verdadero o falso", "true or false"),
+				"entero":   i18n.E("un número entero (0 o mayor)", "a whole number (0 or more)"),
+			}[kind])
 		}
 	}
 	return ""

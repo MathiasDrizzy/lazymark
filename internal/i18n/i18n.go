@@ -7,6 +7,7 @@ package i18n
 import (
 	"embed"
 	"encoding/json"
+	"fmt"
 	"os"
 	"strings"
 	"sync"
@@ -162,4 +163,34 @@ func T(es, en string) string {
 		}
 		return en
 	}
+}
+
+// E es T para los textos de los errores: mismo comportamiento (es y en vienen del código; los demás idiomas, del catálogo con clave en y, si falta, en inglés),
+// pero la prueba de cobertura de los catálogos no los exige, porque son muchos y un idioma sin traducir cae en inglés, nunca en español.
+func E(spanish, english string) string {
+	switch l := CurrentLanguage(); l {
+	case LangES:
+		return spanish
+	case LangEN:
+		return english
+	default:
+		if t := catalog(l)[english]; t != "" {
+			return t
+		}
+		return english
+	}
+}
+
+// textErr es un error cuyo texto se elige al mostrarlo, no al crearlo: sirve para los errores centinela de los paquetes (`var ErrX = i18n.NewError(…)`), que
+// se crean antes de saber el idioma. Dos con el mismo texto son distintos (errors.Is compara el puntero).
+type textErr struct{ es, en string }
+
+func (e *textErr) Error() string { return E(e.es, e.en) }
+
+// NewError crea un error que se escribe en el idioma de la interfaz cuando se muestra.
+func NewError(spanish, english string) error { return &textErr{spanish, english} }
+
+// Errorf es fmt.Errorf con el formato en el idioma de la interfaz (admite %w). Los argumentos van en el mismo orden en los dos textos.
+func Errorf(spanish, english string, args ...any) error {
+	return fmt.Errorf(E(spanish, english), args...)
 }

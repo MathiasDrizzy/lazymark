@@ -3,6 +3,7 @@ package storage
 import (
 	"errors"
 	"fmt"
+	"github.com/MathiasDrizzy/lazymark/internal/i18n"
 	"io/fs"
 	"os"
 	"path/filepath"
@@ -10,7 +11,7 @@ import (
 )
 
 // ErrOutsideNotes es el error de una ruta que no es una nota dentro de la carpeta de notas.
-var ErrOutsideNotes = errors.New("la ruta no es una nota de la carpeta de notas")
+var ErrOutsideNotes = i18n.NewError("la ruta no es una nota de la carpeta de notas", "the path is not a note in the notes folder")
 
 // ResolveNote valida una ruta que viene de fuera (la CLI, un agente por MCP) antes de leerla o
 // escribirla: debe ser un archivo regular .md que, una vez resueltos los enlaces simbólicos y los "..",
@@ -24,10 +25,10 @@ func (s *Storage) ResolveFile(path string) (string, error) { return s.resolveFil
 
 func (s *Storage) resolveFile(path string, requireMD bool) (string, error) {
 	if strings.TrimSpace(path) == "" {
-		return "", fmt.Errorf("%w: ruta vacía", ErrOutsideNotes)
+		return "", i18n.Errorf("%w: ruta vacía", "%w: empty path", ErrOutsideNotes)
 	}
 	if requireMD && !strings.EqualFold(filepath.Ext(path), ".md") {
-		return "", fmt.Errorf("%w: %q no termina en .md", ErrOutsideNotes, path)
+		return "", i18n.Errorf("%w: %q no termina en .md", "%w: %q does not end in .md", ErrOutsideNotes, path)
 	}
 	if !filepath.IsAbs(path) {
 		path = filepath.Join(s.BaseDir, path)
@@ -44,20 +45,20 @@ func (s *Storage) resolveFile(path string, requireMD bool) (string, error) {
 		// una ruta que no existe y que, además, cae fuera de la carpeta de notas es una ruta inválida (código 2),
 		// no una nota que falta: así no se revela qué existe fuera
 		if errors.Is(err, os.ErrNotExist) && s.lexicallyOutside(filepath.Clean(path), base) {
-			return "", fmt.Errorf("%w: %q está fuera de %q", ErrOutsideNotes, path, s.BaseDir)
+			return "", i18n.Errorf("%w: %q está fuera de %q", "%w: %q is outside %q", ErrOutsideNotes, path, s.BaseDir)
 		}
 		return "", err
 	}
 	rel, err := filepath.Rel(base, real)
 	if err != nil || rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) || filepath.IsAbs(rel) {
-		return "", fmt.Errorf("%w: %q está fuera de %q", ErrOutsideNotes, path, s.BaseDir)
+		return "", i18n.Errorf("%w: %q está fuera de %q", "%w: %q is outside %q", ErrOutsideNotes, path, s.BaseDir)
 	}
 	fi, err := os.Stat(real)
 	if err != nil {
 		return "", err
 	}
 	if !fi.Mode().IsRegular() {
-		return "", fmt.Errorf("%w: %q no es un archivo", ErrOutsideNotes, path)
+		return "", i18n.Errorf("%w: %q no es un archivo", "%w: %q is not a file", ErrOutsideNotes, path)
 	}
 	return real, nil
 }
@@ -88,7 +89,7 @@ func (s *Storage) linkStaysInside(path string, d fs.DirEntry) bool {
 // los enlaces simbólicos del tramo que ya existe, debe quedar dentro de la carpeta de notas.
 func (s *Storage) confineNewPath(path string) error {
 	if !filepath.IsAbs(path) {
-		return fmt.Errorf("%w: la ruta %q no es absoluta", ErrOutsideNotes, path)
+		return i18n.Errorf("%w: la ruta %q no es absoluta", "%w: path %q is not absolute", ErrOutsideNotes, path)
 	}
 	base, err := filepath.EvalSymlinks(s.BaseDir)
 	if err != nil {
@@ -115,7 +116,7 @@ func (s *Storage) confineNewPath(path string) error {
 	}
 	rel, err := filepath.Rel(base, filepath.Join(real, rest))
 	if err != nil || rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) || filepath.IsAbs(rel) {
-		return fmt.Errorf("%w: %q está fuera de %q", ErrOutsideNotes, path, s.BaseDir)
+		return i18n.Errorf("%w: %q está fuera de %q", "%w: %q is outside %q", ErrOutsideNotes, path, s.BaseDir)
 	}
 	return nil
 }

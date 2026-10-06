@@ -101,7 +101,7 @@ var (
 	// una tarea: viñeta (- * +) o número de lista (1. 1)) y casilla; la sangría ya se quitó
 	taskRegex     = regexp.MustCompile(`^(?:[-*+]|\d+[.)])\s+\[([ xX])\]\s+(.*)$`)
 	listItemRegex = regexp.MustCompile(`^(?:[-*+]|\d+[.)])(?:\s|$)`)
-	imageRegex    = regexp.MustCompile(`!\[(.*?)\]\((.*?)\)`)
+	imageRegex    = regexp.MustCompile(`!\[(.*?)\]\(((?:\\.|[^\\)])*?)\)`)
 	tagRegex      = regexp.MustCompile(`#([a-zA-Z0-9_-]+)(/[a-zA-Z0-9_/-]*)?`)
 	unsafeChars   = regexp.MustCompile(`[\\/:*?"<>|\[\]#^]`) // además de lo que el sistema de archivos no admite, lo que rompe un [[wikilink]]
 )
@@ -154,7 +154,7 @@ func (s *Storage) ListTreeEntries(expanded map[string]bool) ([]NoteEntry, error)
 			}
 
 			fullPath := filepath.Join(dirPath, name)
-			info, err := de.Info()
+			info, err := s.entryInfo(fullPath, de)
 			if err != nil {
 				continue
 			}
@@ -267,7 +267,7 @@ func (s *Storage) ListNotes() ([]Note, error) {
 			return nil
 		}
 
-		info, err := d.Info()
+		info, err := s.entryInfo(path, d)
 		if err != nil {
 			return nil
 		}
@@ -426,7 +426,7 @@ func (s *Storage) extractImages(content string) []string {
 	var images []string
 	for _, m := range matches {
 		if len(m) > 2 {
-			images = append(images, m[2])
+			images = append(images, UnescapeRef(m[2]))
 		}
 	}
 	return images
@@ -439,7 +439,7 @@ func (s *Storage) CreateNoteInDir(dir, title string) (*Note, error) {
 
 // ErrNoteExists es el error de crear una nota o carpeta cuyo nombre ya está ocupado (por un archivo, una carpeta o
 // un enlace simbólico, también colgante). No se escribió nada.
-var ErrNoteExists = errors.New("ya existe")
+var ErrNoteExists = i18n.NewError("ya existe", "already exists")
 
 // CreateNoteInDirWithBody crea la nota con body como contenido (vacío: la plantilla con fecha y primera tarea). Se
 // crea con O_EXCL: no sigue enlaces simbólicos ni pisa nada, y si el nombre está ocupado no escribe.
@@ -449,7 +449,7 @@ func (s *Storage) CreateNoteInDirWithBody(dir, title, body string) (*Note, error
 	}
 	cleanName := slug(title)
 	if cleanName == "" {
-		return nil, fmt.Errorf("nombre de nota vacío")
+		return nil, i18n.Errorf("nombre de nota vacío", "empty note name")
 	}
 	fileName := fmt.Sprintf("%s.md", cleanName)
 	fullPath := filepath.Join(dir, fileName)
@@ -463,7 +463,7 @@ func (s *Storage) CreateNoteInDirWithBody(dir, title, body string) (*Note, error
 	f, err := os.OpenFile(fullPath, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o644)
 	if err != nil {
 		if errors.Is(err, os.ErrExist) {
-			return nil, fmt.Errorf("%w una nota con el nombre: %s", ErrNoteExists, fileName)
+			return nil, i18n.Errorf("%w una nota con el nombre: %s", "%w: a note named %s", ErrNoteExists, fileName)
 		}
 		return nil, err
 	}
@@ -494,7 +494,7 @@ func (s *Storage) CreateFolderInDir(parentDir, name string) (string, error) {
 	}
 	cleanName := slug(name)
 	if cleanName == "" {
-		return "", fmt.Errorf("nombre de carpeta vacío")
+		return "", i18n.Errorf("nombre de carpeta vacío", "empty folder name")
 	}
 	fullPath := filepath.Join(parentDir, cleanName)
 	if _, err := os.Lstat(fullPath); err == nil { // Lstat: un enlace simbólico (también colgante) cuenta como ocupado
@@ -522,7 +522,7 @@ func (s *Storage) MoveNote(notePath, targetFolderPath string) error {
 		return nil
 	}
 	if _, err := os.Stat(destPath); err == nil {
-		return fmt.Errorf("ya existe %s en el destino", baseName)
+		return i18n.Errorf("ya existe %s en el destino", "%s already exists at destination", baseName)
 	}
 	return os.Rename(notePath, destPath)
 }
@@ -569,7 +569,7 @@ func (s *Storage) ToggleTaskIfUnchanged(notePath string, lineNum int, expected t
 	err = rewriteLine(notePath, lineNum, expected, func(line string) (string, error) {
 		m := toggleTaskRegex.FindStringSubmatch(line)
 		if len(m) != 4 {
-			return "", fmt.Errorf("la línea %d no es una tarea válida de markdown", lineNum)
+			return "", i18n.Errorf("la línea %d no es una tarea válida de markdown", "line %d is not a valid markdown task", lineNum)
 		}
 		newDone = m[2] != "x" && m[2] != "X"
 		mark := " "
@@ -589,7 +589,7 @@ func rewriteLine(notePath string, lineNum int, expected time.Time, fn func(line 
 	return rewriteLines(notePath, expected, func(lines []string) ([]string, error) {
 		idx := lineNum - 1
 		if idx < 0 || idx >= len(lines) {
-			return nil, fmt.Errorf("índice de línea %d fuera de rango", lineNum)
+			return nil, i18n.Errorf("índice de línea %d fuera de rango", "line index %d out of range", lineNum)
 		}
 		newLine, err := fn(lines[idx])
 		if err != nil {
@@ -605,14 +605,14 @@ func rewriteLine(notePath string, lineNum int, expected time.Time, fn func(line 
 func rewriteLines(notePath string, expected time.Time, edit func(lines []string) ([]string, error)) error {
 	before, err := os.Stat(notePath)
 	if err != nil {
-		return fmt.Errorf("error al obtener info de archivo: %w", err)
+		return i18n.Errorf("error al obtener info de archivo: %w", "could not read the file info: %w", err)
 	}
 	if !expected.IsZero() && !before.ModTime().Equal(expected) {
 		return ErrNoteChanged
 	}
 	data, err := safeio.ReadRegular(notePath, MaxNoteBytes)
 	if err != nil {
-		return fmt.Errorf("error al leer la nota: %w", err)
+		return i18n.Errorf("error al leer la nota: %w", "could not read the note: %w", err)
 	}
 	lines, err := edit(strings.Split(string(data), "\n"))
 	if err != nil {
@@ -623,10 +623,13 @@ func rewriteLines(notePath string, expected time.Time, edit func(lines []string)
 	// preparado de antemano (`<nota>.md.tmp`) no puede desviar la escritura a otro archivo
 	tmpFile, err := os.CreateTemp(filepath.Dir(notePath), ".lazymark-*.tmp")
 	if err != nil {
-		return fmt.Errorf("error al crear archivo temporal: %w", err)
+		return i18n.Errorf("error al crear archivo temporal: %w", "could not create the temporary file: %w", err)
 	}
 	tmp := tmpFile.Name()
 	_, werr := tmpFile.Write([]byte(strings.Join(lines, "\n")))
+	if werr == nil {
+		werr = safeio.SyncFile(tmpFile) // a disco antes del rename (A1)
+	}
 	cerr := tmpFile.Close()
 	if werr == nil {
 		werr = cerr
@@ -636,7 +639,7 @@ func rewriteLines(notePath string, expected time.Time, edit func(lines []string)
 	}
 	if werr != nil {
 		_ = os.Remove(tmp)
-		return fmt.Errorf("error al escribir archivo temporal: %w", werr)
+		return i18n.Errorf("error al escribir archivo temporal: %w", "could not write the temporary file: %w", werr)
 	}
 	after, err := os.Stat(notePath)
 	if err != nil || !after.ModTime().Equal(before.ModTime()) || after.Size() != before.Size() {
@@ -645,7 +648,7 @@ func rewriteLines(notePath string, expected time.Time, edit func(lines []string)
 	}
 	if err := os.Rename(tmp, notePath); err != nil {
 		_ = os.Remove(tmp)
-		return fmt.Errorf("error al renombrar archivo atómico: %w", err)
+		return i18n.Errorf("error al renombrar archivo atómico: %w", "could not rename the temporary file: %w", err)
 	}
 	return nil
 }
@@ -671,7 +674,7 @@ func (s *Storage) Rename(path, newName string) (string, error) {
 	}
 	clean := slug(newName)
 	if clean == "" {
-		return "", fmt.Errorf("nombre vacío")
+		return "", i18n.Errorf("nombre vacío", "empty name")
 	}
 	if !fi.IsDir() {
 		clean += ".md"
@@ -687,7 +690,7 @@ func (s *Storage) Rename(path, newName string) (string, error) {
 }
 
 // ErrNoteChanged indica que la nota cambió en disco desde que se cargó.
-var ErrNoteChanged = errors.New("la nota cambió por fuera; recarga antes de editarla")
+var ErrNoteChanged = i18n.NewError("la nota cambió por fuera; recarga antes de editarla", "the note changed outside; reload before editing it")
 
 // AppendToNote agrega text como un párrafo al final de la nota, sin tocar lo
 // anterior. Si la nota cambió por fuera desde que se cargó (expected), no
@@ -763,3 +766,20 @@ func (s *Storage) ReplaceLineIf(notePath string, line int, before, after string,
 		return after, nil
 	})
 }
+
+// entryInfo es d.Info() salvo para un enlace simbólico: ahí se mira el destino (Stat), porque el mtime con el que se compara al escribir es el del archivo que se
+// escribe, no el del enlace (si no, toda edición de una nota que es un enlace daba un falso "la nota cambió por fuera").
+func (s *Storage) entryInfo(path string, d fs.DirEntry) (fs.FileInfo, error) {
+	if d.Type()&fs.ModeSymlink != 0 {
+		if fi, err := os.Stat(path); err == nil {
+			return fi, nil
+		}
+	}
+	return d.Info()
+}
+
+// refUnescaper deshace el escape de la referencia de una imagen: `\(`, `\)`, `\[`, `\]` y `%20` (lo que escribe `lazymark paste`).
+var refUnescaper = strings.NewReplacer(`\(`, "(", `\)`, ")", `\[`, "[", `\]`, "]", "%20", " ")
+
+// UnescapeRef devuelve la ruta de una imagen de markdown (`![](ruta)`) sin el escape de ( ) [ ] y espacios.
+func UnescapeRef(ref string) string { return refUnescaper.Replace(ref) }

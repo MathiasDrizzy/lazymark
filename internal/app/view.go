@@ -20,7 +20,7 @@ import (
 // View declara pantalla alternativa y mouse; Bubble Tea v2 los reaplica en cada
 // frame, también al volver del editor externo.
 func (m *AppModel) View() tea.View {
-	v := tea.NewView(m.render())
+	v := tea.NewView(textwidth.NoC1(m.render())) // la única frontera: nada del texto de una nota llega a la terminal como control de 8 bits
 	v.AltScreen = true
 	if m.c.cfg.MouseClick {
 		v.MouseMode = tea.MouseModeCellMotion

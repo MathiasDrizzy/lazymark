@@ -284,3 +284,12 @@ func TestNoLazygitIdentity(t *testing.T) {
 		}
 	}
 }
+
+// TestReleaseWorkflowPinsGoreleaser (ORD-019 C.8 / H8): el workflow de release usa una versión exacta de goreleaser (vX.Y.Z), no un rango como "~> v2" ni "latest".
+func TestReleaseWorkflowPinsGoreleaser(t *testing.T) {
+	text := readRepo(t, ".github/workflows/release.yml")
+	m := regexp.MustCompile(`(?m)^\s+version:\s*"?([^"\s#]+)`).FindStringSubmatch(text)
+	if m == nil || !regexp.MustCompile(`^v\d+\.\d+\.\d+$`).MatchString(m[1]) {
+		t.Errorf("goreleaser debe fijarse a una versión exacta (v2.18.2, no un rango): %v", m)
+	}
+}

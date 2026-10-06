@@ -1,7 +1,6 @@
 package storage
 
 import (
-	"fmt"
 	"github.com/MathiasDrizzy/lazymark/internal/i18n"
 	"regexp"
 	"sort"
@@ -300,10 +299,10 @@ func setDateIn(line string, f DateField, value string, newFmt DateFormat) string
 // movimiento a la columna de hecho: aquí solo se permiten el inicio y el vencimiento.
 func (s *Storage) SetTaskDate(notePath string, line int, f DateField, value string, expected time.Time) error {
 	if f == DateDone || f == DateCreated {
-		return fmt.Errorf("la fecha de completada y la de creación no se editan a mano")
+		return i18n.Errorf("la fecha de completada y la de creación no se editan a mano", "completion date and creation date cannot be edited manually")
 	}
 	if value != "" && !ValidDate(value) {
-		return fmt.Errorf("%q no es una fecha válida (AAAA-MM-DD)", value)
+		return i18n.Errorf("%q no es una fecha válida (AAAA-MM-DD)", "%q is not a valid date (YYYY-MM-DD)", value)
 	}
 	notePath, err := s.ResolveNote(notePath)
 	if err != nil {
@@ -311,7 +310,7 @@ func (s *Storage) SetTaskDate(notePath string, line int, f DateField, value stri
 	}
 	return rewriteLine(notePath, line, expected, func(l string) (string, error) {
 		if !toggleTaskRegex.MatchString(l) {
-			return "", fmt.Errorf("la línea %d no es una tarea válida de markdown", line)
+			return "", i18n.Errorf("la línea %d no es una tarea válida de markdown", "line %d is not a valid markdown task", line)
 		}
 		return setDateIn(l, f, value, s.WriteDateFormat()), nil
 	})
@@ -323,7 +322,7 @@ func (s *Storage) SetTaskDate(notePath string, line int, f DateField, value stri
 func (s *Storage) SetTaskDates(notePath string, line int, start, due *string, expected time.Time) error {
 	for _, v := range []*string{start, due} {
 		if v != nil && *v != "" && !ValidDate(*v) {
-			return fmt.Errorf("%q no es una fecha válida (AAAA-MM-DD)", *v)
+			return i18n.Errorf("%q no es una fecha válida (AAAA-MM-DD)", "%q is not a valid date (YYYY-MM-DD)", *v)
 		}
 	}
 	notePath, err := s.ResolveNote(notePath)
@@ -332,7 +331,7 @@ func (s *Storage) SetTaskDates(notePath string, line int, start, due *string, ex
 	}
 	return rewriteLine(notePath, line, expected, func(l string) (string, error) {
 		if !toggleTaskRegex.MatchString(l) {
-			return "", fmt.Errorf("la línea %d no es una tarea válida de markdown", line)
+			return "", i18n.Errorf("la línea %d no es una tarea válida de markdown", "line %d is not a valid markdown task", line)
 		}
 		fm := s.WriteDateFormat()
 		if start != nil {
@@ -434,6 +433,7 @@ func (s *Storage) MigrateDates(to DateFormat, dryRun bool) ([]DateChange, error)
 	}
 	sort.Slice(notes, func(i, j int) bool { return notes[i].Path < notes[j].Path }) // orden fijo: si se corta a mitad, lo migrado es predecible
 	var out []DateChange
+	migrated := map[string]bool{} // archivos reales ya migrados
 	for _, n := range notes {
 		if n.TooLarge || len(n.Tasks) == 0 {
 			continue
@@ -455,6 +455,14 @@ func (s *Storage) MigrateDates(to DateFormat, dryRun bool) ([]DateChange, error)
 		if len(changes) == 0 {
 			continue
 		}
+		target, err := s.ResolveNote(n.Path) // una nota que es un enlace se escribe en su destino (el enlace se conserva)
+		if err != nil {
+			continue // un enlace que sale de la carpeta: no se toca y no corta la corrida
+		}
+		if migrated[target] {
+			continue // el enlace y su destino son el mismo archivo: ya se escribió (con otra lectura el mtime ya no coincidiría)
+		}
+		migrated[target] = true
 		if dryRun {
 			out = append(out, changes...)
 			continue
@@ -462,7 +470,7 @@ func (s *Storage) MigrateDates(to DateFormat, dryRun bool) ([]DateChange, error)
 		if migrateBeforeWrite != nil {
 			migrateBeforeWrite(n.Path)
 		}
-		err := rewriteLines(n.Path, n.ModTime, func(ls []string) ([]string, error) {
+		err = rewriteLines(target, n.ModTime, func(ls []string) ([]string, error) {
 			for _, c := range changes {
 				if c.Line-1 >= len(ls) {
 					return nil, ErrNoteChanged
@@ -479,7 +487,7 @@ func (s *Storage) MigrateDates(to DateFormat, dryRun bool) ([]DateChange, error)
 			return ls, nil
 		})
 		if err != nil { // una nota falló (p. ej. cambió afuera): se devuelve lo ya migrado y el error con el nombre de esa nota; las siguientes no se tocan
-			return out, fmt.Errorf("%s: %w", s.relPath(n.Path), err)
+			return out, i18n.Errorf("%s: %w", "%s: %w", s.relPath(n.Path), err)
 		}
 		out = append(out, changes...) // solo cuenta lo que se escribió de verdad
 	}

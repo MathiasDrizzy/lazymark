@@ -49,3 +49,19 @@ func TestCutKeepsWidthOnWideGlyph(t *testing.T) {
 		}
 	}
 }
+
+// TestNoC1 (ORD-019 C.1): se quitan los controles de 8 bits (con el texto que traen: solo el carácter) y se deja lo demás, también los ESC de los estilos.
+func TestNoC1(t *testing.T) {
+	for in, want := range map[string]string{
+		"plano":                      "plano",
+		"a\u009d52;c;x\u009cb":       "a52;c;xb",
+		"x\u009b31my":                "x31my",
+		"\x1b[1mnegrita\x1b[0m ñ 日本": "\x1b[1mnegrita\x1b[0m ñ 日本",
+		"\u0080\u009f ":              " ",
+		"a\x9bb\x9dc\x1b[0m":         "abc\x1b[0m", // bytes sueltos que no son UTF-8 válido
+	} {
+		if got := NoC1(in); got != want {
+			t.Errorf("NoC1(%q) = %q, se esperaba %q", in, got, want)
+		}
+	}
+}

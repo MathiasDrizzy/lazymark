@@ -120,7 +120,7 @@ func main() {
 			}
 			dir := extractDirArg(os.Args[1:])
 			if err := mcp.RunServer(dir); err != nil {
-				fmt.Fprintf(os.Stderr, "Error en servidor MCP: %v\n", err)
+				fmt.Fprintf(os.Stderr, i18n.E("Error en servidor MCP: %v\n", "MCP server error: %v\n"), err)
 				os.Exit(1)
 			}
 			return
@@ -164,7 +164,7 @@ func main() {
 
 	cfg, err := config.Load(customDir)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "Error al inicializar la configuración: %v\n", err)
+		fmt.Fprintf(os.Stderr, i18n.E("Error al inicializar la configuración: %v\n", "Could not initialize the configuration: %v\n"), err)
 		os.Exit(1)
 	}
 
@@ -178,14 +178,14 @@ func main() {
 
 	appModel, err := app.New(cfg)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "Error al inicializar lazymark: %v\n", err)
+		fmt.Fprintf(os.Stderr, i18n.E("Error al inicializar lazymark: %v\n", "Could not initialize lazymark: %v\n"), err)
 		os.Exit(1)
 	}
 
 	// Pantalla alternativa y mouse se declaran en AppModel.View (Bubble Tea v2)
 	p := tea.NewProgram(appModel)
 	if _, err := p.Run(); err != nil {
-		fmt.Fprintf(os.Stderr, "Error durante la ejecución: %v\n", err)
+		fmt.Fprintf(os.Stderr, i18n.E("Error durante la ejecución: %v\n", "Error while running: %v\n"), err)
 		os.Exit(1)
 	}
 }

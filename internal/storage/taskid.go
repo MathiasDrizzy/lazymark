@@ -5,6 +5,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"github.com/MathiasDrizzy/lazymark/internal/i18n"
 	"os"
 	"path"
 	"path/filepath"
@@ -13,7 +14,7 @@ import (
 )
 
 // ErrTaskNotFound es el error de un id de tarea que no corresponde a ninguna tarea.
-var ErrTaskNotFound = errors.New("no existe esa tarea")
+var ErrTaskNotFound = i18n.NewError("no existe esa tarea", "no such task")
 
 // taskHash es la huella de una tarea: el texto sin etiquetas del tablero, en minúscula y con los espacios
 // colapsados. No depende de la casilla ni de la columna (mover o marcar no cambia la identidad) ni de la línea
@@ -56,7 +57,7 @@ func (s *Storage) TaskIDs(n Note) []string {
 func (s *Storage) FindTask(id string) (Note, Task, error) {
 	i := strings.LastIndex(id, "#")
 	if i <= 0 || i == len(id)-1 {
-		return Note{}, Task{}, fmt.Errorf("%w: el id %q no es <nota.md>#<huella>", ErrTaskNotFound, id)
+		return Note{}, Task{}, i18n.Errorf("%w: el id %q no es <nota.md>#<huella>", "%w: id %q is not <note.md>#<hash>", ErrTaskNotFound, id)
 	}
 	rel := id[:i]
 	notes, err := s.ListNotes()
@@ -82,7 +83,7 @@ func (s *Storage) ResolveFolder(rel string) (string, error) {
 	path := s.BaseDir
 	if rel != "" {
 		if filepath.IsAbs(rel) {
-			return "", fmt.Errorf("%w: la carpeta debe ser relativa a la carpeta de notas", ErrOutsideNotes)
+			return "", i18n.Errorf("%w: la carpeta debe ser relativa a la carpeta de notas", "%w: folder must be relative to the notes folder", ErrOutsideNotes)
 		}
 		path = filepath.Join(s.BaseDir, rel)
 	}
@@ -93,16 +94,16 @@ func (s *Storage) ResolveFolder(rel string) (string, error) {
 	real, err := filepath.EvalSymlinks(path)
 	if err != nil {
 		if errors.Is(err, os.ErrNotExist) {
-			return "", fmt.Errorf("%w: la carpeta %q no existe", ErrOutsideNotes, rel)
+			return "", i18n.Errorf("%w: la carpeta %q no existe", "%w: folder %q does not exist", ErrOutsideNotes, rel)
 		}
 		return "", err
 	}
 	r, err := filepath.Rel(base, real)
 	if err != nil || r == ".." || strings.HasPrefix(r, ".."+string(filepath.Separator)) {
-		return "", fmt.Errorf("%w: %q está fuera de la carpeta de notas", ErrOutsideNotes, rel)
+		return "", i18n.Errorf("%w: %q está fuera de la carpeta de notas", "%w: %q is outside the notes folder", ErrOutsideNotes, rel)
 	}
 	if fi, err := os.Stat(real); err != nil || !fi.IsDir() {
-		return "", fmt.Errorf("%w: %q no es una carpeta", ErrOutsideNotes, rel)
+		return "", i18n.Errorf("%w: %q no es una carpeta", "%w: %q is not a folder", ErrOutsideNotes, rel)
 	}
 	return real, nil
 }
@@ -118,7 +119,7 @@ func (s *Storage) EnsureFolder(rel string) (string, error) {
 	cur := ""
 	for _, seg := range strings.Split(rel, "/") {
 		if seg == "" || seg == "." || seg == ".." || strings.ContainsAny(seg, "\\:") || strings.IndexFunc(seg, func(r rune) bool { return r < 0x20 || r == 0x7f }) >= 0 {
-			return "", fmt.Errorf("%w: la carpeta %q no es válida", ErrOutsideNotes, rel)
+			return "", i18n.Errorf("%w: la carpeta %q no es válida", "%w: folder %q is not valid", ErrOutsideNotes, rel)
 		}
 		cur = path.Join(cur, seg)
 		if _, err := os.Lstat(filepath.Join(s.BaseDir, filepath.FromSlash(cur))); errors.Is(err, os.ErrNotExist) {
