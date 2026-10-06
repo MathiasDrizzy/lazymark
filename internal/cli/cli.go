@@ -247,7 +247,7 @@ func RunTaskWithWriter(w io.Writer, args []string, defaultNotesDir string) error
 	}
 }
 
-func finishMove(w io.Writer, p *parser, _ *ops.Service, do func() (ops.TaskDTO, error)) error {
+func finishMove(w io.Writer, p *parser, svc *ops.Service, do func() (ops.TaskDTO, error)) error {
 	t, err := do()
 	if err != nil {
 		return err
@@ -258,7 +258,12 @@ func finishMove(w io.Writer, p *parser, _ *ops.Service, do func() (ops.TaskDTO, 
 	if p.json {
 		return printJSON(w, t)
 	}
-	fmt.Fprint(w, plain(fmt.Sprintf("%s → %s%s\n", t.ID, t.Column, datesSuffix(t))))
+	head := plain(fmt.Sprintf("%s → %s", t.ID, t.Column))
+	if colorEnabled(w, svc) { // en una terminal las fechas llevan el color de su estado, igual que en `task list`
+		fmt.Fprintln(w, head+datesSuffixColored(t, storage.Today()))
+		return nil
+	}
+	fmt.Fprintln(w, head+plain(datesSuffix(t)))
 	return nil
 }
 
@@ -613,11 +618,14 @@ func missingToMessage(emoji, dataview int) string {
 	return head + "\n" + counts + "\n" + hint + "\n" + i18n.T("(--dry-run solo muestra el cambio; quítalo para escribir)", "(--dry-run only shows the change; drop it to write)")
 }
 
+// isTerminal dice si el descriptor es una terminal (una variable para que las pruebas la simulen).
+var isTerminal = term.IsTerminal
+
 // colorEnabled dice si la salida de texto lleva color: solo en una terminal (no en una tubería ni redirigida a un archivo), sin NO_COLOR y con date_colors
 // activado en la configuración; además aplica el tema configurado para que los colores sean los de su paleta. `--json` nunca llega aquí.
 func colorEnabled(w io.Writer, svc *ops.Service) bool {
 	f, ok := w.(*os.File)
-	if !ok || !term.IsTerminal(f.Fd()) || os.Getenv("NO_COLOR") != "" {
+	if !ok || !isTerminal(f.Fd()) || os.Getenv("NO_COLOR") != "" {
 		return false
 	}
 	cfg := svc.UserConfig()

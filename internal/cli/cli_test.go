@@ -1127,3 +1127,67 @@ func TestTaskListColorOnlyOnTTY(t *testing.T) {
 		t.Errorf("datesSuffix sigue sin color: %q", plainLine)
 	}
 }
+
+// TestTaskMoveColorOnlyOnTTY (ORD-024): la fecha de la línea que imprimen `task move`, `due`, `start` y `toggle` va en el color de su estado SOLO en una terminal, igual
+// que en `task list`; en una tubería, con `--json` o con NO_COLOR no hay ni un código ANSI.
+func TestTaskMoveColorOnlyOnTTY(t *testing.T) {
+	dir := fixture(t)
+	os.WriteFile(filepath.Join(dir, "col.md"), []byte("# C\n- [ ] vencida 📅 2020-01-01\n- [ ] lejos 📅 2999-01-01\n"), 0o644)
+	idOf := func(text string) string {
+		out, err := run(t, dir, "task", "list", "--json")
+		if err != nil {
+			t.Fatal(err)
+		}
+		var tasks []struct{ ID, Text string }
+		if err := json.Unmarshal([]byte(out), &tasks); err != nil {
+			t.Fatal(err)
+		}
+		for _, k := range tasks {
+			if k.Text == text {
+				return k.ID
+			}
+		}
+		t.Fatalf("no hay la tarea %q", text)
+		return ""
+	}
+	moveTo := func(tty bool, args ...string) string { // corre el comando con un archivo real como salida (una terminal simulada o no)
+		old := isTerminal
+		isTerminal = func(uintptr) bool { return tty }
+		t.Cleanup(func() { isTerminal = old })
+		f, err := os.CreateTemp(t.TempDir(), "salida")
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer f.Close()
+		if err := RunTaskWithWriter(f, append(args[1:], "--dir", dir), dir); err != nil {
+			t.Fatal(err)
+		}
+		b, _ := os.ReadFile(f.Name())
+		return string(b)
+	}
+	id := idOf("vencida")
+	if out := moveTo(true, "task", "move", id, "doing"); !strings.Contains(out, "\x1b[") || !strings.Contains(out, "2020-01-01") {
+		t.Errorf("en una terminal la fecha vencida de task move lleva color: %q", out)
+	}
+	if out := moveTo(false, "task", "move", id, "todo"); strings.Contains(out, "\x1b") || !strings.Contains(out, "2020-01-01") {
+		t.Errorf("sin terminal (tubería o archivo) no hay color: %q", out)
+	}
+	if out := moveTo(true, "task", "move", id, "doing", "--json"); strings.Contains(out, "\x1b") {
+		t.Errorf("--json nunca lleva color: %q", out)
+	}
+	t.Setenv("NO_COLOR", "1")
+	if out := moveTo(true, "task", "move", id, "todo"); strings.Contains(out, "\x1b") {
+		t.Errorf("NO_COLOR apaga el color: %q", out)
+	}
+	t.Setenv("NO_COLOR", "")
+	// los otros comandos que imprimen la misma línea: due, start y toggle
+	later := idOf("lejos")
+	for _, args := range [][]string{{"task", "due", later, "2999-02-02"}, {"task", "start", later, "2999-01-15"}, {"task", "toggle", later}} {
+		if out := moveTo(true, args...); !strings.Contains(out, "\x1b[") {
+			t.Errorf("%v en una terminal lleva color: %q", args[:2], out)
+		}
+		if out := moveTo(false, args...); strings.Contains(out, "\x1b") {
+			t.Errorf("%v en una tubería no lleva color: %q", args[:2], out)
+		}
+	}
+}
