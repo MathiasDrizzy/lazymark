@@ -63,12 +63,12 @@ type mascotState struct {
 	lastInput time.Time // la última tecla o clic: el "click me!" cuenta el tiempo sin interacción desde aquí
 }
 
-// El "click me!" sobre la mascota (pedido de Mathias: muy sutil y solo algunas veces). Cadencia: tras 20 segundos sin tocar nada aparece 6 segundos y se repite cada
-// 90 segundos de quietud (antes 2 min / 3 s / 4 min: en la práctica nadie lo veía); cualquier tecla o clic reinicia la cuenta, así nunca sale mientras se trabaja, y tras el primer clic en la mascota no vuelve más.
+// El "click me!" sobre la mascota (pedido de Mathias: muy sutil y solo algunas veces). Cadencia: tras 20 segundos sin tocar nada aparece 15 segundos y se repite cada
+// 60 segundos de quietud (antes 2 min / 3 s / 4 min, y luego 20 s / 6 s / 90 s: una ventana de 6 s se pierde con solo mirar a otro lado); cualquier tecla o clic reinicia la cuenta, así nunca sale mientras se trabaja, y tras el primer clic en la mascota no vuelve más.
 const (
 	hintIdleAfter = 20 * time.Second
-	hintEvery     = 90 * time.Second
-	hintShowFor   = 6 * time.Second
+	hintEvery     = 60 * time.Second
+	hintShowFor   = 15 * time.Second
 	hintText      = "click me!"
 )
 
