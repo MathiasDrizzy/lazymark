@@ -2,6 +2,7 @@ package app
 
 import (
 	"errors"
+	"github.com/MathiasDrizzy/lazymark/internal/ui/views"
 	"strings"
 	"time"
 
@@ -181,7 +182,12 @@ func (p *datesPopup) resolved(i int) string {
 		return dim("→ " + i18n.T("sin fecha", "no date"))
 	}
 	d, _ := time.Parse("2006-01-02", v) // en UTC: el día de la semana no depende de la zona horaria
-	return lipgloss.NewStyle().Foreground(theme.ColorGreen).Render("→ " + v + " (" + storage.WeekdayName(d.Weekday(), i18n.CurrentLanguage()) + ")")
+	field := storage.DateDue
+	if i == dateStart {
+		field = storage.DateStart
+	}
+	// la fecha resuelta con el color de su estado (vencida, por vencer, en fecha; ya empezó o no), igual que se verá en la tarea
+	return views.DateStyleFor(field, v, false, p.today.Format("2006-01-02")).Render("→ " + v + " (" + storage.WeekdayName(d.Weekday(), i18n.CurrentLanguage()) + ")")
 }
 
 func (p *datesPopup) render(l Layout) string {

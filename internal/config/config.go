@@ -128,6 +128,8 @@ type Config struct {
 	KanbanColumns []KanbanColumn `json:"kanban_columns"`
 	// Mascot: si el perezoso dormido aparece en los estados de reposo (carpeta o nota vacía). Por defecto sí.
 	Mascot bool `json:"mascot"`
+	// ClickHint: si, tras un rato sin tocar nada, aparece muy tenue el texto "click me!" sobre la mascota. Por defecto sí; no hace falta apagar la mascota para quitarlo.
+	ClickHint bool `json:"click_hint"`
 	// MaxNoteMB es el tamaño máximo, en MB, de una nota que lazymark lee (listado, vista previa, CLI y MCP). Una más grande se muestra como "demasiado grande" y no se carga. Por defecto 10.
 	MaxNoteMB int `json:"max_note_mb"`
 	// DateFormat es el formato en que se escriben las fechas de las tareas en el archivo: "dataview" (`[due:: 2026-05-10]`), "emoji" (el formato por
@@ -135,6 +137,13 @@ type Config struct {
 	DateFormat string `json:"date_format"`
 	// DateFormatNoticeShown: ya se avisó (una sola vez) que el vault tiene fechas con emojis y se escriben así.
 	DateFormatNoticeShown bool `json:"date_format_notice_shown"`
+	// DateColors: si las fechas de las tareas se dibujan con un color según su estado (vencida, por vencer, en fecha, inicio, completada). Por defecto sí; apagado,
+	// todas van en un gris claro neutro.
+	DateColors bool `json:"date_colors"`
+	// DueSoonDays: cuántos días antes del vencimiento (0 a 30) una fecha cuenta como "por vencer". 0 (por defecto): solo el mismo día.
+	DueSoonDays int `json:"due_soon_days"`
+	// DateColorNames: el color de la paleta del tema que usa cada estado: overdue, soon, ontime, started, notstarted y done, con un valor de DateColorChoices.
+	DateColorNames map[string]string `json:"date_color_names"`
 	// ScreenBackground: "theme" (por defecto) o "terminal". Ver ScreenBackgroundTheme.
 	ScreenBackground string `json:"screen_background"`
 	configPath       string `json:"-"`
@@ -194,7 +203,10 @@ func DefaultConfig(notesDir string) *Config {
 		KanbanCards:        KanbanCardsRects,
 		ScreenBackground:   ScreenBackgroundTheme,
 		Mascot:             true,
+		ClickHint:          true,
 		MaxNoteMB:          10,
+		DateColors:         true,
+		DateColorNames:     DefaultDateColorNames(),
 		NerdFont:           true,
 		KanbanColumns:      DefaultKanbanColumns(),
 	}
@@ -274,6 +286,8 @@ func load(customDir string, create bool) (*Config, error) {
 			if disk.DateFormat != "dataview" && disk.DateFormat != "emoji" {
 				disk.DateFormat = "" // ausente o desconocido: el de por defecto
 			}
+			disk.DueSoonDays = min(max(disk.DueSoonDays, 0), 30)
+			disk.DateColorNames = normalizeDateColorNames(disk.DateColorNames)
 			if disk.KanbanCards != KanbanCardsCompact {
 				disk.KanbanCards = KanbanCardsRects // ausente o desconocido
 			}
@@ -489,4 +503,25 @@ func normalizeLanguage(v string) string {
 		return string(l)
 	}
 	return "auto"
+}
+
+// DateColorChoices son los colores de la paleta del tema que se pueden elegir para el estado de una fecha (los nombres que entiende views.PaletteColor).
+var DateColorChoices = []string{"error", "warning", "orange", "success", "accent", "info", "special", "text", "muted"}
+
+// DefaultDateColorNames son los colores por defecto de cada estado de fecha (la tabla razonada está en ui/views/datecolors.go).
+func DefaultDateColorNames() map[string]string {
+	return map[string]string{"overdue": "error", "soon": "warning", "ontime": "accent", "started": "info", "notstarted": "muted", "done": "success"}
+}
+
+// normalizeDateColorNames completa con los de por defecto los estados que faltan y reemplaza los nombres que no son un color de la paleta.
+func normalizeDateColorNames(in map[string]string) map[string]string {
+	out := DefaultDateColorNames()
+	for k := range out {
+		for _, c := range DateColorChoices {
+			if in[k] == c {
+				out[k] = c
+			}
+		}
+	}
+	return out
 }

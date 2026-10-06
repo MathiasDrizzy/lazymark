@@ -1,6 +1,9 @@
 package app
 
 import (
+	"github.com/MathiasDrizzy/lazymark/internal/config"
+	"github.com/MathiasDrizzy/lazymark/internal/ui/theme"
+	"github.com/MathiasDrizzy/lazymark/internal/ui/views"
 	"github.com/charmbracelet/x/ansi"
 	"os"
 	"path/filepath"
@@ -458,4 +461,80 @@ func TestNoC1ControlsReachTheTerminal(t *testing.T) {
 	press(m, "esc")
 	m.c.setStatus("%s", "aviso "+evil)
 	check("barra de estado")
+}
+
+// TestSettingsDateColors (ORD-020 K3): en Ajustes se apaga date_colors, se cambia due_soon_days y el color de un estado; se aplica a la vista al momento y se guarda en el
+// archivo de configuración.
+func TestSettingsDateColors(t *testing.T) {
+	m := newTestModel(t, 120, 40)
+	old := views.DateColors
+	t.Cleanup(func() { views.DateColors = old })
+	p := newSettingsPopup(m.c, func() {}, func() {})
+	if !m.c.cfg.DateColors || m.c.cfg.DueSoonDays != 0 || m.c.cfg.DateColorNames["soon"] != "warning" {
+		t.Fatalf("por defecto: colores sí, 0 días, por vencer = warning: %+v", m.c.cfg)
+	}
+	p.change(setDueSoon, 1)
+	p.change(setDueSoon, 1)
+	if m.c.cfg.DueSoonDays != 2 || views.DateColors.SoonDays != 2 {
+		t.Errorf("due_soon_days = %d (vista %d), se esperaba 2", m.c.cfg.DueSoonDays, views.DateColors.SoonDays)
+	}
+	p.change(setDueSoon, -1)
+	p.change(setDueSoon, -1)
+	p.change(setDueSoon, -1) // de 0 vuelve al último: 30
+	if m.c.cfg.DueSoonDays != 30 {
+		t.Errorf("la vuelta al principio da 30: %d", m.c.cfg.DueSoonDays)
+	}
+	p.change(setColorSoon, 1) // warning → orange
+	if m.c.cfg.DateColorNames["soon"] != "orange" || views.DateColors.Names["soon"] != "orange" {
+		t.Errorf("color de por vencer = %q", m.c.cfg.DateColorNames["soon"])
+	}
+	p.change(setDateColors, 1)
+	if m.c.cfg.DateColors || views.DateColors.Enabled {
+		t.Error("date_colors apagado")
+	}
+	for _, id := range []settingID{setDateColors, setDueSoon, setColorOverdue, setColorSoon, setColorOnTime, setColorStarted, setColorNotStarted, setColorDone} {
+		if p.label(id) == "" || strings.TrimSpace(p.value(id)) == "" {
+			t.Errorf("la fila %d de Ajustes debe tener texto y valor", id)
+		}
+	}
+	// el archivo de configuración lo dice
+	data, err := os.ReadFile(m.c.cfg.Path())
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, want := range []string{`"date_colors": false`, `"due_soon_days": 30`, `"soon": "orange"`} {
+		if !strings.Contains(string(data), want) {
+			t.Errorf("el archivo de configuración debe llevar %s:\n%s", want, data)
+		}
+	}
+}
+
+// TestPreviewDatesAreColoredByState (ORD-020): en la vista previa las fechas llevan el color de su estado (vencida, por vencer, en fecha) y, apagados los colores, ninguno.
+func TestPreviewDatesAreColoredByState(t *testing.T) {
+	old := storage.Today
+	storage.Today = func() string { return "2026-10-06" }
+	t.Cleanup(func() { storage.Today = old })
+	oldC := views.DateColors
+	t.Cleanup(func() { views.DateColors = oldC })
+	views.DateColors = views.DateColorSettings{Enabled: true, Names: config.DefaultDateColorNames()}
+	theme.ApplyThemeByName("catppuccin-mocha")
+	lines := views.ColorDateLines([]string{
+		"[ ] vencida " + views.DateGlyph(storage.DateDue) + " 2026-10-01",
+		"[ ] hoy " + views.DateGlyph(storage.DateDue) + " 2026-10-06",
+		"[ ] lejos " + views.DateGlyph(storage.DateDue) + " 2026-12-01",
+		"[✓] hecha " + views.DateGlyph(storage.DateDue) + " 2026-10-01",
+		"texto sin fechas",
+	}, "2026-10-06")
+	want := []string{"38;2;243;139;168", "38;2;249;226;175", "38;2;137;180;250", ""} // rojo, amarillo y azul de Catppuccin Mocha; la tarea hecha, neutra
+	for i, w := range want[:3] {
+		if !strings.Contains(lines[i], w) {
+			t.Errorf("línea %d: debe llevar el color %s: %q", i, w, lines[i])
+		}
+	}
+	if strings.Contains(lines[3], "38;2;243;139;168") {
+		t.Errorf("el vencimiento de una tarea hecha no va en rojo: %q", lines[3])
+	}
+	if lines[4] != "texto sin fechas" {
+		t.Errorf("una línea sin fechas no cambia: %q", lines[4])
+	}
 }

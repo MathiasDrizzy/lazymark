@@ -1101,3 +1101,29 @@ func TestConfigLanguageBeatsSystem(t *testing.T) {
 		t.Errorf("language=en en la configuración manda: %v", err)
 	}
 }
+
+// TestTaskListColorOnlyOnTTY (ORD-020 K4): `task list` solo lleva color si la salida es una terminal; en una tubería (aquí un buffer), con --json o con NO_COLOR no hay
+// ni un código ANSI. Con color, cada fecha lleva el de su estado.
+func TestTaskListColorOnlyOnTTY(t *testing.T) {
+	dir := fixture(t)
+	os.WriteFile(filepath.Join(dir, "col.md"), []byte("# C\n- [ ] vencida 📅 2020-01-01\n- [ ] lejos 📅 2999-01-01\n"), 0o644)
+	out, err := run(t, dir, "task", "list")
+	if err != nil || strings.Contains(out, "\x1b") {
+		t.Errorf("en una tubería no hay color: %v %q", err, out)
+	}
+	if out, err = run(t, dir, "task", "list", "--json"); err != nil || strings.Contains(out, "\x1b") {
+		t.Errorf("--json no lleva color: %v", err)
+	}
+	var buf bytes.Buffer
+	svc, _ := ops.New(dir)
+	if colorEnabled(&buf, svc) {
+		t.Error("un buffer no es una terminal")
+	}
+	line := datesSuffixColored(ops.TaskDTO{Due: "2020-01-01", Overdue: true}, "2026-10-06")
+	if !strings.Contains(line, "\x1b[") || !strings.Contains(line, "2020-01-01") {
+		t.Errorf("con color cada fecha lleva su código: %q", line)
+	}
+	if plainLine := datesSuffix(ops.TaskDTO{Due: "2020-01-01", Overdue: true}); strings.Contains(plainLine, "\x1b") {
+		t.Errorf("datesSuffix sigue sin color: %q", plainLine)
+	}
+}

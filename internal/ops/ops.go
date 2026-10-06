@@ -85,6 +85,9 @@ func (s *Service) afterDateWrite() {
 	}
 }
 
+// UserConfig es la configuración del usuario con la que se creó el servicio (solo para leer: colores de fechas, tema…).
+func (s *Service) UserConfig() *config.Config { return s.cfg }
+
 // New crea el servicio para una carpeta de notas ("" es la de por defecto), con las columnas de la config del
 // usuario. No crea nada en disco.
 func New(notesDir string) (*Service, error) { return newService(notesDir, false) }

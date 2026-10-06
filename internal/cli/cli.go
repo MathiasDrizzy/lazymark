@@ -5,6 +5,10 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"github.com/MathiasDrizzy/lazymark/internal/storage"
+	"github.com/MathiasDrizzy/lazymark/internal/ui/theme"
+	"github.com/MathiasDrizzy/lazymark/internal/ui/views"
+	"github.com/charmbracelet/x/term"
 	"io"
 	"os"
 	"strings"
@@ -182,12 +186,18 @@ func RunTaskWithWriter(w io.Writer, args []string, defaultNotesDir string) error
 		if p.json {
 			return printJSON(w, tasks)
 		}
+		colored := colorEnabled(w, svc)
 		for _, t := range tasks {
 			mark := "[ ]"
 			if t.Done {
 				mark = "[x]"
 			}
-			fmt.Fprint(w, plain(fmt.Sprintf("%s %s  %s  (%s)%s\n", mark, t.ID, t.Text, t.Column, datesSuffix(t))))
+			head := plain(fmt.Sprintf("%s %s  %s  (%s)", mark, t.ID, t.Text, t.Column))
+			if colored {
+				fmt.Fprintln(w, head+datesSuffixColored(t, storage.Today()))
+			} else {
+				fmt.Fprintln(w, head+plain(datesSuffix(t)))
+			}
 		}
 		return nil
 
@@ -601,4 +611,42 @@ func missingToMessage(emoji, dataview int) string {
 		hint = i18n.T("Están mezclados. Elige el que usa tu Task format de Obsidian Tasks:", "They are mixed. Pick the one your Obsidian Tasks Task format uses:") + "\n  lazymark dates migrate --to dataview --dry-run   (Task format: Dataview)\n  lazymark dates migrate --to emoji --dry-run      (Task format: Tasks)"
 	}
 	return head + "\n" + counts + "\n" + hint + "\n" + i18n.T("(--dry-run solo muestra el cambio; quítalo para escribir)", "(--dry-run only shows the change; drop it to write)")
+}
+
+// colorEnabled dice si la salida de texto lleva color: solo en una terminal (no en una tubería ni redirigida a un archivo), sin NO_COLOR y con date_colors
+// activado en la configuración; además aplica el tema configurado para que los colores sean los de su paleta. `--json` nunca llega aquí.
+func colorEnabled(w io.Writer, svc *ops.Service) bool {
+	f, ok := w.(*os.File)
+	if !ok || !term.IsTerminal(f.Fd()) || os.Getenv("NO_COLOR") != "" {
+		return false
+	}
+	cfg := svc.UserConfig()
+	if cfg == nil || !cfg.DateColors {
+		return false
+	}
+	theme.ApplyThemeByName(cfg.Theme)
+	views.DateColors = views.DateColorSettings{Enabled: true, SoonDays: cfg.DueSoonDays, Names: cfg.DateColorNames}
+	return true
+}
+
+// datesSuffixColored es datesSuffix con cada fecha en el color de su estado (vencida, por vencer, en fecha…), el mismo de la TUI. Solo para una terminal.
+func datesSuffixColored(t ops.TaskDTO, today string) string {
+	var parts []string
+	for _, d := range []struct {
+		g    string
+		f    storage.DateField
+		date string
+	}{{"▸", storage.DateStart, t.Start}, {"◑", storage.DateScheduled, t.Scheduled}, {"◷", storage.DateDue, t.Due}, {"✓", storage.DateDone, t.Completed}, {"+", storage.DateCreated, t.Created}} {
+		if d.date != "" {
+			parts = append(parts, views.DateStyleFor(d.f, d.date, t.Done, today).Render(d.g+" "+d.date))
+		}
+	}
+	if len(parts) == 0 {
+		return ""
+	}
+	out := "  " + strings.Join(parts, " ")
+	if t.Overdue {
+		out += " (" + i18n.T("vencida", "overdue") + ")"
+	}
+	return out
 }

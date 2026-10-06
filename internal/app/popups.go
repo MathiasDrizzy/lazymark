@@ -2,6 +2,7 @@ package app
 
 import (
 	"fmt"
+	"github.com/MathiasDrizzy/lazymark/internal/ui/views"
 	"os"
 	"path/filepath"
 	"strings"
@@ -32,6 +33,15 @@ const (
 	setKanbanCards
 	setDateFormat
 	setNotesDir
+	setClickHint
+	setDateColors
+	setDueSoon
+	setColorOverdue
+	setColorSoon
+	setColorOnTime
+	setColorStarted
+	setColorNotStarted
+	setColorDone
 	settingCount
 )
 
@@ -98,11 +108,40 @@ func (p *settingsPopup) label(id settingID) string {
 		return i18n.T("Tarjetas", "Cards")
 	case setDateFormat:
 		return i18n.T("Formato de fechas", "Date format")
+	case setClickHint:
+		return i18n.T("Aviso «click me!»", "\"click me!\" hint")
+	case setDateColors:
+		return i18n.T("Colores de fechas", "Date colors")
+	case setDueSoon:
+		return i18n.T("Por vencer (días antes)", "Due soon (days before)")
+	case setColorOverdue:
+		return "  " + i18n.T("Color: vencida", "Color: overdue")
+	case setColorSoon:
+		return "  " + i18n.T("Color: por vencer", "Color: due soon")
+	case setColorOnTime:
+		return "  " + i18n.T("Color: en fecha", "Color: on time")
+	case setColorStarted:
+		return "  " + i18n.T("Color: ya empezó", "Color: started")
+	case setColorNotStarted:
+		return "  " + i18n.T("Color: sin empezar", "Color: not started")
+	case setColorDone:
+		return "  " + i18n.T("Color: completada", "Color: completed")
 	case setNotesDir:
 		return i18n.T("Carpeta de notas", "Notes folder")
 	}
 	return ""
 }
+
+// dateColorKey es la clave de configuración del estado que edita la fila id de color, y si id es una fila de color.
+func dateColorKey(id settingID) (string, bool) {
+	if id >= setColorOverdue && id <= setColorDone {
+		return views.DateStateKeys[id-setColorOverdue], true
+	}
+	return "", false
+}
+
+// dueSoonOptions son los valores de "por vencer" que recorre Ajustes (0 a 30 días).
+var dueSoonOptions = []int{0, 1, 2, 3, 5, 7, 14, 30}
 
 func (p *settingsPopup) value(id settingID) string {
 	cfg := p.c.cfg
@@ -156,8 +195,26 @@ func (p *settingsPopup) value(id settingID) string {
 			return "dataview"
 		}
 		return "dataview (" + i18n.T("auto", "auto") + ")"
+	case setClickHint:
+		if cfg.ClickHint {
+			return i18n.T("sí", "yes")
+		}
+		return "no"
+	case setDateColors:
+		if cfg.DateColors {
+			return i18n.T("sí", "yes")
+		}
+		return "no"
+	case setDueSoon:
+		if cfg.DueSoonDays == 0 {
+			return i18n.T("solo el mismo día", "same day only")
+		}
+		return fmt.Sprintf("%d", cfg.DueSoonDays)
 	case setNotesDir:
 		return leftTruncate(shortPath(cfg.NotesDir), 24)
+	}
+	if key, ok := dateColorKey(id); ok {
+		return cfg.DateColorNames[key]
 	}
 	return ""
 }
@@ -222,7 +279,27 @@ func (p *settingsPopup) change(id settingID, dir int) {
 		} else {
 			cfg.PopupBackground = config.PopupBackgroundTheme
 		}
+	case setClickHint:
+		cfg.ClickHint = !cfg.ClickHint
+	case setDateColors:
+		cfg.DateColors = !cfg.DateColors
+	case setDueSoon:
+		cur := 0
+		for i, v := range dueSoonOptions {
+			if v <= cfg.DueSoonDays {
+				cur = i
+			}
+		}
+		cfg.DueSoonDays = dueSoonOptions[(cur+dir+len(dueSoonOptions))%len(dueSoonOptions)]
+	default:
+		if key, ok := dateColorKey(id); ok {
+			if cfg.DateColorNames == nil {
+				cfg.DateColorNames = config.DefaultDateColorNames()
+			}
+			cfg.DateColorNames[key] = cycle(config.DateColorChoices, cfg.DateColorNames[key], dir)
+		}
 	}
+	applyDateColors(cfg)
 	p.c.save()
 	p.c.setStatus("%s: %s", p.label(id), p.value(id))
 	p.onChange()
@@ -270,8 +347,8 @@ func cycle(opts []string, current string, dir int) string {
 
 func (p *settingsPopup) render(l Layout) string {
 	w := popupWidth(l, 56)
-	p.top, p.height = 1, p.n
-	labelW := 22
+	p.top, p.height = 1, clamp(p.n, 1, min(12, max(3, l.H-8))) // con muchos ajustes la lista se desplaza (12 filas como máximo; menos en terminales bajas)
+	labelW := 24
 	var lines []string
 	lines = append(lines, p.rows(w-3, func(i int) string {
 		id := settingID(i)
@@ -425,4 +502,9 @@ func (p *trashPopup) render(l Layout) string {
 	}
 	lines = append(lines, strings.Join(buttons, "   "))
 	return theme.RenderPopup(i18n.T("Papelera", "Trash"), escHint, lines, w)
+}
+
+// applyDateColors pasa a la vista la configuración de los colores de las fechas (date_colors, due_soon_days y el color de cada estado).
+func applyDateColors(cfg *config.Config) {
+	views.DateColors = views.DateColorSettings{Enabled: cfg.DateColors, SoonDays: cfg.DueSoonDays, Names: cfg.DateColorNames}
 }

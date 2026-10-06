@@ -227,13 +227,15 @@ func TestDatesAreMonochromeGlyphs(t *testing.T) {
 		}
 	}
 	// el calendario de la vencida va en rojo; el de la futura, atenuado; el check, en verde
-	var redDue, mutedDue, greenDone int
+	var redDue, mutedDue, neutralDue, greenDone int
 	for _, seg := range byGlyph[""] {
 		switch {
 		case seg.hasFg(theme.ColorRed):
 			redDue++
-		case seg.hasFg(theme.ColorOverlay0):
+		case seg.hasFg(theme.ColorBlue): // la futura: en fecha, el azul de acento (ORD-020: ya no atenuado)
 			mutedDue++
+		case seg.hasFg(theme.ColorSubtext0): // el vencimiento de una tarea ya hecha: neutro y legible
+			neutralDue++
 		}
 	}
 	for _, seg := range byGlyph[""] {
@@ -243,15 +245,22 @@ func TestDatesAreMonochromeGlyphs(t *testing.T) {
 	}
 	var mutedStart int
 	for _, seg := range byGlyph["\uf135"] {
-		if seg.hasFg(theme.ColorOverlay0) {
+		if seg.hasFg(theme.ColorTeal) { // ya empezó (inicio ≤ hoy): el verde azulado de información
 			mutedStart++
 		}
 	}
 	if mutedStart != 1 {
-		t.Errorf("la fecha de inicio va atenuada: %d de %d", mutedStart, len(byGlyph["\uf135"]))
+		t.Errorf("la fecha de inicio va con el color de 'ya empezó': %d de %d", mutedStart, len(byGlyph["\uf135"]))
 	}
-	if redDue != 1 || mutedDue != 2 || greenDone != 1 {
-		t.Errorf("colores de las fechas: vencida roja=%d (1), atenuadas=%d (2), completada verde=%d (1)", redDue, mutedDue, greenDone)
+	for g, segs := range byGlyph { // ninguna fecha queda en el gris atenuado que casi no se veía
+		for _, seg := range segs {
+			if seg.hasFg(theme.ColorOverlay0) {
+				t.Errorf("la fecha con el glifo %q sigue en el gris atenuado (Overlay0)", g)
+			}
+		}
+	}
+	if redDue != 1 || mutedDue != 1 || neutralDue != 1 || greenDone != 1 {
+		t.Errorf("colores de las fechas: vencida roja=%d (1), en fecha azul=%d (1), vencimiento de una hecha neutro=%d (1), completada verde=%d (1)", redDue, mutedDue, neutralDue, greenDone)
 	}
 	// un emoji de fecha que sobrevive en el texto de la tarea (repetido o inválido) también se dibuja como glifo
 	b := dateBoard()

@@ -103,7 +103,7 @@ func (m *AppModel) hintTickCmd() tea.Cmd {
 // y en la ventana de la cadencia.
 func (m *AppModel) hintShowing(kind string, r Rect) bool {
 	st := &m.mascot
-	if st.clicked || st.playing || !m.c.cfg.MouseClick || len(m.c.popups) > 0 || !m.mascotShows(kind, r) {
+	if st.clicked || st.playing || !m.c.cfg.ClickHint || !m.c.cfg.MouseClick || len(m.c.popups) > 0 || !m.mascotShows(kind, r) {
 		return false
 	}
 	idle := hintNow().Sub(st.lastInput) - hintIdleAfter

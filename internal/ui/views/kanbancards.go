@@ -79,22 +79,20 @@ func splitWidth(s string, width int) (head, rest string) {
 	return s, ""
 }
 
-// cardDates arma la línea de fechas de una tarjeta (glifo y fecha: inicio, programada, vencimiento, completada, creada), con el vencimiento en
-// el color de error del tema si está vencida; "" si no tiene fechas. width es el ancho disponible: si no caben todas, se quitan primero la
+// cardDates arma la línea de fechas de una tarjeta (glifo y fecha: inicio, programada, vencimiento, completada, creada), con cada fecha en el
+// color de su estado (vencida, por vencer, en fecha…); "" si no tiene fechas. width es el ancho disponible: si no caben todas, se quitan primero la
 // de creada, la programada y la de completada, y después la de inicio.
 func cardDates(d storage.Dates, done bool, today string, width int) string {
-	overdue := storage.Overdue(done, d.Due, today)
 	type field struct {
 		f    storage.DateField
 		date string
-		over bool
 	}
-	all := []field{{storage.DateStart, d.Start, false}, {storage.DateScheduled, d.Scheduled, false}, {storage.DateDue, d.Due, overdue}, {storage.DateDone, d.Done, false}, {storage.DateCreated, d.Created, false}}
+	all := []field{{storage.DateStart, d.Start}, {storage.DateScheduled, d.Scheduled}, {storage.DateDue, d.Due}, {storage.DateDone, d.Done}, {storage.DateCreated, d.Created}}
 	build := func(keep func(storage.DateField) bool) string {
 		var parts []string
 		for _, x := range all {
 			if x.date != "" && keep(x.f) {
-				parts = append(parts, DatePart(x.f, x.date, x.over))
+				parts = append(parts, DatePart(x.f, x.date, done, today))
 			}
 		}
 		return strings.Join(parts, " ")

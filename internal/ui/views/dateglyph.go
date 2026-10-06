@@ -3,9 +3,7 @@ package views
 import (
 	"strings"
 
-	"charm.land/lipgloss/v2"
 	"github.com/MathiasDrizzy/lazymark/internal/storage"
-	"github.com/MathiasDrizzy/lazymark/internal/ui/theme"
 )
 
 // En el archivo las fechas de una tarea son emojis (🛫 📅 ✅: el formato de Obsidian Tasks), pero en pantalla nunca se dibujan
@@ -57,29 +55,17 @@ func ReplaceDateEmoji(s string) string {
 	return s
 }
 
-// dateStyles son los colores de cada fecha: la vencida con el color de error del tema, la completada con el de éxito y el
-// resto atenuado.
-func dateStyle(f storage.DateField, overdue bool) lipgloss.Style {
-	switch {
-	case f == storage.DateDue && overdue:
-		return lipgloss.NewStyle().Foreground(theme.ColorRed).Bold(true)
-	case f == storage.DateDone:
-		return lipgloss.NewStyle().Foreground(theme.ColorGreen)
-	}
-	return lipgloss.NewStyle().Foreground(theme.ColorOverlay0)
+// DatePart arma una fecha para dibujarla: el glifo y la fecha, con el color de su estado (datecolors.go). done: la tarea está hecha; today: hoy (AAAA-MM-DD).
+func DatePart(f storage.DateField, date string, done bool, today string) string {
+	return DateStyleFor(f, date, done, today).Render(DateGlyph(f) + " " + date)
 }
 
-// DatePart arma una fecha para dibujarla: el glifo y la fecha, con su color.
-func DatePart(f storage.DateField, date string, overdue bool) string {
-	return dateStyle(f, overdue).Render(DateGlyph(f) + " " + date)
-}
-
-// PanelDates arma las fechas que se muestran junto al texto en el panel Tareas: solo el vencimiento (en rojo si venció). El
+// PanelDates arma las fechas que se muestran junto al texto en el panel Tareas: solo el vencimiento (con el color de su estado). El
 // panel es angosto y la fecha de completada, que se agrega sola al marcar la tarea, se ve en las tarjetas y en la vista previa;
 // "" si no tiene vencimiento.
 func PanelDates(d storage.Dates, done bool, today string) string {
 	if d.Due == "" {
 		return ""
 	}
-	return DatePart(storage.DateDue, d.Due, storage.Overdue(done, d.Due, today))
+	return DatePart(storage.DateDue, d.Due, done, today)
 }

@@ -339,72 +339,72 @@ func schema(required []string, props obj) obj {
 }
 
 func (s *Server) getToolsList() []obj {
-	const idDesc = "Id estable de la tarea (el campo `id` de list_tasks y get_kanban): <nota.md>#<huella>."
+	idDesc := i18n.E("Id estable de la tarea (el campo `id` de list_tasks y get_kanban): <nota.md>#<huella>.", "Stable task id (the `id` field of list_tasks and get_kanban): <note.md>#<hash>.")
 	return []obj{
 		{
 			"name":        "list_notes",
-			"description": "Lista las notas de Lazymark con su ruta, título, etiquetas y cantidad de tareas.",
+			"description": i18n.E("Lista las notas de Lazymark con su ruta, título, etiquetas y cantidad de tareas.", "Lists the Lazymark notes with their path, title, tags and number of tasks."),
 			"inputSchema": schema(nil, obj{}),
 		},
 		{
 			"name":        "read_note",
-			"description": "Lee el contenido Markdown de una nota de la carpeta de notas.",
-			"inputSchema": schema([]string{"path"}, obj{"path": str("Ruta de la nota .md: absoluta o relativa a la carpeta de notas (el `id` que devuelven list_notes y create_note sirve tal cual). Debe quedar dentro de ella.")}),
+			"description": i18n.E("Lee el contenido Markdown de una nota de la carpeta de notas.", "Reads the Markdown content of a note in the notes folder."),
+			"inputSchema": schema([]string{"path"}, obj{"path": str(i18n.E("Ruta de la nota .md: absoluta o relativa a la carpeta de notas (el `id` que devuelven list_notes y create_note sirve tal cual). Debe quedar dentro de ella.", "Path of the .md note: absolute or relative to the notes folder (the `id` that list_notes and create_note return works as is). It must be inside it."))}),
 		},
 		{
 			"name":        "create_note",
-			"description": "Crea una nota nueva (con plantilla, o solo con su título si empty es true) y devuelve su ruta.",
+			"description": i18n.E("Crea una nota nueva (con plantilla, o solo con su título si empty es true) y devuelve su ruta.", "Creates a new note (from the template, or with just its title if empty is true) and returns its path."),
 			"inputSchema": schema([]string{"title"}, obj{
-				"title":  str("Título de la nota."),
-				"folder": str("Subcarpeta de la carpeta de notas donde crearla (opcional; debe existir)."),
-				"empty":  obj{"type": "boolean", "description": "Si es true, la nota solo lleva su título."},
+				"title":  str(i18n.E("Título de la nota.", "Title of the note.")),
+				"folder": str(i18n.E("Subcarpeta de la carpeta de notas donde crearla (opcional; debe existir).", "Subfolder of the notes folder to create it in (optional; it must exist).")),
+				"empty":  obj{"type": "boolean", "description": i18n.E("Si es true, la nota solo lleva su título.", "If true, the note only has its title.")},
 			}),
 		},
 		{
 			"name":        "search_notes",
-			"description": "Busca texto en todas las notas (sin distinguir mayúsculas). Devuelve nota, línea y el contexto de cada coincidencia, ordenadas por nota y línea.",
+			"description": i18n.E("Busca texto en todas las notas (sin distinguir mayúsculas). Devuelve nota, línea y el contexto de cada coincidencia, ordenadas por nota y línea.", "Searches text in all the notes (case-insensitive). Returns the note, line and context of each match, ordered by note and line."),
 			"inputSchema": schema([]string{"query"}, obj{
-				"query":          str("El texto a buscar, o una expresión regular si regex es true."),
-				"regex":          obj{"type": "boolean", "description": "Si es true, query es una expresión regular (RE2)."},
-				"case_sensitive": obj{"type": "boolean", "description": "Si es true, distingue mayúsculas de minúsculas."},
-				"limit":          obj{"type": "integer", "description": "Máximo de coincidencias (por defecto 500)."},
+				"query":          str(i18n.E("El texto a buscar, o una expresión regular si regex es true.", "The text to search for, or a regular expression if regex is true.")),
+				"regex":          obj{"type": "boolean", "description": i18n.E("Si es true, query es una expresión regular (RE2).", "If true, query is a regular expression (RE2).")},
+				"case_sensitive": obj{"type": "boolean", "description": i18n.E("Si es true, distingue mayúsculas de minúsculas.", "If true, the search is case-sensitive.")},
+				"limit":          obj{"type": "integer", "description": i18n.E("Máximo de coincidencias (por defecto 500).", "Maximum number of matches (default 500).")},
 			}),
 		},
 		{
 			"name":        "list_tasks",
-			"description": "Lista las tareas con su id, texto, columna del tablero y si están hechas.",
+			"description": i18n.E("Lista las tareas con su id, texto, columna del tablero y si están hechas.", "Lists the tasks with their id, text, board column and whether they are done."),
 			"inputSchema": schema(nil, obj{
-				"pending_only": obj{"type": "boolean", "description": "Si es true, omite las tareas hechas."},
-				"column":       str("Opcional: solo las de esta columna (su id, como todo, doing o done)."),
-				"note_path":    str("Opcional: solo las de esta nota."),
+				"pending_only": obj{"type": "boolean", "description": i18n.E("Si es true, omite las tareas hechas.", "If true, leaves out the finished tasks.")},
+				"column":       str(i18n.E("Opcional: solo las de esta columna (su id, como todo, doing o done).", "Optional: only the tasks in this column (its id, such as todo, doing or done).")),
+				"note_path":    str(i18n.E("Opcional: solo las de esta nota.", "Optional: only the tasks of this note.")),
 			}),
 		},
 		{
 			"name":        "move_task",
-			"description": "Lleva una tarea a otra columna del tablero Kanban. Reescribe solo la línea de la tarea; si la nota cambió en disco mientras tanto, no escribe y devuelve un error.",
-			"inputSchema": schema([]string{"id", "column"}, obj{"id": str(idDesc), "column": str("Id de la columna destino (get_kanban muestra las que hay).")}),
+			"description": i18n.E("Lleva una tarea a otra columna del tablero Kanban. Reescribe solo la línea de la tarea; si la nota cambió en disco mientras tanto, no escribe y devuelve un error.", "Moves a task to another column of the Kanban board. It only rewrites the task's line; if the note changed on disk in the meantime, it writes nothing and returns an error."),
+			"inputSchema": schema([]string{"id", "column"}, obj{"id": str(idDesc), "column": str(i18n.E("Id de la columna destino (get_kanban muestra las que hay).", "Id of the destination column (get_kanban shows the existing ones)."))}),
 		},
 		{
 			"name":        "set_task_date",
-			"description": "Pone o quita la fecha de inicio (🛫) o de vencimiento (📅) de una tarea, en el formato de Obsidian Tasks. Reescribe solo la línea de la tarea. La fecha de completada (✅) la maneja sola el movimiento a la columna de hecho.",
+			"description": i18n.E("Pone o quita la fecha de inicio (🛫) o de vencimiento (📅) de una tarea, en el formato de Obsidian Tasks. Reescribe solo la línea de la tarea. La fecha de completada (✅) la maneja sola el movimiento a la columna de hecho.", "Sets or removes the start date or the due date of a task, in an Obsidian Tasks format (the configured date format). It only rewrites the task's line. The completion date is handled by moving the task to the done column."),
 			"inputSchema": schema([]string{"id", "field", "date"}, obj{
 				"id":    str(idDesc),
-				"field": obj{"type": "string", "enum": []string{"start", "due"}, "description": "start (inicio) o due (vencimiento)."},
-				"date":  str("La fecha AAAA-MM-DD (debe existir en el calendario), o \"none\" para quitarla."),
+				"field": obj{"type": "string", "enum": []string{"start", "due"}, "description": i18n.E("start (inicio) o due (vencimiento).", "start (start date) or due (due date).")},
+				"date":  str(i18n.E("La fecha AAAA-MM-DD (debe existir en el calendario), o \"none\" para quitarla.", "The date YYYY-MM-DD (it must exist in the calendar), or \"none\" to remove it.")),
 			}),
 		},
 		{
 			"name":        "toggle_task",
-			"description": "Marca una tarea como hecha (la lleva a la columna de hecho) o, si ya lo estaba, la devuelve a la primera columna.",
+			"description": i18n.E("Marca una tarea como hecha (la lleva a la columna de hecho) o, si ya lo estaba, la devuelve a la primera columna.", "Marks a task as done (moves it to the done column) or, if it already was, returns it to the first column."),
 			"inputSchema": schema(nil, obj{
 				"id":   str(idDesc),
-				"path": str("Forma anterior: ruta de la nota (con line)."),
-				"line": obj{"type": "integer", "description": "Forma anterior: línea de la tarea, desde 1 (con path)."},
+				"path": str(i18n.E("Forma anterior: ruta de la nota (con line).", "Previous form: path of the note (with line).")),
+				"line": obj{"type": "integer", "description": i18n.E("Forma anterior: línea de la tarea, desde 1 (con path).", "Previous form: line of the task, from 1 (with path).")},
 			}),
 		},
 		{
 			"name":        "get_kanban",
-			"description": "Devuelve el tablero Kanban: las columnas configuradas, en orden, cada una con sus tarjetas.",
+			"description": i18n.E("Devuelve el tablero Kanban: las columnas configuradas, en orden, cada una con sus tarjetas.", "Returns the Kanban board: the configured columns, in order, each with its cards."),
 			"inputSchema": schema(nil, obj{}),
 		},
 	}

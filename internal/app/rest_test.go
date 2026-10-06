@@ -413,6 +413,14 @@ func TestClickMeHintCycle(t *testing.T) {
 	at(8*time.Minute + 5*time.Minute)
 	press(r.AppModel, "esc")
 
+	// con click_hint apagado en la configuración no aparece (la mascota sigue)
+	r1 := newRig()
+	r1.c.cfg.ClickHint = false
+	at(2*time.Minute + time.Second)
+	if shows(r1) {
+		t.Error("con click_hint apagado no hay aviso")
+	}
+
 	// sin mouse no
 	r2 := newRig()
 	r2.c.cfg.MouseClick = false

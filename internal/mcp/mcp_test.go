@@ -578,3 +578,39 @@ func TestMCPErrorsLanguage(t *testing.T) {
 		}
 	}
 }
+
+// TestToolsListLanguage (ORD-020): las descripciones de las herramientas y de sus parámetros (tools/list) siguen la misma regla que los errores: inglés por defecto
+// (un agente no tiene LANG) y el idioma de la configuración si hay uno. Ninguna descripción queda en español en el modo por defecto.
+func TestToolsListLanguage(t *testing.T) {
+	list := func(cfg string) string {
+		home := t.TempDir()
+		t.Setenv("HOME", home)
+		t.Setenv("XDG_CONFIG_HOME", filepath.Join(home, ".config"))
+		t.Setenv("AppData", filepath.Join(home, "AppData"))
+		t.Setenv("LANG", "es_ES.UTF-8")
+		if cfg != "" {
+			base, _ := os.UserConfigDir()
+			os.MkdirAll(filepath.Join(base, "lazymark"), 0o755)
+			os.WriteFile(filepath.Join(base, "lazymark", "config.json"), []byte(cfg), 0o644)
+		}
+		notes := filepath.Join(home, "notas")
+		os.MkdirAll(notes, 0o755)
+		r := session(t, notes, map[string]interface{}{"id": 1, "method": "tools/list"})
+		b, _ := json.Marshal(r[1].Result)
+		return string(b)
+	}
+	en := list("")
+	for _, want := range []string{"Lists the Lazymark notes", "Reads the Markdown content", "Searches text in all the notes", "Marks a task as done"} {
+		if !strings.Contains(en, want) {
+			t.Errorf("sin idioma configurado debe estar en inglés: falta %q", want)
+		}
+	}
+	for _, spanish := range []string{"Lista las notas", "Lee el contenido", "Busca texto", "Ruta de la nota", "Título de la nota", "Marca una tarea"} {
+		if strings.Contains(en, spanish) {
+			t.Errorf("queda texto en español en tools/list por defecto: %q", spanish)
+		}
+	}
+	if es := list(`{"language":"es"}`); !strings.Contains(es, "Lista las notas de Lazymark") || strings.Contains(es, "Lists the Lazymark notes") {
+		t.Error("con language=es las descripciones salen en español")
+	}
+}

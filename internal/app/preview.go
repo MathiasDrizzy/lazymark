@@ -48,7 +48,8 @@ func (p *previewPanel) lines(note *storage.Note, width int) []string {
 	if p.c != nil {
 		gen = p.c.gen
 	}
-	key := fmt.Sprintf("%s|%d|%d|%s|%d|%v|%d", note.Path, note.ModTime.UnixNano(), width, theme.CurrentThemeName, p.imgs.Generation(), views.DateIcons, gen)
+	today := storage.Today()
+	key := fmt.Sprintf("%s|%d|%d|%s|%d|%v|%d|%s", note.Path, note.ModTime.UnixNano(), width, theme.CurrentThemeName, p.imgs.Generation(), views.DateIcons, gen, views.DateColorsKey(today))
 	if key != p.cacheKey {
 		if note.Path != p.noteOfCache() {
 			p.sel = 0 // otra nota: no queda ningún enlace seleccionado
@@ -63,8 +64,8 @@ func (p *previewPanel) lines(note *storage.Note, width int) []string {
 		if p.c != nil && p.c.links != nil {
 			shown.Content, p.links = markLinks(shown.Content, p.c.links, note.Path)
 		}
-		raw := strings.Split(renderMarkdown(&shown, width, p.imgs), "\n")
-		if note.TooLarge { // no se leyó: solo se avisa
+		raw := views.ColorDateLines(strings.Split(renderMarkdown(&shown, width, p.imgs), "\n"), today) // las fechas con el color de su estado
+		if note.TooLarge {                                                                             // no se leyó: solo se avisa
 			raw = []string{lipgloss.NewStyle().Foreground(theme.ColorPeach).Render(fmt.Sprintf(i18n.T("[nota demasiado grande: %d MB, el máximo es %d MB (max_note_mb)]", "[note too large: %d MB, the maximum is %d MB (max_note_mb)]"), note.Size>>20, storage.MaxNoteBytes>>20))}
 		}
 		if p.c != nil && p.c.links != nil {
