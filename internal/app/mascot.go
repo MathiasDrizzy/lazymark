@@ -1,6 +1,7 @@
 package app
 
 import (
+	"image"
 	"sync"
 	"time"
 
@@ -162,13 +163,54 @@ func (m *AppModel) frameName() string {
 // factor entero, con vecino más cercano, sobre un lienzo del tamaño exacto en píxeles de las celdas: la
 // terminal no tiene que reescalarla ni suavizarla); sin Kitty, bloques de cuadrante del cuadro de 20x10.
 func (m *AppModel) mascotLines() []string {
+	lines, _, _ := m.mascotBlock()
+	return lines
+}
+
+// mascotBlock es mascotLines más dónde está la parte visible del sprite dentro del bloque de 10x5 celdas: la fila (0 a 4) y la columna de la celda donde empieza la
+// cabeza (la primera con píxeles no transparentes) y la columna central de lo visible. El sprite tiene filas transparentes arriba (la imagen se apoya abajo), así que
+// el "click me!" se coloca desde esta fila y no desde el borde del bloque.
+func (m *AppModel) mascotBlock() (lines []string, headRow, headCol int) {
 	name := m.frameName()
 	cw, ch := m.cellSize()
 	img, _ := frames36().Grids[name].Image(mascotCols*cw, mascotRows*ch)
 	if lines, ok := m.c.kitty.BlockImage("mascot-"+name, img, mascotCols, mascotRows); ok {
-		return lines
+		x0, y0, x1, _ := opaqueBounds(img)
+		return lines, min(max(y0/ch, 0), mascotRows-1), min(max((x0+x1)/2/cw, 0), mascotCols-1)
 	}
-	return sprite.Quadrants(frames().Grids[name])
+	g := frames().Grids[name]
+	gw, gh := g.Size()
+	x0, y0, x1 := gw, gh, -1
+	for y := 0; y < gh; y++ {
+		for x := 0; x < gw; x++ {
+			if x < len(g[y]) && g[y][x].Set {
+				x0, y0, x1 = min(x0, x), min(y0, y), max(x1, x)
+			}
+		}
+	}
+	if x1 < 0 { // cuadro vacío
+		return sprite.Quadrants(g), 0, mascotCols / 2
+	}
+	// cada celda de cuadrantes son 2x2 píxeles del cuadro de 20x10
+	q := sprite.Quadrants(g)
+	return q, min(max(y0/2, 0), max(len(q)-1, 0)), min(max((x0+x1)/2/2, 0), mascotCols-1)
+}
+
+// opaqueBounds son los límites (píxeles, x1 inclusive, y1 inclusive) de lo que no es transparente en img; sin nada, un cuadro vacío en (0,0,0,0).
+func opaqueBounds(img *image.NRGBA) (x0, y0, x1, y1 int) {
+	b := img.Bounds()
+	x0, y0, x1, y1 = b.Max.X, b.Max.Y, -1, -1
+	for y := b.Min.Y; y < b.Max.Y; y++ {
+		for x := b.Min.X; x < b.Max.X; x++ {
+			if img.NRGBAAt(x, y).A != 0 {
+				x0, y0, x1, y1 = min(x0, x), min(y0, y), max(x1, x), max(y1, y)
+			}
+		}
+	}
+	if x1 < 0 {
+		return 0, 0, 0, 0
+	}
+	return x0, y0, x1, y1
 }
 
 // mascotClick maneja un clic: si cae en la mascota, lanza la siguiente animación.

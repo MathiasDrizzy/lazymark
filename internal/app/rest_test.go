@@ -368,11 +368,15 @@ func TestClickMeHintCycle(t *testing.T) {
 	rows := func(r *imageRig) []string {
 		return strings.Split(ansi.Strip(r.View().Content), "\n")
 	}
-	shows := func(r *imageRig) bool {
-		rect := r.mascotRect()
-		row := rows(r)[rect.Y-1]
-		return strings.Contains(row, hintText)
+	hintRowOf := func(r *imageRig) int { // la fila donde se ve el aviso (justo encima de la cabeza), o -1
+		for y, l := range rows(r) {
+			if strings.Contains(l, hintText) {
+				return y
+			}
+		}
+		return -1
 	}
+	shows := func(r *imageRig) bool { return hintRowOf(r) >= 0 }
 	at := func(d time.Duration) { now = base.Add(d) }
 
 	r := newRig()
@@ -386,8 +390,12 @@ func TestClickMeHintCycle(t *testing.T) {
 		t.Fatalf("tras 2 min sin interacción aparece:\n%s", strings.Join(rows(r), "\n"))
 	}
 	shown := rows(r)
+	hy := hintRowOf(r)
+	if rect := r.mascotRect(); hy < rect.Y-1 || hy >= rect.Y+rect.H {
+		t.Errorf("el aviso (fila %d) debe estar en el bloque de la mascota o en la fila de encima (%d a %d)", hy, rect.Y-1, rect.Y+rect.H-1)
+	}
 	for i := range shown {
-		if i != r.mascotRect().Y-1 && shown[i] != hidden[i] {
+		if i != hy && shown[i] != hidden[i] {
 			t.Errorf("el aviso no mueve nada: la fila %d cambió:\n%q\n%q", i, hidden[i], shown[i])
 		}
 	}
@@ -467,5 +475,151 @@ func TestHintWait(t *testing.T) {
 	}
 	if got := hintWait(-time.Hour); got < time.Second {
 		t.Errorf("un reloj que retrocede no genera un tick inmediato: %v", got)
+	}
+}
+
+// TestNoteIsEmpty (ORD-021 C.2): vacía es sin contenido o solo con su título; cualquier otra cosa (texto, tareas, un segundo encabezado) no.
+func TestNoteIsEmpty(t *testing.T) {
+	for in, want := range map[string]bool{
+		"": true, "\n\n": true, "# Título": true, "# Título\n": true, "\n# Título\n\n": true,
+		"# Título\n\ntexto": false, "    # indentado es código": false, "\t# con tabulación": false, "  # hasta 3 espacios es título": true, "\ufeff# Título\n": true, "\ufeff": true, "# Título\r\n": true, "# A\n# B": false, "texto": false, "- [ ] tarea": false, "## Sub": false, "#etiqueta": false,
+	} {
+		if got := noteIsEmpty(in); got != want {
+			t.Errorf("noteIsEmpty(%q) = %v, se esperaba %v", in, got, want)
+		}
+	}
+}
+
+// TestMascotShowsInTheThreeEmptyCases (ORD-021 M2): la mascota aparece en una carpeta de notas vacía, con una carpeta vacía seleccionada (aunque haya otras con notas) y
+// con una nota vacía o solo con su título; con una nota con contenido, no. Con y sin Kitty.
+func TestMascotShowsInTheThreeEmptyCases(t *testing.T) {
+	for _, kitty := range []bool{false, true} {
+		r := newEmptyRig(t, 120, 35, kitty)
+		base := r.c.store.BaseDir
+		visible := func() bool { r.Update(tea.WindowSizeMsg{Width: 120, Height: 35}); return r.mascotVisible() }
+		if !visible() {
+			t.Errorf("kitty=%v: carpeta de notas vacía: debe verse la mascota", kitty)
+		}
+		os.Mkdir(filepath.Join(base, "prueba"), 0o755)
+		os.Mkdir(filepath.Join(base, "llena"), 0o755)
+		os.WriteFile(filepath.Join(base, "llena", "n.md"), []byte("# N\n\ntexto\n"), 0o644)
+		r.afterChange()
+		r.notes.selectPath(filepath.Join(base, "prueba"))
+		if !visible() {
+			t.Errorf("kitty=%v: carpeta vacía seleccionada (hay otra con notas): debe verse la mascota", kitty)
+		}
+		for name, content := range map[string]string{"v1.md": "", "v2.md": "# Solo título\n"} {
+			os.WriteFile(filepath.Join(base, name), []byte(content), 0o644)
+			r.afterChange()
+			r.notes.selectPath(filepath.Join(base, name))
+			if !visible() {
+				t.Errorf("kitty=%v: nota %q (%q): debe verse la mascota", kitty, name, content)
+			}
+		}
+		os.WriteFile(filepath.Join(base, "c.md"), []byte("# C\n\ncon contenido\n"), 0o644)
+		r.afterChange()
+		r.notes.selectPath(filepath.Join(base, "c.md"))
+		if visible() {
+			t.Errorf("kitty=%v: con una nota con contenido no debe verse la mascota", kitty)
+		}
+	}
+}
+
+// TestHintSitsJustAboveTheHead (ORD-021 M1): el "click me!" va en la fila justo encima de la primera fila visible del sprite (no del borde del bloque, que tiene filas
+// transparentes arriba), y centrado sobre ella, en todos los cuadros de todas las animaciones, con y sin Kitty.
+func TestHintSitsJustAboveTheHead(t *testing.T) {
+	for _, kitty := range []bool{false, true} {
+		r := newEmptyRig(t, 120, 35, kitty)
+		for ai, a := range frames().Anims {
+			for si := range a.Frames {
+				r.mascot.playing, r.mascot.anim, r.mascot.step = true, ai, si
+				lines, headRow, headCol := r.mascotBlock()
+				if len(lines) != mascotRows || headRow < 0 || headRow >= mascotRows || headCol < 0 || headCol >= mascotCols {
+					t.Fatalf("kitty=%v %s: cabeza fuera del bloque: fila %d columna %d", kitty, a.Frames[si], headRow, headCol)
+				}
+				// independiente: la primera fila con píxeles visibles del cuadro
+				name := a.Frames[si]
+				cw, ch := r.cellSize()
+				want := -1
+				if kitty {
+					img, _ := frames36().Grids[name].Image(mascotCols*cw, mascotRows*ch)
+				rows:
+					for y := 0; y < img.Bounds().Dy(); y++ {
+						for x := 0; x < img.Bounds().Dx(); x++ {
+							if img.NRGBAAt(x, y).A != 0 {
+								want = y / ch
+								break rows
+							}
+						}
+					}
+				} else {
+					for i, l := range sprite.Quadrants(frames().Grids[name]) {
+						if strings.TrimSpace(ansi.Strip(l)) != "" {
+							want = i
+							break
+						}
+					}
+				}
+				if want >= 0 && headRow != want {
+					t.Errorf("kitty=%v %s: la cabeza empieza en la fila %d del bloque, el cálculo independiente dice %d", kitty, name, headRow, want)
+				}
+				// la fila del texto: justo encima (o la libre de encima del bloque si la cabeza toca el borde)
+				h := r.layout.Preview.H - 2
+				row, col := r.hintPlacement(h, mascotRows, headRow, headCol, r.layout.Preview.W-2-mascotCols-1, r.layout.Preview.W-2)
+				if row != max(0, h-mascotRows+headRow-1) {
+					t.Errorf("kitty=%v %s: fila del aviso %d", kitty, name, row)
+				}
+				if c := col + len(hintText)/2; c < r.layout.Preview.W-2-mascotCols-1 || c > r.layout.Preview.W-2 {
+					t.Errorf("kitty=%v %s: el aviso (centro en %d) no queda sobre la mascota", kitty, name, c)
+				}
+			}
+		}
+		r.mascot.playing = false
+	}
+}
+
+// TestHintRowOnScreen: con la mascota en reposo, el "click me!" que se ve en pantalla está en la fila inmediatamente superior a la primera fila visible de la mascota
+// (sin hueco) y su centro cae sobre la cabeza (±2 columnas).
+func TestHintRowOnScreen(t *testing.T) {
+	base := time.Date(2026, 10, 6, 12, 0, 0, 0, time.UTC)
+	old := hintNow
+	t.Cleanup(func() { hintNow = old })
+	now := base
+	hintNow = func() time.Time { return now }
+	r := newEmptyRig(t, 120, 35, false)
+	r.c.cfg.MouseClick = true
+	r.mascot.lastInput = base
+	now = base.Add(hintIdleAfter + time.Second)
+	rows := strings.Split(ansi.Strip(r.View().Content), "\n")
+	hintY, hintX := -1, -1
+	for y, l := range rows {
+		if i := strings.Index(l, hintText); i >= 0 {
+			hintY, hintX = y, len([]rune(l[:i]))
+		}
+	}
+	if hintY < 0 {
+		t.Fatalf("no se ve el aviso:\n%s", strings.Join(rows, "\n"))
+	}
+	rect := r.mascotRect()
+	firstY, minX, maxX := -1, 1<<30, -1
+	for y := rect.Y; y < rect.Y+rect.H; y++ {
+		cells := []rune(rows[y])
+		for x := rect.X; x < rect.X+rect.W && x < len(cells); x++ {
+			if strings.ContainsRune(quadrantRunes, cells[x]) {
+				if firstY < 0 {
+					firstY = y
+				}
+				minX, maxX = min(minX, x), max(maxX, x)
+			}
+		}
+	}
+	if firstY < 0 {
+		t.Fatal("no se ve la mascota")
+	}
+	if hintY != firstY-1 {
+		t.Errorf("el aviso está en la fila %d y la cabeza empieza en la %d: debe estar justo encima (fila %d)", hintY, firstY, firstY-1)
+	}
+	if c, hc := hintX+len(hintText)/2, (minX+maxX)/2; c < hc-2 || c > hc+2 {
+		t.Errorf("el aviso (centro %d) no está centrado sobre la mascota (centro %d)", c, hc)
 	}
 }

@@ -31,7 +31,7 @@ func (m *AppModel) restKind() string {
 	case panelTasks:
 		if n := m.previewNote(); n == nil {
 			return restNone
-		} else if strings.TrimSpace(n.Content) == "" {
+		} else if noteIsEmpty(n.Content) {
 			return restEmptyNote
 		}
 		return ""
@@ -46,7 +46,7 @@ func (m *AppModel) restKind() string {
 		return restFolder
 	}
 	if n := m.notes.currentNote(); n != nil {
-		if strings.TrimSpace(n.Content) == "" {
+		if noteIsEmpty(n.Content) {
 			return restEmptyNote
 		}
 		return ""
@@ -92,14 +92,17 @@ func (m *AppModel) renderRest(kind string, title, footer string, r Rect, active 
 		}
 	}
 	if m.mascotShows(kind, r) {
-		block := m.mascotLines()
+		block, headRow, headCol := m.mascotBlock()
+		left := inner - mascotCols - 1 // columna (del interior del panel) donde empieza el bloque de la mascota
+		hintRow, hintCol := m.hintPlacement(h, len(block), headRow, headCol, left, inner)
+		hint := m.hintShowing(kind, r)
+		base := append([]string(nil), lines...) // las filas sin la mascota (el "click me!" reemplaza las celdas transparentes de una fila del bloque)
 		for i, l := range block {
 			y := h - len(block) + i
-			lines[y] = textwidth.Pad(lines[y], inner-mascotCols-1) + l
+			lines[y] = textwidth.Pad(lines[y], left) + l
 		}
-		if m.hintShowing(kind, r) { // la fila libre justo encima de la mascota (mascotShows garantiza que hay una); sin borde ni fondo, color atenuado
-			y := max(0, h-len(block)-1)
-			lines[y] = textwidth.Pad(lines[y], inner-mascotCols-1) + lipgloss.NewStyle().Foreground(theme.ColorSubtext0).Italic(true).Render(textwidth.Pad(hintText, mascotCols))
+		if hint && hintRow >= 0 && hintRow < len(lines) && inner >= len([]rune(hintText)) { // justo encima de la cabeza (la primera fila visible del sprite), centrado sobre ella; sin borde ni fondo
+			lines[hintRow] = textwidth.Pad(base[hintRow], hintCol) + lipgloss.NewStyle().Foreground(theme.ColorSubtext0).Italic(true).Render(hintText)
 		}
 	}
 	return theme.RenderPanel(title, footer, lines, r.W, r.H, active)
@@ -119,4 +122,32 @@ func fillKeys(text string, dim lipgloss.Style, keys ...string) string {
 		}
 	}
 	return b.String()
+}
+
+// hintPlacement es dónde va el "click me!": la fila justo encima de la primera fila visible del sprite (headRow dentro del bloque de blockRows filas que acaba en
+// el borde de abajo del panel de alto h; si la cabeza llega al borde del bloque, la fila libre de encima) y la columna que lo centra sobre la cabeza (headCol es la
+// columna central de lo visible, left donde empieza el bloque), sin salirse del panel de ancho inner.
+func (m *AppModel) hintPlacement(h, blockRows, headRow, headCol, left, inner int) (row, col int) {
+	row = max(0, h-blockRows+headRow-1)
+	col = left + headCol - len([]rune(hintText))/2
+	col = max(0, min(col, inner-len([]rune(hintText))))
+	return row, col
+}
+
+// noteIsEmpty dice si una nota cuenta como vacía a efectos del estado de reposo (y de la mascota): sin contenido, o solo con su título (una línea `# …`). Una nota con
+// cualquier otra cosa (texto, tareas, otro encabezado) no lo está.
+func noteIsEmpty(content string) bool {
+	titles := 0
+	for _, raw := range strings.Split(strings.TrimPrefix(content, "\ufeff"), "\n") {
+		l := strings.TrimRight(raw, " \t\r")
+		indent := len(l) - len(strings.TrimLeft(l, " \t"))
+		switch {
+		case l == "":
+		case indent < 4 && !strings.HasPrefix(l[indent:], "\t") && strings.HasPrefix(strings.TrimLeft(l, " "), "# ") && titles == 0: // un `# …` de hasta 3 espacios es el título; con 4 o con tabulación es código
+			titles++
+		default:
+			return false
+		}
+	}
+	return true
 }
