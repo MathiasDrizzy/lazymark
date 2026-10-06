@@ -58,6 +58,56 @@ type mascotState struct {
 	step    int // cuadro dentro de ella
 	next    int // la que sonará en el próximo clic
 	gen     int // cambia con cada animación: los ticks de una anterior se ignoran
+
+	clicked   bool      // ya le hicieron clic en esta sesión: el "click me!" no vuelve
+	lastInput time.Time // la última tecla o clic: el "click me!" cuenta el tiempo sin interacción desde aquí
+}
+
+// El "click me!" sobre la mascota (pedido de Mathias: muy sutil y solo algunas veces). Cadencia: tras 2 minutos sin tocar nada aparece 3 segundos y se repite cada
+// 4 minutos de quietud; cualquier tecla o clic reinicia la cuenta, así nunca sale mientras se trabaja, y tras el primer clic en la mascota no vuelve más.
+const (
+	hintIdleAfter = 2 * time.Minute
+	hintEvery     = 4 * time.Minute
+	hintShowFor   = 3 * time.Second
+	hintText      = "click me!"
+)
+
+// hintNow es el reloj del "click me!" (las pruebas lo reemplazan).
+var hintNow = time.Now
+
+// hintTickMsg despierta al modelo en la próxima frontera del "click me!" (cuando toca aparecer o desaparecer), para que se redibuje sin que nadie toque nada.
+// No es un tick fijo: en quietud son un par de avisos por ciclo.
+type hintTickMsg struct{}
+
+// hintWait es cuánto falta, con idle de quietud, para la próxima frontera: aparecer a los 2 min, irse 3 s después y volver cada 4 min.
+func hintWait(idle time.Duration) time.Duration {
+	if idle < 0 {
+		return hintIdleAfter // un reloj que retrocede: se vuelve a mirar en 2 min, nunca en un bucle de ticks inmediatos
+	}
+	if idle < hintIdleAfter {
+		return hintIdleAfter - idle
+	}
+	phase := (idle - hintIdleAfter) % hintEvery
+	if phase < hintShowFor {
+		return hintShowFor - phase
+	}
+	return hintEvery - phase
+}
+
+func (m *AppModel) hintTickCmd() tea.Cmd {
+	wait := hintWait(hintNow().Sub(m.mascot.lastInput)) + 50*time.Millisecond // un poco después de la frontera, ya del otro lado
+	return tea.Tick(wait, func(time.Time) tea.Msg { return hintTickMsg{} })
+}
+
+// hintShowing dice si en este instante toca mostrar el "click me!" sobre la mascota del panel r: con mouse, la mascota dibujada, sin popups, sin haberle hecho clic
+// y en la ventana de la cadencia.
+func (m *AppModel) hintShowing(kind string, r Rect) bool {
+	st := &m.mascot
+	if st.clicked || st.playing || !m.c.cfg.MouseClick || len(m.c.popups) > 0 || !m.mascotShows(kind, r) {
+		return false
+	}
+	idle := hintNow().Sub(st.lastInput) - hintIdleAfter
+	return idle >= 0 && idle%hintEvery < hintShowFor
 }
 
 // mascotTickMsg avanza un cuadro de la animación de la generación gen.
@@ -127,6 +177,7 @@ func (m *AppModel) mascotClick(x, y int) (tea.Cmd, bool) {
 		return nil, false
 	}
 	st := &m.mascot
+	st.clicked = true // ya la encontró: el "click me!" no vuelve en esta sesión
 	st.gen++
 	st.playing, st.anim, st.step = true, st.next%len(frames().Anims), 0
 	st.next++

@@ -22,7 +22,7 @@ func readRepo(t *testing.T, rel string) string {
 // principal antes de la primera sección y como máximo 3 badges.
 func TestReadmeStructure(t *testing.T) {
 	text := readRepo(t, "README.md")
-	order := []string{"## Why lazymark", "## What it does", "## Install", "## Quick start", "## Keys", "## Configuration", "## Compatibility", "## Contributing", "## License"}
+	order := []string{"## Why lazymark", "## What it does", "## Obsidian compatibility", "## Install", "## Quick start", "## Keys", "## Configuration", "## Compatibility", "## Contributing", "## License", "## The mascot"}
 	prev := -1
 	for _, h := range order {
 		i := strings.Index(text, "\n"+h+"\n")
@@ -41,13 +41,17 @@ func TestReadmeStructure(t *testing.T) {
 	if n := strings.Count(text, "[!["); n > 3 {
 		t.Errorf("hay %d badges (máximo 3)", n)
 	}
-	for _, link := range []string{"[Install](#install)", "[Quick start](#quick-start)", "[Keys](#keys)", "[Configuration](#configuration)"} {
+	for _, link := range []string{"[Obsidian compatibility](#obsidian-compatibility)", "[Install](#install)", "[Quick start](#quick-start)", "[Keys](#keys)", "[Configuration](#configuration)"} {
 		if !strings.Contains(text, link) {
 			t.Errorf("faltan los enlaces rápidos: %s", link)
 		}
 	}
+	// ORD-018 (R1): la mascota es la ÚLTIMA sección del README
+	if last := text[strings.LastIndex(text, "\n## "):]; !strings.HasPrefix(last, "\n## The mascot\n") {
+		t.Errorf("la última sección debe ser The mascot: %.40q", last)
+	}
 	// una sección de funcionalidades con un GIF (o captura) por bloque
-	what := text[strings.Index(text, "## What it does"):strings.Index(text, "## Install")]
+	what := text[strings.Index(text, "## What it does"):strings.Index(text, "## Obsidian compatibility")]
 	if blocks, media := strings.Count(what, "\n### "), strings.Count(what, "<img src=\"assets/readme/"); blocks < 4 || blocks != media {
 		t.Errorf("funcionalidades: %d bloques y %d imágenes (4 o más, una por bloque)", blocks, media)
 	}

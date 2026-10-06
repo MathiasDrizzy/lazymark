@@ -126,7 +126,7 @@ type NoteContentDTO struct {
 // distintas tienen ids distintos y read_note / note show lo aceptan tal cual.
 func (s *Service) noteID(path string) string {
 	rel, err := filepath.Rel(s.Store.BaseDir, path)
-	if err != nil || strings.HasPrefix(rel, "..") {
+	if err != nil || rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
 		return filepath.ToSlash(path)
 	}
 	return filepath.ToSlash(rel)
@@ -583,3 +583,6 @@ func (s *Service) MigrateDates(to string, dryRun bool) (MigrationDTO, error) {
 	}
 	return out, err
 }
+
+// DateFormatCounts dice cuántas tareas del vault tienen fechas en emoji y cuántas en Dataview (una con los dos formatos cuenta en ambos).
+func (s *Service) DateFormatCounts() (emoji, dataview int) { return s.Store.CountDateFormats() }

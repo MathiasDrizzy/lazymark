@@ -14,7 +14,7 @@ Plain markdown files. Keyboard and mouse. Inline images.
 
 <img src="assets/readme/main.gif" alt="lazymark browsing a folder of notes, ticking a task, opening the key list, the Kanban board and the settings" width="100%">
 
-[Install](#install) · [Quick start](#quick-start) · [Keys](#keys) · [Configuration](#configuration)
+[Obsidian compatibility](#obsidian-compatibility) · [Install](#install) · [Quick start](#quick-start) · [Keys](#keys) · [Configuration](#configuration)
 
 </div>
 
@@ -128,6 +128,41 @@ Copy a screenshot, or an image file in the file manager, open the note in micro,
 
 <img src="assets/readme/feature-paste.gif" alt="Opening a note in micro and pasting a copied image as a markdown reference at the cursor" width="100%">
 
+## Obsidian compatibility
+
+A lazymark notes folder is an Obsidian vault: open the same folder in both and they work on the same files. lazymark never adds a hidden folder or a database, and it does not touch the `.obsidian` folder.
+
+What lazymark reads and writes the way Obsidian does:
+
+- **Wikilinks**: `[[note]]`, `[[note|alias]]`, `[[note#Heading]]`, `[[note#^block]]` and `[[folder/note]]`. Renaming a note or a folder offers to update the links that point to it ([docs/links.md](docs/links.md)).
+- **Tags**: every `#tag` in a note, and nested ones such as `#project/web`.
+- **Tasks**: `- [ ]` and `- [x]` lines, nested at any depth.
+- **Task dates** of the [Obsidian Tasks](https://publish.obsidian.md/tasks/Introduction) plugin, in both of its formats. It always reads both, mixed in the same vault if you like:
+
+  | Task format in Obsidian Tasks | How the dates look in the file | `lazymark dates migrate` |
+  |---|---|---|
+  | Dataview | `[start:: 2026-10-05] [due:: 2026-10-09]` | `--to dataview` |
+  | Tasks (the default of the plugin) | a small emoji icon before each date (a calendar for the due date) | `--to emoji` |
+
+  The fields are start, due, completion, scheduled and created. lazymark writes the format you choose in Settings (`,`) → **Date format** (`date_format`): Dataview by default, plain ASCII that looks the same in any editor and on GitHub. A vault that already has emoji dates and none in Dataview keeps writing emojis, and lazymark tells you once how to change it.
+
+**Which one to pick.** In Obsidian open *Settings → Tasks → Task format* and choose the same one in lazymark. Obsidian Tasks reads one format at a time and has no tool to convert a vault, so if the two do not match, Obsidian will not see the dates lazymark writes. To convert the notes you already have:
+
+```
+lazymark dates migrate              # no --to: says how many tasks use each format and what to try
+lazymark dates migrate --to dataview --dry-run   # shows the change, writes nothing
+lazymark dates migrate --to dataview             # applies it (--to emoji goes back)
+```
+
+It is never automatic, only touches task lines (not paragraphs, code blocks or the front matter), writes each note atomically and a second run changes nothing. Then set the same *Task format* in Obsidian.
+
+What is **not** compatible, so you are not surprised:
+
+- Priorities, recurrence (`every week`), dependencies and `on completion` are not interpreted. They stay in the line, untouched and shown as text; ticking a recurring task does **not** create the next one.
+- Tasks and Dataview **query blocks** are not run: they show as the code they are.
+- Tags in the front matter (`tags: [x]`) are not read as categories; only inline `#tags` are. The front matter itself is never modified.
+- Embeds (`![[file]]`), canvases, callouts, plugins and the graph view are not supported.
+
 ## Install
 
 Install a [Nerd Font](https://www.nerdfonts.com/) in your terminal for the folder and note icons. Building needs Go 1.27.1 or newer.
@@ -225,3 +260,7 @@ The GIFs are made from the tapes in [assets/readme](assets/readme/CAPTURES.md), 
 ## License
 
 [MIT](LICENSE)
+
+## The mascot
+
+When there is nothing to show in the preview (an empty notes folder, an empty folder or an empty note), a small sloth sleeps at the bottom right of the panel. Click it and it wakes up and plays an animation (it waves, dances, jumps or spins); each click plays the next one. If you leave lazymark alone for a couple of minutes, a very faint `click me!` shows above it for a few seconds now and then, just so you find out it can be clicked. It never appears while you are working, and after your first click on the sloth it does not come back during that session. It needs the mouse (not `--no-mouse`) and a terminal at least 60 columns wide. To turn the sloth off, set **Mascot** to off in Settings (`,`) or `mascot = false` in the config.

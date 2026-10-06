@@ -77,6 +77,7 @@ func New(cfg *config.Config) (*AppModel, error) {
 		c.taskFilter = views.TaskFilterPending
 	}
 	m := &AppModel{c: c, ratio: cfg.SidebarRatio, ht: mouse.NewHitTester(), emit: tea.Raw}
+	m.mascot.lastInput = hintNow()
 	m.preview.imgs = c.kitty
 	m.preview.c = c
 	m.notes = newNotesPanel(c)
@@ -98,7 +99,7 @@ func loadedStatus(n int) string {
 // Init consulta a la terminal si soporta gráficos Kitty (a=q + DA1). Mientras
 // no conteste afirmativamente, las imágenes se muestran como texto.
 func (m *AppModel) Init() tea.Cmd {
-	return m.emit(image.QuerySequence() + mascotRequestSequence())
+	return tea.Batch(m.emit(image.QuerySequence()+mascotRequestSequence()), m.hintTickCmd())
 }
 
 // relayout recalcula la geometría. Se llama solo ante un cambio de tamaño o de
@@ -155,6 +156,10 @@ func (m *AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 func (m *AppModel) update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	switch msg.(type) {
+	case tea.KeyPressMsg, tea.MouseClickMsg, tea.MouseWheelMsg, tea.PasteMsg:
+		m.mascot.lastInput = hintNow() // interacción: el "click me!" empieza de nuevo a contar
+	}
 	switch msg := msg.(type) {
 	case imageTickMsg:
 		return m, m.startImageJobs(msg)
@@ -167,6 +172,11 @@ func (m *AppModel) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 	case mascotTickMsg:
 		return m, m.mascotTick(msg)
+	case hintTickMsg:
+		if m.mascot.clicked {
+			return m, nil // ya no hace falta redibujar cada segundo
+		}
+		return m, m.hintTickCmd()
 	case searchTickMsg:
 		for _, p := range m.c.popups {
 			if sp, ok := p.(*searchPopup); ok {

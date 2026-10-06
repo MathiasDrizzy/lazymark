@@ -489,14 +489,20 @@ func RunDailyWithWriter(w io.Writer, args []string, defaultNotesDir string) erro
 }
 
 const datesUsageES = `uso: lazymark dates migrate --to dataview|emoji [--dry-run] [--json] [--dir <carpeta>]
-Pasa las fechas de todas las tareas al formato elegido (Dataview: [due:: 2026-05-10]; emoji: el de Obsidian Tasks). Nunca es automático.
+Pasa las fechas de todas las tareas al formato elegido. Los dos son formatos de Obsidian Tasks: elige el de Ajustes → Tasks → Task format.
+  --to dataview   [start:: 2026-05-01] [due:: 2026-05-10]   (Task format: Dataview)
+  --to emoji      🛫 2026-05-01 📅 2026-05-10               (Task format: Tasks, el de Obsidian por defecto)
+Sin --to dice cuántas tareas hay en cada formato y qué comando probar. Nunca es automático.
 Solo toca líneas de tarea (no párrafos ni bloques de código), conserva el resto de la línea y escribe cada nota de forma atómica.
 Con --dry-run muestra el cambio sin escribir nada. Es idempotente: una segunda corrida no cambia nada.
 códigos de salida: 0 ok · 1 falló · 2 argumentos inválidos · 4 una nota cambió mientras se migraba (esa no se escribió)
 `
 
 const datesUsageEN = `usage: lazymark dates migrate --to dataview|emoji [--dry-run] [--json] [--dir <folder>]
-Moves the dates of every task to the chosen format (Dataview: [due:: 2026-05-10]; emoji: the Obsidian Tasks one). It is never automatic.
+Moves the dates of every task to the chosen format. Both are Obsidian Tasks formats: pick the one in Settings → Tasks → Task format.
+  --to dataview   [start:: 2026-05-01] [due:: 2026-05-10]   (Task format: Dataview)
+  --to emoji      🛫 2026-05-01 📅 2026-05-10               (Task format: Tasks, Obsidian's default)
+Without --to it says how many tasks use each format and which command to try. It is never automatic.
 It only touches task lines (not paragraphs or code blocks), keeps the rest of the line and writes each note atomically.
 With --dry-run it shows the change without writing anything. It is idempotent: a second run changes nothing.
 exit codes: 0 ok · 1 failed · 2 invalid arguments · 4 a note changed while migrating (that one was not written)
@@ -511,14 +517,14 @@ func RunDates(args []string, defaultNotesDir string) error {
 func RunDatesWithWriter(w io.Writer, args []string, defaultNotesDir string) error {
 	help := usageText(datesUsageES, datesUsageEN)
 	if len(args) == 0 {
-		return &ops.Error{Code: ExitUsage, Err: errors.New("falta el subcomando (migrate)\n" + help)}
+		return &ops.Error{Code: ExitUsage, Err: errors.New(i18n.T("falta el subcomando (migrate)", "missing subcommand (migrate)") + "\n" + help)}
 	}
 	if args[0] == "-h" || args[0] == "--help" {
 		fmt.Fprint(w, help)
 		return nil
 	}
 	if args[0] != "migrate" {
-		return &ops.Error{Code: ExitUsage, Err: fmt.Errorf("subcomando desconocido: %q (migrate)", args[0])}
+		return &ops.Error{Code: ExitUsage, Err: fmt.Errorf(i18n.T("subcomando desconocido: %q (migrate)", "unknown subcommand: %q (migrate)"), args[0])}
 	}
 	p := newParser("dates migrate", defaultNotesDir)
 	var to string
@@ -535,12 +541,15 @@ func RunDatesWithWriter(w io.Writer, args []string, defaultNotesDir string) erro
 	if err := p.need(0, "lazymark dates migrate --to dataview|emoji [--dry-run]"); err != nil {
 		return err
 	}
-	if to != "dataview" && to != "emoji" {
-		return &ops.Error{Code: ExitUsage, Err: errors.New("uso: lazymark dates migrate --to dataview|emoji [--dry-run] (falta --to)")}
+	if to != "" && to != "dataview" && to != "emoji" {
+		return &ops.Error{Code: ExitUsage, Err: fmt.Errorf(i18n.T("--to debe ser dataview o emoji (no %q)", "--to must be dataview or emoji (not %q)"), to)}
 	}
 	svc, err := p.service()
 	if err != nil {
 		return err
+	}
+	if to == "" { // sin --to: se dice qué formato usa hoy el vault y qué comando probar
+		return &ops.Error{Code: ExitUsage, Err: errors.New(missingToMessage(svc.DateFormatCounts()))}
 	}
 	res, err := svc.MigrateDates(to, dry)
 	if err != nil {
@@ -573,4 +582,23 @@ func RunDatesWithWriter(w io.Writer, args []string, defaultNotesDir string) erro
 	}
 	fmt.Fprintf(w, msg+"\n", res.Lines, res.Notes, to)
 	return nil
+}
+
+// missingToMessage es el error de `dates migrate` sin --to: dice qué formato de fechas usa hoy el vault (cuántas tareas en emoji y cuántas en Dataview) y sugiere
+// el comando para pasar al otro formato con --dry-run, que no escribe nada.
+func missingToMessage(emoji, dataview int) string {
+	head := i18n.T("falta --to (dataview o emoji).", "missing --to (dataview or emoji).")
+	counts := fmt.Sprintf(i18n.T("Hoy el vault tiene %d tarea(s) con emojis y %d tarea(s) con Dataview.", "This vault has %d task(s) with emoji and %d task(s) with Dataview."), emoji, dataview)
+	var hint string
+	switch {
+	case emoji == 0 && dataview == 0:
+		return head + "\n" + i18n.T("Ninguna tarea tiene fechas: no hay nada que migrar.", "No task has dates: there is nothing to migrate.")
+	case emoji > 0 && dataview == 0:
+		hint = i18n.T("Si en Obsidian Tasks tu Task format es Dataview, prueba:", "If your Obsidian Tasks Task format is Dataview, try:") + "\n  lazymark dates migrate --to dataview --dry-run"
+	case dataview > 0 && emoji == 0:
+		hint = i18n.T("Si en Obsidian Tasks tu Task format es Tasks (emojis), prueba:", "If your Obsidian Tasks Task format is Tasks (emoji), try:") + "\n  lazymark dates migrate --to emoji --dry-run"
+	default:
+		hint = i18n.T("Están mezclados. Elige el que usa tu Task format de Obsidian Tasks:", "They are mixed. Pick the one your Obsidian Tasks Task format uses:") + "\n  lazymark dates migrate --to dataview --dry-run   (Task format: Dataview)\n  lazymark dates migrate --to emoji --dry-run      (Task format: Tasks)"
+	}
+	return head + "\n" + counts + "\n" + hint + "\n" + i18n.T("(--dry-run solo muestra el cambio; quítalo para escribir)", "(--dry-run only shows the change; drop it to write)")
 }

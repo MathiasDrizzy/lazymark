@@ -392,7 +392,10 @@ func (s *Storage) TakeDateFormatNotice() string {
 }
 
 // countDateFormats cuenta las tareas del vault con fechas en emoji y las que las tienen en Dataview (una tarea con ambos formatos cuenta en los dos).
-func (s *Storage) countDateFormats() (emoji, dataview int) {
+func (s *Storage) countDateFormats() (emoji, dataview int) { return s.CountDateFormats() }
+
+// CountDateFormats es countDateFormats para quien lo muestra (`lazymark dates migrate` sin --to).
+func (s *Storage) CountDateFormats() (emoji, dataview int) {
 	notes, err := s.ListNotes()
 	if err != nil {
 		return 0, 0

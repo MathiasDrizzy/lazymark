@@ -350,3 +350,114 @@ func TestEmbeddedMascotHasSleepFrame(t *testing.T) {
 		t.Errorf("el sprite de cuadrantes mide %dx%d y %dx%d celdas piden %dx%d", w, h, mascotCols, mascotRows, 2*mascotCols, 2*mascotRows)
 	}
 }
+
+// TestClickMeHintCycle (ORD-018 M1): el "click me!" sobre la mascota es sutil y esporádico: aparece 3 s tras 2 min sin interacción y cada 4 min de quietud; una tecla
+// reinicia la cuenta; no aparece sin mouse, con un popup abierto ni después del primer clic en la mascota; no mueve nada del resto de la pantalla.
+func TestClickMeHintCycle(t *testing.T) {
+	base := time.Date(2026, 10, 5, 12, 0, 0, 0, time.UTC)
+	old := hintNow
+	t.Cleanup(func() { hintNow = old })
+	now := base
+	hintNow = func() time.Time { return now }
+	newRig := func() *imageRig {
+		r := newEmptyRig(t, 120, 35, false)
+		r.c.cfg.MouseClick = true
+		r.mascot.lastInput = base
+		return r
+	}
+	rows := func(r *imageRig) []string {
+		return strings.Split(ansi.Strip(r.View().Content), "\n")
+	}
+	shows := func(r *imageRig) bool {
+		rect := r.mascotRect()
+		row := rows(r)[rect.Y-1]
+		return strings.Contains(row, hintText)
+	}
+	at := func(d time.Duration) { now = base.Add(d) }
+
+	r := newRig()
+	at(time.Minute)
+	if shows(r) {
+		t.Error("tras 1 minuto de quietud todavía no")
+	}
+	hidden := rows(r)
+	at(2*time.Minute + time.Second)
+	if !shows(r) {
+		t.Fatalf("tras 2 min sin interacción aparece:\n%s", strings.Join(rows(r), "\n"))
+	}
+	shown := rows(r)
+	for i := range shown {
+		if i != r.mascotRect().Y-1 && shown[i] != hidden[i] {
+			t.Errorf("el aviso no mueve nada: la fila %d cambió:\n%q\n%q", i, hidden[i], shown[i])
+		}
+	}
+	at(2*time.Minute + 4*time.Second)
+	if shows(r) {
+		t.Error("a los 3 s desaparece")
+	}
+	at(6*time.Minute + time.Second)
+	if !shows(r) {
+		t.Error("se repite 4 min después")
+	}
+	// una tecla reinicia la cuenta
+	press(r.AppModel, "j")
+	if shows(r) {
+		t.Error("tras una tecla no se muestra")
+	}
+	at(6*time.Minute + 2*time.Minute + 2*time.Second)
+	if !shows(r) {
+		t.Error("2 min después de la última tecla vuelve")
+	}
+	// con un popup abierto no
+	press(r.AppModel, "?")
+	at(8*time.Minute + 5*time.Minute)
+	press(r.AppModel, "esc")
+
+	// sin mouse no
+	r2 := newRig()
+	r2.c.cfg.MouseClick = false
+	at(2*time.Minute + time.Second)
+	if shows(r2) {
+		t.Error("sin mouse no hay aviso")
+	}
+
+	// tras el primer clic en la mascota, nunca más
+	r3 := newRig()
+	at(2*time.Minute + time.Second)
+	if !shows(r3) {
+		t.Fatal("antes del clic aparece")
+	}
+	rect := r3.mascotRect()
+	r3.Update(tea.MouseClickMsg{X: rect.X + 2, Y: rect.Y + 2, Button: tea.MouseLeft})
+	for _, d := range []time.Duration{3 * time.Minute, 10 * time.Minute, 30 * time.Minute, 2 * time.Hour} {
+		at(d)
+		r3.mascot.playing = false
+		r3.mascot.lastInput = base
+		if shows(r3) {
+			t.Errorf("después del clic no vuelve (%v)", d)
+		}
+	}
+}
+
+// TestHintWait (ORD-018, segunda opinión): el redibujado del "click me!" no es un tick fijo de 1 s: espera hasta la próxima frontera (aparecer o desaparecer) y a
+// veces mucho más; cuando no aplica (clic hecho) no hay tick.
+func TestHintWait(t *testing.T) {
+	for _, c := range []struct {
+		idle time.Duration
+		want time.Duration
+	}{
+		{0, hintIdleAfter},
+		{time.Minute, hintIdleAfter - time.Minute},
+		{hintIdleAfter, hintShowFor}, // acaba de aparecer: se espera a que se vaya
+		{hintIdleAfter + time.Second, hintShowFor - time.Second},
+		{hintIdleAfter + hintShowFor, hintEvery - hintShowFor}, // se fue: se espera a la próxima vez
+		{hintIdleAfter + hintEvery - time.Second, time.Second},
+	} {
+		if got := hintWait(c.idle); got != c.want {
+			t.Errorf("hintWait(%v) = %v, se esperaba %v", c.idle, got, c.want)
+		}
+	}
+	if got := hintWait(-time.Hour); got < time.Second {
+		t.Errorf("un reloj que retrocede no genera un tick inmediato: %v", got)
+	}
+}

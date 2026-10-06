@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"flag"
 	"github.com/MathiasDrizzy/lazymark/internal/config"
+	"github.com/MathiasDrizzy/lazymark/internal/i18n"
 	"io/fs"
 	"os"
 	"path/filepath"
@@ -984,5 +985,50 @@ func TestNoteIDIsRelativePathCLI(t *testing.T) {
 	}
 	if !seen["a/igual.md"] || !seen["b/igual.md"] {
 		t.Errorf("ids: %v", seen)
+	}
+}
+
+// TestDatesMigrateWithoutToTellsTheVaultFormat (ORD-018 D1): sin --to (y sin subcomando) el error sale en el idioma de la interfaz, dice cuántas tareas hay en cada
+// formato y sugiere el comando.
+func TestDatesMigrateWithoutToTellsTheVaultFormat(t *testing.T) {
+	dir := t.TempDir()
+	os.WriteFile(filepath.Join(dir, "n.md"), []byte("- [ ] a 📅 2026-05-10\n- [ ] b 🛫 2026-05-01\n- [ ] c [due:: 2026-05-12]\n- [ ] d sin fecha\n"), 0o644)
+	for _, c := range []struct {
+		lang string
+		want []string
+	}{
+		{"es", []string{"falta --to", "2 tarea(s) con emojis", "1 tarea(s) con Dataview", "lazymark dates migrate --to dataview --dry-run"}},
+		{"en", []string{"missing --to", "2 task(s) with emoji", "1 task(s) with Dataview", "lazymark dates migrate --to dataview --dry-run"}},
+	} {
+		i18n.SetLanguage(c.lang)
+		t.Cleanup(func() { i18n.SetLanguage("es") })
+		_, err := run(t, dir, "dates", "migrate")
+		if err == nil {
+			t.Fatalf("%s: sin --to debe fallar", c.lang)
+		}
+		for _, w := range c.want {
+			if !strings.Contains(err.Error(), w) {
+				t.Errorf("%s: el error debe decir %q:\n%v", c.lang, w, err)
+			}
+		}
+		if c.lang == "en" && strings.Contains(err.Error(), "falta") {
+			t.Errorf("en inglés no hay español: %v", err)
+		}
+	}
+	// un vault solo con Dataview sugiere emoji; sin tareas con fechas, lo dice
+	os.WriteFile(filepath.Join(dir, "n.md"), []byte("- [ ] c [due:: 2026-05-12]\n"), 0o644)
+	i18n.SetLanguage("en")
+	_, err := run(t, dir, "dates", "migrate")
+	if err == nil || !strings.Contains(err.Error(), "--to emoji --dry-run") {
+		t.Errorf("solo Dataview → sugiere emoji: %v", err)
+	}
+	os.WriteFile(filepath.Join(dir, "n.md"), []byte("- [ ] sin fecha\n"), 0o644)
+	_, err = run(t, dir, "dates", "migrate")
+	if err == nil || !strings.Contains(err.Error(), "No task has dates") {
+		t.Errorf("sin fechas: %v", err)
+	}
+	_, err = run(t, dir, "dates")
+	if err == nil || strings.Contains(err.Error(), "falta el subcomando") {
+		t.Errorf("sin subcomando, en inglés: %v", err)
 	}
 }

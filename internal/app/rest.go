@@ -97,6 +97,10 @@ func (m *AppModel) renderRest(kind string, title, footer string, r Rect, active 
 			y := h - len(block) + i
 			lines[y] = textwidth.Pad(lines[y], inner-mascotCols-1) + l
 		}
+		if m.hintShowing(kind, r) { // la fila libre justo encima de la mascota (mascotShows garantiza que hay una); sin borde ni fondo, color atenuado
+			y := max(0, h-len(block)-1)
+			lines[y] = textwidth.Pad(lines[y], inner-mascotCols-1) + dim(textwidth.Pad(hintText, mascotCols))
+		}
 	}
 	return theme.RenderPanel(title, footer, lines, r.W, r.H, active)
 }
