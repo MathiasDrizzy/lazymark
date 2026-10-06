@@ -439,6 +439,10 @@ func (s *Storage) CreateNoteInDir(dir, title string) (*Note, error) {
 
 // ErrNoteExists es el error de crear una nota o carpeta cuyo nombre ya está ocupado (por un archivo, una carpeta o
 // un enlace simbólico, también colgante). No se escribió nada.
+// ErrEmptyName es el error de un título o nombre que no deja nada (solo separadores o puntos): quien decide el código de salida lo reconoce con errors.Is, no por su texto
+// (que cambia con el idioma).
+var ErrEmptyName = i18n.NewError("el nombre queda vacío", "the name is empty")
+
 var ErrNoteExists = i18n.NewError("ya existe", "already exists")
 
 // CreateNoteInDirWithBody crea la nota con body como contenido (vacío: la plantilla con fecha y primera tarea). Se
@@ -449,7 +453,7 @@ func (s *Storage) CreateNoteInDirWithBody(dir, title, body string) (*Note, error
 	}
 	cleanName := slug(title)
 	if cleanName == "" {
-		return nil, i18n.Errorf("nombre de nota vacío", "empty note name")
+		return nil, ErrEmptyName
 	}
 	fileName := fmt.Sprintf("%s.md", cleanName)
 	fullPath := filepath.Join(dir, fileName)
@@ -494,7 +498,7 @@ func (s *Storage) CreateFolderInDir(parentDir, name string) (string, error) {
 	}
 	cleanName := slug(name)
 	if cleanName == "" {
-		return "", i18n.Errorf("nombre de carpeta vacío", "empty folder name")
+		return "", ErrEmptyName
 	}
 	fullPath := filepath.Join(parentDir, cleanName)
 	if _, err := os.Lstat(fullPath); err == nil { // Lstat: un enlace simbólico (también colgante) cuenta como ocupado
@@ -674,7 +678,7 @@ func (s *Storage) Rename(path, newName string) (string, error) {
 	}
 	clean := slug(newName)
 	if clean == "" {
-		return "", i18n.Errorf("nombre vacío", "empty name")
+		return "", ErrEmptyName
 	}
 	if !fi.IsDir() {
 		clean += ".md"

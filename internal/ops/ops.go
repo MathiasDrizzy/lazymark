@@ -253,7 +253,7 @@ func (s *Service) NewNoteFromTemplate(title, folder, template string, empty bool
 		n, err = s.Store.CreateNoteInDirWithBody(dir, title, body)
 	}
 	if err != nil {
-		if errors.Is(err, storage.ErrNoteExists) || strings.Contains(err.Error(), "vacío") {
+		if errors.Is(err, storage.ErrNoteExists) || errors.Is(err, storage.ErrEmptyName) {
 			return NoteDTO{}, usage("%v", "%v", err)
 		}
 		return NoteDTO{}, err
