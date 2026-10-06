@@ -642,7 +642,7 @@ func CleanRelFolder(v string) (string, bool) {
 			parts = parts[:i]
 			break
 		}
-		if p == "" || p == "." || p == ".." || strings.HasPrefix(p, ".") || strings.EqualFold(p, "assets") || strings.ContainsAny(p, "<>:\"|?*") || strings.IndexFunc(p, unicode.IsControl) >= 0 {
+		if p == "" || p == "." || p == ".." || strings.HasPrefix(p, ".") || strings.EqualFold(p, "assets") || strings.ContainsAny(p, "<>:\"|?*") || strings.IndexFunc(p, unicode.IsControl) >= 0 || safeio.ReservedWindowsName(p) { // CON, NUL, COM1… son dispositivos en Windows: se rechazan en todos los sistemas (el vault viaja)
 			return "", false
 		}
 	}

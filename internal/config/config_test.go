@@ -542,7 +542,7 @@ func TestCleanRelFolderAndDailyName(t *testing.T) {
 			t.Errorf("CleanRelFolder(%q) = %q %v, se esperaba %q", in, got, ok, want)
 		}
 	}
-	for _, bad := range []string{"", "/abs", "C:\\x", "C:x", "..", "a/../b", "../x", ".oculta", "a/.git", "assets", "a//b", "a/./b", "x:y", "a|b", "a\x00b", string(make([]byte, 101))} {
+	for _, bad := range []string{"CON", "diario/nul", "COM1.txt", "lpt9", "", "/abs", "C:\\x", "C:x", "..", "a/../b", "../x", ".oculta", "a/.git", "assets", "a//b", "a/./b", "x:y", "a|b", "a\x00b", string(make([]byte, 101))} {
 		if _, ok := CleanRelFolder(bad); ok {
 			t.Errorf("CleanRelFolder(%q) debe rechazarse", bad)
 		}
