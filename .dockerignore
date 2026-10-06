@@ -1,0 +1,13 @@
+# Only what `go build ./cmd/lazymark` needs goes into the build context.
+# (assets/brand is embedded by the code, so only the README GIFs and screenshots are left out.)
+.git
+.github
+.claude
+CLAUDE.local.md
+ESTADO.md
+assets/readme
+docs
+scripts
+**/testdata
+bin
+dist
