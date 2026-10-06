@@ -16,13 +16,11 @@ Type "G"
 Sleep 1.2s
 
 Type "2"
-Sleep 800ms
-Down
-Sleep 500ms
-Down
-Sleep 500ms
-Space
 Sleep 1.5s
+Down
+Sleep 700ms
+Space
+Sleep 1.8s
 
 Type "?"
 Sleep 2.5s

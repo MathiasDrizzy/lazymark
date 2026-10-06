@@ -2,12 +2,11 @@
 Output assets/readme/feature-dates.gif
 Source assets/readme/tapes/lib/common.tape
 
+# the Tasks panel shows the due dates in the color of their state (overdue, today, on time); five steps down is a task with no dates yet
 Type "2"
-Sleep 1s
-Down
-Sleep 500ms
-Down
-Sleep 500ms
+Sleep 1.5s
+Down@300ms 5
+Sleep 600ms
 Type "d"
 Sleep 1.2s
 Type "+3d"

@@ -7,6 +7,6 @@ Kickoff notes for the spring redesign of the marketing site.
 - [x] Audit the current navigation
 - [ ] Sketch three homepage layouts #doing
 - [ ] Pick a typeface pair
-- [ ] Review contrast ratios against WCAG AA
+- [ ] Review contrast ratios against WCAG AA [start:: 2026-10-08]
 
 Tags: #work #design

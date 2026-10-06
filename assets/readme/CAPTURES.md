@@ -23,6 +23,10 @@ lazymark paints the whole screen with the theme's base color (Screen background 
 themes such as Solarized Light are readable on the recorder's dark terminal and appear in the
 recordings.
 
+The dates of the demo tasks are written for 2026-10-06 and `demo-env.sh` moves them by as many days as separate that day from the day you record, so the colors of the dates (overdue in red, due today in yellow, on time in blue, started in teal, completed in green) look the same whichever day you record. `inbox.md` is the newest note, so its dated tasks come first in the Tasks panel.
+
+The Reddit demo and the MCP demo are not part of the README: they live in `assets/social/` (`reddit-demo.tape` makes `reddit-demo.mp4` and `reddit-demo.gif`, 1280x720, font size 22 so it reads on a phone; `mcp-demo.tape` makes `mcp-demo.gif`). Record them from the repository root with `vhs assets/social/<name>.tape`.
+
 `demo-env.sh` also fakes the clipboard (`pngpaste`, `wl-paste` and `osascript` stand-ins that "have
 copied" the demo architecture diagram, so the real clipboard is never read) and installs the micro
 plugin in the temporary `HOME`. VHS cannot send `Alt-i` to micro (it types an `i`), so
