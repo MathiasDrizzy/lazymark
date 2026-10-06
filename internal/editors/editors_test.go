@@ -245,3 +245,18 @@ func TestNanoUninstallWithoutClosingMark(t *testing.T) {
 		t.Errorf("con el cierre se quita solo el bloque:\n%s", b)
 	}
 }
+
+// TestNanoUninstallSecondBlockWithoutClosingMark (ORD-019, segunda opinión): con dos bloques de lazymark, el primero cerrado y el segundo sin cierre, tampoco se borra
+// lo que sigue al segundo (el aviso es por el último bloque abierto, no por haber visto algún cierre antes).
+func TestNanoUninstallSecondBlockWithoutClosingMark(t *testing.T) {
+	e := env(t)
+	rc := filepath.Join(e.Home, ".nanorc")
+	text := nanoBegin + "\nbind M-7 x main\n" + nanoEnd + "\nset linenumbers\n" + nanoBegin + "\nset tabsize 4\nset mouse\n"
+	os.WriteFile(rc, []byte(text), 0o644)
+	if _, err := Uninstall("nano", e); err == nil {
+		t.Fatal("el segundo bloque no tiene cierre: debe avisar")
+	}
+	if b, _ := os.ReadFile(rc); string(b) != text {
+		t.Errorf("el nanorc no se toca:\n%s", b)
+	}
+}

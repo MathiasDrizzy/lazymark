@@ -53,6 +53,9 @@ func (s *Storage) resolveFile(path string, requireMD bool) (string, error) {
 	if err != nil || rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) || filepath.IsAbs(rel) {
 		return "", i18n.Errorf("%w: %q está fuera de %q", "%w: %q is outside %q", ErrOutsideNotes, path, s.BaseDir)
 	}
+	if requireMD && !strings.EqualFold(filepath.Ext(real), ".md") { // un enlace llamado x.md hacia un script no es una nota
+		return "", i18n.Errorf("%w: %q apunta a %q, que no termina en .md", "%w: %q points to %q, which does not end in .md", ErrOutsideNotes, path, real)
+	}
 	fi, err := os.Stat(real)
 	if err != nil {
 		return "", err

@@ -366,7 +366,7 @@ func uninstallNano(e Env) ([]string, error) {
 		for _, line := range strings.SplitAfter(text, "\n") {
 			switch {
 			case strings.HasPrefix(line, "# >>> lazymark ("):
-				inside = true
+				inside, closed = true, false // el aviso es por el ÚLTIMO bloque abierto: un cierre anterior no sirve
 			case inside && strings.HasPrefix(line, nanoEnd):
 				inside, closed = false, true
 			case !inside:

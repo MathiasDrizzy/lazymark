@@ -109,3 +109,32 @@ func TestEditThroughExternalSymlink(t *testing.T) {
 		t.Error("el enlace sigue siendo un enlace")
 	}
 }
+
+// TestSymlinkToNonMarkdownIsNotANote (ORD-019, segunda opinión): un enlace llamado x.md cuyo destino NO es un .md (un script, por ejemplo) no es una nota: no se
+// lista, no se edita y migrate no lo escribe, aunque sus líneas parezcan tareas.
+func TestSymlinkToNonMarkdownIsNotANote(t *testing.T) {
+	dir, _ := filepath.EvalSymlinks(t.TempDir())
+	script := filepath.Join(dir, "script.sh")
+	body := "#!/bin/sh\n- [ ] no soy tarea 📅 2026-05-10\n"
+	os.WriteFile(script, []byte(body), 0o755)
+	link := filepath.Join(dir, "tarea.md")
+	if err := os.Symlink("script.sh", link); err != nil {
+		t.Skip("sin enlaces simbólicos:", err)
+	}
+	s := New(dir)
+	if _, err := s.ResolveNote(link); !errors.Is(err, ErrOutsideNotes) {
+		t.Errorf("ResolveNote del enlace a un .sh: %v", err)
+	}
+	if err := s.SetTaskDate(link, 2, DateDue, "2026-06-01", time.Time{}); !errors.Is(err, ErrOutsideNotes) {
+		t.Errorf("editar el enlace a un .sh: %v", err)
+	}
+	if done, err := s.MigrateDates(FormatDataview, false); err != nil || len(done) != 0 {
+		t.Errorf("migrate no toca el .sh: %v %v", done, err)
+	}
+	if b, _ := os.ReadFile(script); string(b) != body {
+		t.Errorf("el script no cambió: %q", b)
+	}
+	if fi, _ := os.Stat(script); fi.Mode().Perm() != 0o755 {
+		t.Errorf("permisos intactos: %v", fi.Mode().Perm())
+	}
+}
