@@ -497,3 +497,54 @@ func TestMCPStdinIOError(t *testing.T) {
 		}
 	}
 }
+
+// TestNoteIDIsRelativePathMCP (ORD-018 L13): el id de una nota es su ruta relativa a la carpeta de notas (como el campo `note` de las tareas): dos notas homónimas en
+// carpetas distintas tienen ids distintos, y create_note en una subcarpeta devuelve un id con el que read_note lee esa nota.
+func TestNoteIDIsRelativePathMCP(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("XDG_CONFIG_HOME", filepath.Join(home, ".config"))
+	t.Setenv("AppData", filepath.Join(home, "AppData"))
+	notes, _ := filepath.EvalSymlinks(t.TempDir())
+	for _, f := range []string{"a/igual.md", "b/igual.md"} {
+		os.MkdirAll(filepath.Join(notes, filepath.Dir(f)), 0o755)
+		os.WriteFile(filepath.Join(notes, f), []byte("# Igual "+f+"\n"), 0o644)
+	}
+	os.MkdirAll(filepath.Join(notes, "trabajo"), 0o755)
+	r := session(t, notes, call(1, "create_note", map[string]interface{}{"title": "Lanzamiento", "folder": "trabajo", "empty": true}), call(2, "list_notes", nil))
+	txt, isErr := toolText(t, r[1])
+	var created struct {
+		ID string `json:"id"`
+	}
+	if isErr || json.Unmarshal([]byte(txt), &created) != nil || created.ID != "trabajo/lanzamiento.md" {
+		t.Fatalf("create_note debe dar el id con su carpeta: %v %s", isErr, txt)
+	}
+	txt, _ = toolText(t, r[2])
+	var list []struct{ ID, Title string }
+	if err := json.Unmarshal([]byte(txt), &list); err != nil {
+		t.Fatal(err)
+	}
+	ids := map[string]bool{}
+	for _, n := range list {
+		if ids[n.ID] {
+			t.Errorf("id repetido: %s", n.ID)
+		}
+		ids[n.ID] = true
+	}
+	for _, want := range []string{"a/igual.md", "b/igual.md", "trabajo/lanzamiento.md"} {
+		if !ids[want] {
+			t.Errorf("falta el id %q en %v", want, ids)
+		}
+	}
+	var reads []map[string]interface{}
+	for i, id := range []string{"a/igual.md", "b/igual.md", "trabajo/lanzamiento.md"} {
+		reads = append(reads, call(10+i, "read_note", map[string]interface{}{"path": id}))
+	}
+	rr := session(t, notes, reads...)
+	for i, want := range []string{"# Igual a/igual.md", "# Igual b/igual.md", "# Lanzamiento"} {
+		txt, isErr := toolText(t, rr[float64(10+i)]) // read_note devuelve el contenido
+		if isErr || !strings.Contains(txt, want) {
+			t.Errorf("read_note(id) debe leer su nota (%q): %v %s", want, isErr, txt)
+		}
+	}
+}

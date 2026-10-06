@@ -347,7 +347,7 @@ func (s *Server) getToolsList() []obj {
 		{
 			"name":        "read_note",
 			"description": "Lee el contenido Markdown de una nota de la carpeta de notas.",
-			"inputSchema": schema([]string{"path"}, obj{"path": str("Ruta de la nota .md: absoluta o relativa a la carpeta de notas. Debe quedar dentro de ella.")}),
+			"inputSchema": schema([]string{"path"}, obj{"path": str("Ruta de la nota .md: absoluta o relativa a la carpeta de notas (el `id` que devuelven list_notes y create_note sirve tal cual). Debe quedar dentro de ella.")}),
 		},
 		{
 			"name":        "create_note",

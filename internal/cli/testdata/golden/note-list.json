@@ -19,7 +19,7 @@
     "mod_time": "<TIME>"
   },
   {
-    "id": "diario.md",
+    "id": "sub/diario.md",
     "title": "diario",
     "path": "<DIR>/sub/diario.md",
     "tags": [],

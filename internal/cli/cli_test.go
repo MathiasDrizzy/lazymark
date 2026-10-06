@@ -946,3 +946,43 @@ func TestDatesMigrateFirstNoteFailsCLI(t *testing.T) {
 		t.Errorf("el error nombra la nota: %v", err)
 	}
 }
+
+// TestNoteIDIsRelativePathCLI (ORD-018 L13): `note list --json`, `note new --json` y `note show` usan como id la ruta relativa (a/igual.md y b/igual.md no chocan) y
+// `note show <id>` la lee.
+func TestNoteIDIsRelativePathCLI(t *testing.T) {
+	dir := t.TempDir()
+	for _, f := range []string{"a/igual.md", "b/igual.md"} {
+		os.MkdirAll(filepath.Join(dir, filepath.Dir(f)), 0o755)
+		os.WriteFile(filepath.Join(dir, f), []byte("# Igual "+f+"\n"), 0o644)
+	}
+	os.MkdirAll(filepath.Join(dir, "trabajo"), 0o755)
+	out, err := run(t, dir, "note", "new", "Lanzamiento", "--folder", "trabajo", "--empty", "--json")
+	var nn struct {
+		ID string `json:"id"`
+	}
+	if err != nil || json.Unmarshal([]byte(out), &nn) != nil || nn.ID != "trabajo/lanzamiento.md" {
+		t.Fatalf("note new: %v %s", err, out)
+	}
+	out, err = run(t, dir, "note", "list", "--json")
+	var list []struct {
+		ID string `json:"id"`
+	}
+	if err != nil || json.Unmarshal([]byte(out), &list) != nil {
+		t.Fatalf("note list: %v %s", err, out)
+	}
+	seen := map[string]bool{}
+	for _, n := range list {
+		if seen[n.ID] {
+			t.Errorf("id repetido %s", n.ID)
+		}
+		seen[n.ID] = true
+		show, err := run(t, dir, "note", "show", n.ID, "--json")
+		var sn struct{ ID, Content string }
+		if err != nil || json.Unmarshal([]byte(show), &sn) != nil || sn.ID != n.ID {
+			t.Errorf("note show %s: %v %s", n.ID, err, show)
+		}
+	}
+	if !seen["a/igual.md"] || !seen["b/igual.md"] {
+		t.Errorf("ids: %v", seen)
+	}
+}

@@ -62,7 +62,7 @@ The fields below are stable: they are only ever added to. See `internal/cli/test
 
 | Field | Type | |
 |---|---|---|
-| `id` | string | file name |
+| `id` | string | path relative to the notes folder, with `/` (`work/launch.md`), the same as the `note` field of tasks. Since v0.7.1 (it used to be only the file name, so `a/same.md` and `b/same.md` collided and the id did not open with `note show`). Pass it as is to `note show` or MCP `read_note` |
 | `title` | string | |
 | `path` | string | absolute |
 | `tags` | string[] | categories (`#kb/…` is not one) |

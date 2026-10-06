@@ -122,12 +122,22 @@ type NoteContentDTO struct {
 	Content string `json:"content"`
 }
 
-func noteDTO(n storage.Note) NoteDTO {
+// noteID es el id de una nota: su ruta relativa a la carpeta de notas, con "/" (igual que el campo `note` de las tareas). Dos notas homónimas de carpetas
+// distintas tienen ids distintos y read_note / note show lo aceptan tal cual.
+func (s *Service) noteID(path string) string {
+	rel, err := filepath.Rel(s.Store.BaseDir, path)
+	if err != nil || strings.HasPrefix(rel, "..") {
+		return filepath.ToSlash(path)
+	}
+	return filepath.ToSlash(rel)
+}
+
+func (s *Service) noteDTO(n storage.Note) NoteDTO {
 	tags := n.Tags
 	if tags == nil {
 		tags = []string{}
 	}
-	return NoteDTO{ID: n.ID, Title: n.Title, Path: n.Path, Tags: tags, TasksCount: len(n.Tasks), ModTime: n.ModTime.Format(time.RFC3339)}
+	return NoteDTO{ID: s.noteID(n.Path), Title: n.Title, Path: n.Path, Tags: tags, TasksCount: len(n.Tasks), ModTime: n.ModTime.Format(time.RFC3339)}
 }
 
 // TaskDTO es una tarea en la salida JSON (esquema estable, docs/cli.md).
@@ -165,7 +175,7 @@ func (s *Service) ListNotes() ([]NoteDTO, error) {
 	}
 	out := []NoteDTO{}
 	for _, n := range notes {
-		out = append(out, noteDTO(n))
+		out = append(out, s.noteDTO(n))
 	}
 	return out, nil
 }
@@ -193,10 +203,10 @@ func (s *Service) ShowNote(path string) (NoteContentDTO, error) {
 	notes, _ := s.Store.ListNotes()
 	for _, n := range notes {
 		if same(n.Path, real) {
-			return NoteContentDTO{NoteDTO: noteDTO(n), Content: string(data)}, nil
+			return NoteContentDTO{NoteDTO: s.noteDTO(n), Content: string(data)}, nil
 		}
 	}
-	return NoteContentDTO{NoteDTO: NoteDTO{Path: real, Tags: []string{}}, Content: string(data)}, nil
+	return NoteContentDTO{NoteDTO: NoteDTO{ID: s.noteID(real), Path: real, Tags: []string{}}, Content: string(data)}, nil
 }
 
 func same(a, b string) bool {
