@@ -4,6 +4,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -134,7 +135,7 @@ func TestSymlinkToNonMarkdownIsNotANote(t *testing.T) {
 	if b, _ := os.ReadFile(script); string(b) != body {
 		t.Errorf("el script no cambió: %q", b)
 	}
-	if fi, _ := os.Stat(script); fi.Mode().Perm() != 0o755 {
+	if fi, _ := os.Stat(script); runtime.GOOS != "windows" && fi.Mode().Perm() != 0o755 { // en Windows los permisos Unix no existen
 		t.Errorf("permisos intactos: %v", fi.Mode().Perm())
 	}
 }

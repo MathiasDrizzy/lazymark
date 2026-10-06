@@ -38,7 +38,8 @@ func TestEditorEnv(t *testing.T) {
 	m := newTestModel(t, 100, 30)
 	m.c.cfg.Editor = "true"
 	cmd := m.c.editorCommand("/n/nota.md", 1)
-	if !strings.Contains(strings.Join(cmd.Env, "\n"), "LAZYMARK_NOTE=/n/nota.md") {
+	abs, _ := filepath.Abs("/n/nota.md") // la ruta que recibe el editor es absoluta (en Windows lleva la unidad)
+	if !strings.Contains(strings.Join(cmd.Env, "\n"), "LAZYMARK_NOTE="+abs) {
 		t.Errorf("el comando del editor no lleva LAZYMARK_NOTE: %q", cmd.Env)
 	}
 }
