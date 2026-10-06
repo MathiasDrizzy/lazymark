@@ -73,6 +73,9 @@ func (p *parser) service() (*ops.Service, error) {
 	}
 	views.DateGlyphs = svc.UserConfig().DateGlyphArray() // los glifos propios de las fechas (date_glyphs) también valen en la salida de texto
 	svc.Notice = func(msg string) { fmt.Fprintln(Stderr, plain(i18n.T("aviso: ", "note: ")+msg)) }
+	for _, w := range svc.UserConfig().Problems() { // un valor inválido de config.json (se usó el defecto) o un archivo ilegible
+		svc.Notice(w)
+	}
 	return svc, nil
 }
 

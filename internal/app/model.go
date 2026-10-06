@@ -90,6 +90,13 @@ func New(cfg *config.Config) (*AppModel, error) {
 	m.tags = tagsPanel{c: c}
 	m.kanban = kanbanSheet{c: c}
 	c.setStatus("%s", loadedStatus(len(c.notes)))
+	if w := cfg.Warnings(); len(w) > 0 { // lo que se vio raro en config.json (un valor inválido, una clave desconocida, un archivo ilegible): el primero en la barra de estado
+		msg := w[0]
+		if len(w) > 1 {
+			msg += fmt.Sprintf(i18n.T(" (y %d más)", " (and %d more)"), len(w)-1)
+		}
+		c.setStatus("%s", msg)
+	}
 	return m, nil
 }
 

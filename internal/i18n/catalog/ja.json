@@ -1,5 +1,6 @@
 {
  "  (No tasks)": "  (タスクなし)",
+ " (and %d more)": " （ほか %d 件）",
  " [options] [command]\n\n": " [オプション] [コマンド]\n\n",
  "\"click me!\" hint": "「click me!」の表示",
  "\"click me!\": every (s)": "「click me!」: 間隔 (秒)",

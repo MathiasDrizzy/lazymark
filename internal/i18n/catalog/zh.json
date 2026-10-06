@@ -1,5 +1,6 @@
 {
  "  (No tasks)": "  (无任务)",
+ " (and %d more)": " （还有 %d 条）",
  " [options] [command]\n\n": " [选项] [命令]\n\n",
  "\"click me!\" hint": "“click me!”提示",
  "\"click me!\": every (s)": "“click me!”：每隔 (秒)",

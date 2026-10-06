@@ -1,6 +1,7 @@
 package app
 
 import (
+	tea "charm.land/bubbletea/v2"
 	"github.com/MathiasDrizzy/lazymark/internal/config"
 	"github.com/MathiasDrizzy/lazymark/internal/ui/theme"
 	"github.com/MathiasDrizzy/lazymark/internal/ui/views"
@@ -731,5 +732,33 @@ func TestSettingsOptionRows(t *testing.T) {
 	back, err := config.LoadReadOnly(m.c.store.BaseDir)
 	if err != nil || back.KanbanTag != "board" || back.TrashDays != 30 || back.DailyName != "AAAA.MM.DD" || back.DateGlyphs["due"] != "D" {
 		t.Errorf("al reabrir se lee lo guardado: %v %+v", err, back)
+	}
+}
+
+// TestStartupShowsConfigWarnings (ORD-025 rev 2): al abrir con un config.json que tiene un valor inválido o una clave desconocida, la barra de estado lo dice (el resto de la
+// configuración se respeta).
+func TestStartupShowsConfigWarnings(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("XDG_CONFIG_HOME", filepath.Join(home, ".config"))
+	t.Setenv("AppData", filepath.Join(home, "AppData"))
+	base, _ := os.UserConfigDir()
+	os.MkdirAll(filepath.Join(base, "lazymark"), 0o755)
+	os.WriteFile(filepath.Join(base, "lazymark", "config.json"), []byte(`{"theme":"dracula","trash_days":"20"}`), 0o644)
+	cfg, err := config.Load(copyFixtures(t))
+	if err != nil {
+		t.Fatal(err)
+	}
+	cfg.Language = "es"
+	m, err := New(cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	m.Update(tea.WindowSizeMsg{Width: 140, Height: 35})
+	if !strings.Contains(lastRow(m), "trash_days") {
+		t.Errorf("la barra de estado avisa del valor inválido: %q", lastRow(m))
+	}
+	if m.c.cfg.Theme != "dracula" {
+		t.Errorf("el resto se respeta: %q", m.c.cfg.Theme)
 	}
 }

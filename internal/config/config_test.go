@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"runtime"
 	"runtime/debug"
 	"strings"
 	"testing"
@@ -559,5 +560,152 @@ func TestCleanRelFolderAndDailyName(t *testing.T) {
 	}
 	if got := FormatDailyName("AAAA.MM.DD", time.Date(2026, 10, 6, 0, 0, 0, 0, time.UTC)); got != "2026.10.06" {
 		t.Errorf("FormatDailyName = %q", got)
+	}
+}
+
+// writeUserConfig deja js como el config.json del usuario (en un HOME aislado) y devuelve su ruta.
+func writeUserConfig(t *testing.T, js string) string {
+	t.Helper()
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("XDG_CONFIG_HOME", filepath.Join(home, ".config"))
+	t.Setenv("AppData", filepath.Join(home, "AppData"))
+	base, _ := os.UserConfigDir()
+	os.MkdirAll(filepath.Join(base, "lazymark"), 0o755)
+	p := filepath.Join(base, "lazymark", "config.json")
+	os.WriteFile(p, []byte(js), 0o644)
+	return p
+}
+
+// TestTolerantConfigWrongType (ORD-025 rev 2): un campo con el tipo equivocado vuelve a su defecto con un aviso y el RESTO del archivo se respeta; al guardar, no se pierde nada (tema,
+// idioma y formato de fechas siguen en el archivo). Es el caso que borraba toda la configuración.
+func TestTolerantConfigWrongType(t *testing.T) {
+	p := writeUserConfig(t, `{"theme":"dracula","language":"es","trash_days":"20","date_format":"emoji"}`)
+	cfg, err := Load(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg.Theme != "dracula" || cfg.Language != "es" || cfg.DateFormat != "emoji" {
+		t.Errorf("el resto del archivo se respeta: %q %q %q", cfg.Theme, cfg.Language, cfg.DateFormat)
+	}
+	if cfg.TrashDays != 20 {
+		t.Errorf("el campo inválido vuelve a su defecto: %d", cfg.TrashDays)
+	}
+	w := strings.Join(cfg.Warnings(), "\n")
+	if !strings.Contains(w, "trash_days") {
+		t.Errorf("avisa del campo inválido: %q", w)
+	}
+	if err := cfg.Save(); err != nil {
+		t.Fatal(err)
+	}
+	b, _ := os.ReadFile(p)
+	for _, want := range []string{`"theme": "dracula"`, `"language": "es"`, `"date_format": "emoji"`, `"trash_days": 20`} {
+		if !strings.Contains(string(b), want) {
+			t.Errorf("tras guardar, el archivo conserva %s:\n%s", want, b)
+		}
+	}
+	if _, err := os.Stat(p + ".bak"); err == nil {
+		t.Error("un archivo que sí se leyó no necesita copia")
+	}
+}
+
+// TestTolerantConfigBrokenJSON: un config.json que no es JSON no se pierde: se usan los defectos, se avisa, y antes de guardar encima el original queda en config.json.bak (una
+// sola vez; el archivo nuevo es JSON válido).
+func TestTolerantConfigBrokenJSON(t *testing.T) {
+	broken := `{"theme":"nord", "language": "es",  ` // cortado a la mitad
+	p := writeUserConfig(t, broken)
+	cfg, err := Load(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg.Theme != "catppuccin-mocha" || len(cfg.Warnings()) == 0 || !strings.Contains(strings.Join(cfg.Warnings(), " "), "config.json") {
+		t.Errorf("defectos y aviso: %q %v", cfg.Theme, cfg.Warnings())
+	}
+	if b, _ := os.ReadFile(p); string(b) != broken {
+		t.Fatal("leer no toca el archivo")
+	}
+	if err := cfg.Save(); err != nil {
+		t.Fatal(err)
+	}
+	if b, _ := os.ReadFile(p + ".bak"); string(b) != broken {
+		t.Errorf("el original queda en config.json.bak: %q", b)
+	}
+	var back map[string]any
+	if b, _ := os.ReadFile(p); json.Unmarshal(b, &back) != nil {
+		t.Error("el archivo nuevo es JSON válido")
+	}
+	if !strings.Contains(strings.Join(cfg.Warnings(), " "), ".bak") {
+		t.Errorf("avisa de dónde quedó la copia: %v", cfg.Warnings())
+	}
+	// una segunda vez no apila otra copia (el archivo ya se leyó bien)
+	cfg.Theme = "nord"
+	cfg.Save()
+	if _, err := os.Stat(p + ".bak.1"); err == nil {
+		t.Error("no se hace otra copia al guardar de nuevo")
+	}
+	// un config roto otra vez: no pisa la copia anterior
+	os.WriteFile(p, []byte(`[1,2`), 0o644)
+	cfg2, _ := Load(t.TempDir())
+	cfg2.Save()
+	if b, _ := os.ReadFile(p + ".bak"); string(b) != broken {
+		t.Errorf("la copia anterior no se pisa: %q", b)
+	}
+	if b, _ := os.ReadFile(p + ".bak.1"); string(b) != `[1,2` {
+		t.Errorf("el segundo roto va a .bak.1: %q", b)
+	}
+}
+
+// TestTolerantConfigUnknownKey: una clave que lazymark no conoce se conserva al guardar (y se avisa de ella): un error de tecleo o una opción de una versión más nueva no se borran.
+func TestTolerantConfigUnknownKey(t *testing.T) {
+	p := writeUserConfig(t, `{"theme":"nord","mi_clave":{"a":[1,2,3]},"trash_day":5}`)
+	cfg, err := Load(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	w := strings.Join(cfg.Warnings(), "\n")
+	if !strings.Contains(w, "mi_clave") || !strings.Contains(w, "trash_day") {
+		t.Errorf("avisa de las claves desconocidas: %q", w)
+	}
+	cfg.Theme = "dracula"
+	if err := cfg.Save(); err != nil {
+		t.Fatal(err)
+	}
+	var back map[string]json.RawMessage
+	b, _ := os.ReadFile(p)
+	if err := json.Unmarshal(b, &back); err != nil {
+		t.Fatal(err)
+	}
+	if string(back["mi_clave"]) != `{"a":[1,2,3]}` && !strings.Contains(strings.ReplaceAll(strings.ReplaceAll(string(back["mi_clave"]), " ", ""), "\n", ""), `{"a":[1,2,3]}`) {
+		t.Errorf("mi_clave se conserva tal cual: %s", back["mi_clave"])
+	}
+	if string(back["trash_day"]) != "5" || !strings.Contains(string(b), `"theme": "dracula"`) {
+		t.Errorf("la otra clave y el cambio de tema también: %s", b)
+	}
+	// y sigue leyéndose bien después
+	again, _ := Load(t.TempDir())
+	if again.Theme != "dracula" {
+		t.Errorf("tema: %q", again.Theme)
+	}
+}
+
+// TestTolerantConfigUnreadableFile: un config.json que existe pero no se puede leer (aquí, sin permisos) tampoco se pisa a ciegas: se avisa y, si hay que guardar, antes se intenta la
+// copia (sin permiso de lectura no se puede copiar: entonces NO se escribe encima y Save devuelve el error).
+func TestTolerantConfigUnreadableFile(t *testing.T) {
+	if runtime.GOOS == "windows" || os.Geteuid() == 0 {
+		t.Skip("necesita permisos de archivo de Unix y no ser root")
+	}
+	p := writeUserConfig(t, `{"theme":"nord"}`)
+	os.Chmod(p, 0)
+	t.Cleanup(func() { os.Chmod(p, 0o644) })
+	cfg, err := Load(t.TempDir())
+	if err != nil || len(cfg.Warnings()) == 0 {
+		t.Fatalf("avisa: %v %v", err, cfg.Warnings())
+	}
+	if err := cfg.Save(); err == nil {
+		t.Error("sin poder copiar el original, Save no escribe encima")
+	}
+	os.Chmod(p, 0o644)
+	if b, _ := os.ReadFile(p); string(b) != `{"theme":"nord"}` {
+		t.Errorf("el original sigue intacto: %q", b)
 	}
 }

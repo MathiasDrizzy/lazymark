@@ -24,6 +24,11 @@ The configuration file is created the first time lazymark saves a setting:
 You can edit the file by hand while lazymark is closed. A missing field keeps its
 default, so a file with only the settings you care about is fine.
 
+
+### If `config.json` has a mistake
+
+lazymark never throws your configuration away because of a typo. Each key is read on its own: a value of the wrong type (for example `"trash_days": "20"`) goes back to its default, a warning says which one (on the status bar, and on stderr in the commands), and **the rest of the file is respected**. A key lazymark does not know (a typo, or an option from a newer version) is kept as it is when the file is saved. If the file is not valid JSON, or cannot be read, lazymark uses the defaults and, before it ever writes over it, keeps what was there as `config.json.bak` (`.bak.1`, `.bak.2`… if there is already one); if it cannot make that copy it does not write at all.
+
 ## Notes folder
 
 - Open lazymark with `--dir <folder>` to use a folder for that run only. Changing a

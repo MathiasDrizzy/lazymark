@@ -1277,3 +1277,31 @@ func TestDateGlyphsOptionCLI(t *testing.T) {
 		t.Errorf("con date_glyphs.due = D: %v %q", err, out)
 	}
 }
+
+// TestConfigSurvivesAWrongTypeCLI (ORD-025 rev 2, repro de cerebro): con un tipo equivocado en una clave ("trash_days": "20") y un vault solo con emojis, `task due` (que guarda la
+// configuración al avisar del formato) NO reescribe config.json con los defectos: tema, idioma y date_format siguen en el archivo y el campo inválido se avisa por stderr.
+func TestConfigSurvivesAWrongTypeCLI(t *testing.T) {
+	dir := fixture(t)
+	base, _ := os.UserConfigDir()
+	os.MkdirAll(filepath.Join(base, "lazymark"), 0o755)
+	cfgFile := filepath.Join(base, "lazymark", "config.json")
+	os.WriteFile(cfgFile, []byte(`{"theme":"dracula","language":"es","trash_days":"20","mi_clave":true}`), 0o644)
+	os.WriteFile(filepath.Join(dir, "e.md"), []byte("# E\n- [ ] con emoji 📅 2026-01-01\n- [ ] sin fecha\n"), 0o644)
+	var errBuf bytes.Buffer
+	old := Stderr
+	Stderr = &errBuf
+	defer func() { Stderr = old }()
+	id := taskID(t, dir, "sin fecha", "e.md")
+	if _, err := run(t, dir, "task", "due", id, "2026-12-01"); err != nil {
+		t.Fatal(err)
+	}
+	b, _ := os.ReadFile(cfgFile)
+	for _, want := range []string{`"theme": "dracula"`, `"language": "es"`, `"mi_clave": true`} {
+		if !strings.Contains(string(b), want) {
+			t.Errorf("config.json conserva %s:\n%s", want, b)
+		}
+	}
+	if !strings.Contains(errBuf.String(), "trash_days") || strings.Contains(errBuf.String(), "mi_clave") {
+		t.Errorf("avisa por stderr del campo inválido: %q", errBuf.String())
+	}
+}
