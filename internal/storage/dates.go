@@ -116,7 +116,7 @@ func scanMarkers(text string) []dateHit {
 		if m[2] >= 0 {
 			k, d = 2, 4
 			// `[[due:: 2026-05-10]]` es un wikilink, `[due:: 2026-05-10](https://…)` el texto de un link Markdown y `[due:: 2026-05-10][ref]` / `[…][]` uno de referencia: no son campos
-			if (m[0] > 0 && text[m[0]-1] == '[') || (m[1] < len(text) && (text[m[1]] == ']' || text[m[1]] == '(' || (text[m[1]] == '[' && !nextIsField(text[m[1]:])))) {
+			if (m[0] > 0 && text[m[0]-1] == '[') || (m[1] < len(text) && (text[m[1]] == ']' || text[m[1]] == '(' || (text[m[1]] == '[' && refLabelFollows(text[m[1]:])))) {
 				continue
 			}
 		} else {
@@ -519,7 +519,21 @@ func DataviewSpans(text string) []DateSpan {
 	return out
 }
 
-// nextIsField dice si lo que sigue ("[…") es otro campo (`[start:: …][due:: …]`, pegados): entonces no es la etiqueta de un link de referencia.
-func nextIsField(rest string) bool {
-	return dataviewDateRe.FindStringIndex(rest) != nil && dataviewDateRe.FindStringIndex(rest)[0] == 0
+// refLabelFollows dice si rest ("[…") empieza con la etiqueta de un link de referencia de CommonMark: cerrada con `]` y sin `[` ni `]` sin escapar dentro
+// (`[ref]`, `[]`). Un `[[wikilink]]` contiguo o un `[` sin cerrar no lo son. Dos campos pegados (`[start:: …][due:: …]`) tampoco: el segundo es otro campo.
+func refLabelFollows(rest string) bool {
+	if loc := dataviewDateRe.FindStringIndex(rest); loc != nil && loc[0] == 0 {
+		return false
+	}
+	for i := 1; i < len(rest); i++ {
+		switch rest[i] {
+		case '\\':
+			i++
+		case '[':
+			return false
+		case ']':
+			return true
+		}
+	}
+	return false
 }

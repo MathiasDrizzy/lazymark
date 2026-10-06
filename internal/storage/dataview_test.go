@@ -325,3 +325,24 @@ func TestReferenceLinksAndUnpairedBackticks(t *testing.T) {
 		t.Errorf("entre dos acentos graves es código: %+v", d)
 	}
 }
+
+// TestFieldFollowedByBracket (ORD-018 L12): `[due:: …][[otra nota]]` (wikilink contiguo) y `[due:: …][texto` (corchete sin cerrar) son campos: la etiqueta de un link de
+// referencia debe cerrarse con `]` y no llevar `[` sin escapar. `[ref]`, `[]` y `[a\[b]` siguen siendo links; editar el campo no deja dos `due`.
+func TestFieldFollowedByBracket(t *testing.T) {
+	for _, line := range []string{"- [ ] Wiki [due:: 2026-05-10][[otra nota]]", "- [ ] Abierto [due:: 2026-05-11][texto", "- [ ] Abierto2 [due:: 2026-05-11][a [b]"} {
+		d := ParseDates(line)
+		if d.Due == "" {
+			t.Errorf("%q: la fecha se lee", line)
+			continue
+		}
+		got := setDateIn(line, DateDue, "2026-06-01", FormatDataview)
+		if strings.Count(got, "due::") != 1 || !strings.Contains(got, "[due:: 2026-06-01]") {
+			t.Errorf("%q: editar reemplaza el campo sin duplicar: %q", line, got)
+		}
+	}
+	for _, line := range []string{"- [ ] A [due:: 2026-05-10][ref]", "- [ ] B [due:: 2026-05-10][]", `- [ ] C [due:: 2026-05-10][a\[b]`} {
+		if d := ParseDates(line); d != (Dates{}) {
+			t.Errorf("%q es un link de referencia: %+v", line, d)
+		}
+	}
+}
