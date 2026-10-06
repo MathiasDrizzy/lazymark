@@ -478,14 +478,24 @@ func TestHintWait(t *testing.T) {
 	}
 }
 
-// TestNoteIsEmpty (ORD-021 C.2): vacía es sin contenido o solo con su título; cualquier otra cosa (texto, tareas, un segundo encabezado) no.
+// TestNoteIsEmpty (ORD-021 C.2 y C.3): vacía es sin contenido o solo con el encabezado que lazymark crea para ESA nota (`# <título derivado del nombre del archivo>`, sin
+// distinguir mayúsculas, espacios, guiones ni guiones bajos). Cualquier otro texto, también un `# encabezado` distinto, es contenido: una nota nunca se ve vacía si tiene datos.
 func TestNoteIsEmpty(t *testing.T) {
-	for in, want := range map[string]bool{
-		"": true, "\n\n": true, "# Título": true, "# Título\n": true, "\n# Título\n\n": true,
-		"# Título\n\ntexto": false, "    # indentado es código": false, "\t# con tabulación": false, "  # hasta 3 espacios es título": true, "\ufeff# Título\n": true, "\ufeff": true, "# Título\r\n": true, "# A\n# B": false, "texto": false, "- [ ] tarea": false, "## Sub": false, "#etiqueta": false,
+	for _, c := range []struct {
+		content, title string
+		want           bool
+	}{
+		{"", "wifi", true}, {"\n\n", "wifi", true}, {"# wifi", "wifi", true}, {"# Wifi\n", "wifi", true}, {"\n# WIFI\n\n", "wifi", true},
+		{"# Reunión semanal\n", "reunión semanal", true}, {"# mi nota\n", "mi-nota", true}, {"# mi_nota\n", "mi nota", true}, {"#   wifi   \n", "wifi", true},
+		{"# Wifi\r\n", "wifi", true}, {"# Wifi\r", "wifi", true}, {"\r\n\r\n# Wifi\r\n\r\n", "wifi", true}, {"\ufeff# wifi\n", "wifi", true}, {"\ufeff", "wifi", true},
+		{"  # wifi", "wifi", true},
+		// el caso de la auditoría: un dato en el encabezado es contenido
+		{"# Clave wifi: 1234", "wifi", false}, {"# Clave wifi: 1234\n", "clave wifi", false}, {"# Otro título", "wifi", false}, {"# wifi 1234", "wifi", false},
+		{"# wifi\n\ntexto", "wifi", false}, {"# wifi\n# wifi", "wifi", false}, {"texto", "wifi", false}, {"- [ ] tarea", "wifi", false}, {"## wifi", "wifi", false}, {"#wifi", "wifi", false},
+		{"    # wifi", "wifi", false}, {"\t# wifi", "wifi", false}, {"# wifi\r\n1234\r\n", "wifi", false}, {"# wifi\r1234", "wifi", false},
 	} {
-		if got := noteIsEmpty(in); got != want {
-			t.Errorf("noteIsEmpty(%q) = %v, se esperaba %v", in, got, want)
+		if got := noteIsEmpty(c.content, c.title); got != c.want {
+			t.Errorf("noteIsEmpty(%q, %q) = %v, se esperaba %v", c.content, c.title, got, c.want)
 		}
 	}
 }
@@ -508,13 +518,19 @@ func TestMascotShowsInTheThreeEmptyCases(t *testing.T) {
 		if !visible() {
 			t.Errorf("kitty=%v: carpeta vacía seleccionada (hay otra con notas): debe verse la mascota", kitty)
 		}
-		for name, content := range map[string]string{"v1.md": "", "v2.md": "# Solo título\n"} {
+		for name, content := range map[string]string{"v1.md": "", "v2.md": "# v2\n"} {
 			os.WriteFile(filepath.Join(base, name), []byte(content), 0o644)
 			r.afterChange()
 			r.notes.selectPath(filepath.Join(base, name))
 			if !visible() {
 				t.Errorf("kitty=%v: nota %q (%q): debe verse la mascota", kitty, name, content)
 			}
+		}
+		os.WriteFile(filepath.Join(base, "wifi.md"), []byte("# Clave wifi: 1234"), 0o644) // el caso de la auditoría: un dato en el encabezado
+		r.afterChange()
+		r.notes.selectPath(filepath.Join(base, "wifi.md"))
+		if visible() || !strings.Contains(plain(r.AppModel), "1234") {
+			t.Errorf("kitty=%v: una nota con '# Clave wifi: 1234' tiene contenido: se ve el dato y no hay mascota", kitty)
 		}
 		os.WriteFile(filepath.Join(base, "c.md"), []byte("# C\n\ncon contenido\n"), 0o644)
 		r.afterChange()
@@ -621,5 +637,54 @@ func TestHintRowOnScreen(t *testing.T) {
 	}
 	if c, hc := hintX+len(hintText)/2, (minX+maxX)/2; c < hc-2 || c > hc+2 {
 		t.Errorf("el aviso (centro %d) no está centrado sobre la mascota (centro %d)", c, hc)
+	}
+}
+
+// TestHeadMetricsAreRobust (ORD-021 rev 2, C.3): panel más chico que el sprite (sin pánico; sin espacio no hay mascota ni aviso), tamaño de celda 0 antes de que responda la
+// terminal, cabeza en la primera fila sin fila libre arriba (el aviso no se dibuja: nunca encima de la cabeza) y un aviso que no se pasa del ancho del panel.
+func TestHeadMetricsAreRobust(t *testing.T) {
+	for _, kitty := range []bool{false, true} {
+		r := newEmptyRig(t, 120, 35, kitty)
+		// panel más chico que el sprite: no hay pánico ni mascota
+		for _, rect := range []Rect{{X: 0, Y: 0, W: 4, H: 3}, {X: 0, Y: 0, W: 12, H: 6}, {X: 0, Y: 0, W: 10, H: 5}, {X: 0, Y: 0, W: 2, H: 2}, {X: 0, Y: 0, W: 0, H: 0}} {
+			if r.mascotShows(restWelcome, rect) {
+				t.Errorf("kitty=%v: un panel de %dx%d no tiene sitio: no debe haber mascota", kitty, rect.W, rect.H)
+			}
+			out := ansi.Strip(r.renderRest(restWelcome, "t", "", rect, false))
+			if strings.ContainsAny(out, quadrantRunes) || strings.Contains(out, hintText) {
+				t.Errorf("kitty=%v: un panel de %dx%d dibujó la mascota o el aviso:\n%s", kitty, rect.W, rect.H, out)
+			}
+		}
+		// celda de 0 píxeles (la terminal aún no contestó): el tamaño por defecto, sin división por cero
+		r.cellW, r.cellH = 0, 0
+		if w, h := r.cellSize(); w <= 0 || h <= 0 {
+			t.Errorf("kitty=%v: cellSize no puede ser 0: %dx%d", kitty, w, h)
+		}
+		if lines, hr, hc := r.mascotBlock(); len(lines) != mascotRows || hr < 0 || hr >= mascotRows || hc < 0 || hc >= mascotCols {
+			t.Errorf("kitty=%v con celda 0: bloque %d filas, cabeza (%d,%d)", kitty, len(lines), hr, hc)
+		}
+	}
+	r := newEmptyRig(t, 120, 35, false)
+	// cabeza en la fila 0 y sin fila libre encima: ni aviso (-1), ni nunca sobre la cabeza
+	if row, _ := r.hintPlacement(mascotRows, mascotRows, 0, 5, 20, 40); row != -1 {
+		t.Errorf("cabeza en la primera fila y sin fila libre arriba: el aviso no se dibuja (fila -1), hay %d", row)
+	}
+	if row, _ := r.hintPlacement(mascotRows+1, mascotRows, 0, 5, 20, 40); row != 0 {
+		t.Errorf("con una fila libre arriba va en ella (0): %d", row)
+	}
+	// el aviso nunca se pasa del ancho del panel (ni empieza antes de 0); si no cabe, no se dibuja
+	for inner := 0; inner <= 30; inner++ {
+		for _, head := range []int{0, 5, 9} {
+			row, col := r.hintPlacement(20, mascotRows, 2, head, max(0, inner-mascotCols-1), inner)
+			if inner < len(hintText) {
+				if row != -1 {
+					t.Errorf("ancho %d < %d: el aviso no cabe y no se dibuja: fila %d", inner, len(hintText), row)
+				}
+				continue
+			}
+			if col < 0 || col+len(hintText) > inner {
+				t.Errorf("ancho %d, cabeza %d: el aviso (columna %d, %d de largo) se pasa del panel", inner, head, col, len(hintText))
+			}
+		}
 	}
 }

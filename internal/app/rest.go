@@ -31,7 +31,7 @@ func (m *AppModel) restKind() string {
 	case panelTasks:
 		if n := m.previewNote(); n == nil {
 			return restNone
-		} else if noteIsEmpty(n.Content) {
+		} else if noteIsEmpty(n.Content, n.Title) {
 			return restEmptyNote
 		}
 		return ""
@@ -46,7 +46,7 @@ func (m *AppModel) restKind() string {
 		return restFolder
 	}
 	if n := m.notes.currentNote(); n != nil {
-		if noteIsEmpty(n.Content) {
+		if noteIsEmpty(n.Content, n.Title) {
 			return restEmptyNote
 		}
 		return ""
@@ -83,7 +83,7 @@ func (m *AppModel) restMessage(kind string) []string {
 // sitio y la mascota está activada, el perezoso dormido abajo a la derecha.
 func (m *AppModel) renderRest(kind string, title, footer string, r Rect, active bool) string {
 	msg := m.restMessage(kind)
-	inner, h := r.W-2, r.H-2
+	inner, h := max(0, r.W-2), max(0, r.H-2) // un panel más chico que su borde: sin interior, sin pánico
 	lines := make([]string, h)
 	top := max(0, (h-len(msg))/2)
 	for i, l := range msg {
@@ -128,26 +128,41 @@ func fillKeys(text string, dim lipgloss.Style, keys ...string) string {
 // el borde de abajo del panel de alto h; si la cabeza llega al borde del bloque, la fila libre de encima) y la columna que lo centra sobre la cabeza (headCol es la
 // columna central de lo visible, left donde empieza el bloque), sin salirse del panel de ancho inner.
 func (m *AppModel) hintPlacement(h, blockRows, headRow, headCol, left, inner int) (row, col int) {
-	row = max(0, h-blockRows+headRow-1)
-	col = left + headCol - len([]rune(hintText))/2
-	col = max(0, min(col, inner-len([]rune(hintText))))
+	width := len([]rune(hintText))
+	row = h - blockRows + headRow - 1
+	if row < 0 || inner < width { // sin fila libre encima de la cabeza (nunca sobre ella) o sin ancho para el texto: no se dibuja
+		return -1, 0
+	}
+	col = left + headCol - width/2
+	col = max(0, min(col, inner-width))
 	return row, col
 }
 
-// noteIsEmpty dice si una nota cuenta como vacía a efectos del estado de reposo (y de la mascota): sin contenido, o solo con su título (una línea `# …`). Una nota con
-// cualquier otra cosa (texto, tareas, otro encabezado) no lo está.
-func noteIsEmpty(content string) bool {
-	titles := 0
-	for _, raw := range strings.Split(strings.TrimPrefix(content, "\ufeff"), "\n") {
-		l := strings.TrimRight(raw, " \t\r")
-		indent := len(l) - len(strings.TrimLeft(l, " \t"))
-		switch {
-		case l == "":
-		case indent < 4 && !strings.HasPrefix(l[indent:], "\t") && strings.HasPrefix(strings.TrimLeft(l, " "), "# ") && titles == 0: // un `# …` de hasta 3 espacios es el título; con 4 o con tabulación es código
-			titles++
-		default:
+// noteIsEmpty dice si una nota cuenta como vacía a efectos del estado de reposo (y de la mascota): sin contenido, o solo con el encabezado que lazymark crea para esa
+// nota (`# <título>`, donde el título es el del nombre del archivo, sin distinguir mayúsculas, espacios, guiones ni guiones bajos). Cualquier otra cosa es contenido:
+// texto, tareas, un `# encabezado` distinto (`# Clave wifi: 1234` en wifi.md es un dato, no un título), un segundo encabezado o código indentado. Admite \r\n, \r y BOM.
+func noteIsEmpty(content, title string) bool {
+	norm := func(s string) string {
+		return strings.Join(strings.Fields(strings.Map(func(r rune) rune {
+			if r == '-' || r == '_' {
+				return ' '
+			}
+			return r
+		}, strings.ToLower(s))), " ")
+	}
+	text := strings.ReplaceAll(strings.ReplaceAll(strings.TrimPrefix(content, "\ufeff"), "\r\n", "\n"), "\r", "\n")
+	headings := 0
+	for _, raw := range strings.Split(text, "\n") {
+		l := strings.TrimRight(raw, " \t")
+		if strings.TrimSpace(l) == "" {
+			continue
+		}
+		indent := len(l) - len(strings.TrimLeft(l, " "))
+		rest := l[indent:]
+		if indent >= 4 || headings > 0 || !strings.HasPrefix(rest, "# ") || norm(rest[2:]) != norm(title) {
 			return false
 		}
+		headings++
 	}
 	return true
 }
