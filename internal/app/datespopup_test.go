@@ -522,7 +522,7 @@ func TestPreviewDatesAreColoredByState(t *testing.T) {
 		"[ ] vencida " + views.DateGlyph(storage.DateDue) + " 2026-10-01",
 		"[ ] hoy " + views.DateGlyph(storage.DateDue) + " 2026-10-06",
 		"[ ] lejos " + views.DateGlyph(storage.DateDue) + " 2026-12-01",
-		"[✓] hecha " + views.DateGlyph(storage.DateDue) + " 2026-10-01",
+		"[✓] hecha " + string(views.DoneMark) + views.DateGlyph(storage.DateDue) + " 2026-10-01", // la tarea hecha lleva el marcador del dato parseado
 		"texto sin fechas",
 	}, "2026-10-06")
 	want := []string{"38;2;243;139;168", "38;2;249;226;175", "38;2;137;180;250", ""} // rojo, amarillo y azul de Catppuccin Mocha; la tarea hecha, neutra
@@ -536,5 +536,72 @@ func TestPreviewDatesAreColoredByState(t *testing.T) {
 	}
 	if lines[4] != "texto sin fechas" {
 		t.Errorf("una línea sin fechas no cambia: %q", lines[4])
+	}
+}
+
+// TestPreviewDoneComesFromTheParsedTask (ORD-022 C.1 / L19-a): que las fechas de una tarea se vean neutras (hecha) lo decide el estado de la tarea, no el texto "[✓]" de la
+// línea: una tarea PENDIENTE que lleva "[✓]" en su descripción conserva el color de su estado, y una tarea hecha va neutra aunque su descripción no lo diga.
+func TestPreviewDoneComesFromTheParsedTask(t *testing.T) {
+	m := newTestModel(t, 200, 40)
+	dir := m.c.store.BaseDir
+	for _, n := range m.c.notes {
+		os.Remove(n.Path)
+	}
+	oldC := views.DateColors
+	t.Cleanup(func() { views.DateColors = oldC })
+	views.DateColors = views.DateColorSettings{Enabled: true, Names: config.DefaultDateColorNames()}
+	theme.ApplyThemeByName("catppuccin-mocha")
+	path := filepath.Join(dir, "estado.md")
+	os.WriteFile(path, []byte("# Estado\n\n- [ ] PENDIENTE con [✓] en el texto 📅 2020-01-01\n- [x] HECHA sin marca 📅 2020-01-01 ✅ 2020-01-02\n- [ ] pendiente normal 📅 2020-01-01\n"), 0o644)
+	m.c.reload()
+	m.afterChange()
+	m.notes.selectPath(path)
+	var pending, done, normal string
+	for _, l := range strings.Split(m.View().Content, "\n") {
+		switch {
+		case strings.Contains(ansi.Strip(l), "[ ] PENDIENTE"): // las filas de la vista previa (el panel Tareas dibuja ☐ y ☑)
+			pending = l
+		case strings.Contains(ansi.Strip(l), "[✓] HECHA"):
+			done = l
+		case strings.Contains(ansi.Strip(l), "[ ] pendiente normal"):
+			normal = l
+		}
+	}
+	const red = "38;2;243;139;168" // el rojo de Catppuccin Mocha: vencida
+	if pending == "" || done == "" || normal == "" {
+		t.Fatalf("faltan filas en la vista previa: %q %q %q", pending, done, normal)
+	}
+	if !strings.Contains(pending, red) || !strings.Contains(normal, red) {
+		t.Errorf("una tarea pendiente vencida va en rojo, también con [✓] en su texto:\npendiente con [✓]: %q\npendiente normal: %q", pending, normal)
+	}
+	if strings.Contains(done, red) {
+		t.Errorf("el vencimiento de una tarea hecha no va en rojo aunque su texto no diga [✓]: %q", done)
+	}
+	for _, l := range []string{pending, done, normal} {
+		if strings.ContainsRune(l, views.DoneMark) {
+			t.Errorf("el marcador interno no debe llegar a la pantalla: %q", l)
+		}
+	}
+}
+
+// TestHandWrittenGlyphsOfBothSetsAreColored (ORD-022 C.2 / L19-b): un glifo de fecha escrito a mano con el OTRO juego (texto con Nerd Font activo, o Nerd Font con el de texto) también
+// se colorea según su campo: lazymark dibuja lo que hay en la nota tal cual, así que el caso se reproducía.
+func TestHandWrittenGlyphsOfBothSetsAreColored(t *testing.T) {
+	oldC, oldIcons := views.DateColors, views.DateIcons
+	t.Cleanup(func() { views.DateColors, views.DateIcons = oldC, oldIcons })
+	views.DateColors = views.DateColorSettings{Enabled: true, Names: config.DefaultDateColorNames()}
+	theme.ApplyThemeByName("catppuccin-mocha")
+	const red, blue = "38;2;243;139;168", "38;2;137;180;250"
+	for _, icons := range []bool{true, false} {
+		views.DateIcons = icons
+		for _, c := range []struct{ glyph, date, want, what string }{
+			{"◷", "2026-10-01", red, "calendario de texto, vencida"}, {"\uf073", "2026-10-01", red, "calendario Nerd Font, vencida"},
+			{"◷", "2999-01-01", blue, "calendario de texto, en fecha"}, {"\uf073", "2999-01-01", blue, "calendario Nerd Font, en fecha"},
+		} {
+			got := views.ColorDateLines([]string{"- [ ] t " + c.glyph + " " + c.date}, "2026-10-06")[0]
+			if !strings.Contains(got, c.want) {
+				t.Errorf("iconos=%v: %s: no se coloreó (%q)", icons, c.what, got)
+			}
+		}
 	}
 }

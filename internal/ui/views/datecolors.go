@@ -220,29 +220,52 @@ func DateColorsKey(today string) string {
 	return k
 }
 
+// DoneMark es un marcador invisible (un WORD JOINER, de ancho 0) que va delante del glifo de cada fecha de una tarea HECHA antes de dibujar el markdown: así `ColorDateLines` sabe
+// si la tarea está hecha por el dato parseado de la tarea, no buscando texto en la línea dibujada (un "[✓]" escrito en la descripción de una tarea pendiente no la vuelve
+// hecha). Cuando se pinta, se quita.
+const DoneMark = '\u2060' // WORD JOINER: no mide nada (un carácter privado mediría 1 celda y cambiaría dónde Glamour parte la línea)
+
 var (
-	// dateOnLine reconoce, en una línea ya dibujada (con sus códigos ANSI), un glifo de fecha, un espacio y una fecha AAAA-MM-DD.
-	dateOnLine = regexp.MustCompile(`([\x{f135}\x{f073}\x{f00c}\x{f252}\x{f067}▸◷✓◑+])( )(\d{4}-\d{2}-\d{2})`)
+	// dateOnLine reconoce, en una línea ya dibujada (con sus códigos ANSI), un glifo de fecha (de los dos juegos: Nerd Font y texto, también si está escrito a mano) con su
+	// marcador de tarea hecha opcional delante, un espacio y una fecha AAAA-MM-DD.
+	// Glamour parte el glifo, el espacio y la fecha en tramos distintos con códigos de estilo entre medio, así que se admiten (cero o más) entre las tres partes.
+	dateOnLine = regexp.MustCompile(`(\x{2060})?(?:\x1b\[[0-9;:]*m)*([\x{f135}\x{f073}\x{f00c}\x{f252}\x{f067}▸◷✓◑+])(?:\x1b\[[0-9;:]*m)*( )(?:\x1b\[[0-9;:]*m)*(\d{4}-\d{2}-\d{2})`)
 	ansiSeq    = regexp.MustCompile(`\x1b\[[0-9;:]*m`)
 )
 
-// ColorDateLines pinta, en las líneas de la vista previa (markdown ya dibujado), cada "glifo fecha" con el color de su estado. El glifo dice qué campo es; si la
-// línea es una tarea hecha ([✓]) su inicio y vencimiento van neutros. Cambia solo el color del primer plano (no deshace el resto de los estilos de la línea).
+// MarkDoneDates pone DoneMark delante de cada "glifo fecha" de las líneas de content (1-based) que son tareas hechas. No cambia el número de líneas.
+func MarkDoneDates(content string, doneLines map[int]bool) string {
+	if len(doneLines) == 0 {
+		return content
+	}
+	lines := strings.Split(content, "\n")
+	for n := range doneLines {
+		if n >= 1 && n <= len(lines) {
+			lines[n-1] = dateOnLine.ReplaceAllString(lines[n-1], string(DoneMark)+"$2$3$4")
+		}
+	}
+	return strings.Join(lines, "\n")
+}
+
+// ColorDateLines pinta, en las líneas de la vista previa (markdown ya dibujado), cada "glifo fecha" con el color de su estado. El glifo dice qué campo es; si lleva
+// DoneMark la tarea está hecha y su inicio y vencimiento van neutros. Cambia solo el color del primer plano (no deshace el resto de los estilos de la línea) y quita
+// los marcadores.
 func ColorDateLines(lines []string, today string) []string {
 	out := make([]string, len(lines))
 	for i, l := range lines {
 		out[i] = l
-		if !strings.ContainsAny(l, "▸◷✓◑+") {
+		if !strings.ContainsAny(l, "\uf135\uf073\uf00c\uf252\uf067▸◷✓◑+") {
+			out[i] = strings.ReplaceAll(l, string(DoneMark), "")
 			continue
 		}
-		done := strings.Contains(ansiSeq.ReplaceAllString(l, ""), "[✓]")
 		out[i] = dateOnLine.ReplaceAllStringFunc(l, func(m string) string {
 			sm := dateOnLine.FindStringSubmatch(m)
-			f, ok := fieldOfGlyph(sm[1])
+			done := sm[1] != ""
+			f, ok := fieldOfGlyph(sm[2])
 			if !ok {
-				return m
+				return strings.ReplaceAll(m, string(DoneMark), "")
 			}
-			st := StateOf(f, sm[3], done, today)
+			st := StateOf(f, sm[4], done, today)
 			col := StateColor(st)
 			r, g, b, _ := col.RGBA()
 			set := fmt.Sprintf("\x1b[38;2;%d;%d;%dm", r>>8, g>>8, b>>8)
@@ -250,15 +273,30 @@ func ColorDateLines(lines []string, today string) []string {
 			if DateColors.Enabled && (st == StateOverdue || st == StateSoon) {
 				set, reset = "\x1b[1m"+set, "\x1b[22m"+reset
 			}
-			return set + m + reset
+			// los tramos de la coincidencia (texto y códigos de estilo): tras cada código se vuelve a poner el color, porque Glamour cierra cada tramo con un reinicio
+			body := strings.ReplaceAll(m, string(DoneMark), "")
+			var b2 strings.Builder
+			b2.WriteString(set)
+			last := 0
+			for _, ix := range ansiSeq.FindAllStringIndex(body, -1) {
+				b2.WriteString(body[last:ix[0]])
+				b2.WriteString(body[ix[0]:ix[1]])
+				b2.WriteString(set)
+				last = ix[1]
+			}
+			b2.WriteString(body[last:])
+			b2.WriteString(reset)
+			return b2.String()
 		})
+		out[i] = strings.ReplaceAll(out[i], string(DoneMark), "")
 	}
 	return out
 }
 
+// fieldOfGlyph dice qué campo de fecha es un glifo, de cualquiera de los dos juegos (Nerd Font y texto): lo escrito a mano en una nota con el otro juego también cuenta.
 func fieldOfGlyph(g string) (storage.DateField, bool) {
 	for f := storage.DateStart; f <= storage.DateCreated; f++ {
-		if DateGlyph(f) == g {
+		if g == glyphSets[0][f] || g == glyphSets[1][f] {
 			return f, true
 		}
 	}

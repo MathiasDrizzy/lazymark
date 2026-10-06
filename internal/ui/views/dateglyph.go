@@ -20,9 +20,15 @@ const (
 // config (nerd_font).
 var DateIcons = true
 
+// glyphSets son los dos juegos de glifos de cada campo (índice de DateField): [0] Nerd Font, [1] texto. Se dibuja uno según DateIcons, pero se reconocen los dos.
+var glyphSets = [2][5]string{
+	{nerdStart, nerdDue, nerdDone, nerdScheduled, nerdCreated},
+	{textStart, textDue, textDone, textScheduled, textCreated},
+}
+
 // DateGlyph es el glifo con el que se dibuja el campo f.
 func DateGlyph(f storage.DateField) string {
-	g := [...][2]string{{nerdStart, textStart}, {nerdDue, textDue}, {nerdDone, textDone}, {nerdScheduled, textScheduled}, {nerdCreated, textCreated}}[f]
+	g := [2]string{glyphSets[0][f], glyphSets[1][f]}
 	if DateIcons {
 		return g[0]
 	}

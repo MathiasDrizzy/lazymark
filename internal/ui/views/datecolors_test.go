@@ -2,6 +2,7 @@ package views
 
 import (
 	"fmt"
+	"github.com/MathiasDrizzy/lazymark/internal/ui/textwidth"
 	"image/color"
 	"os"
 	"strings"
@@ -169,5 +170,16 @@ func TestDateStateColorsAreDistinct(t *testing.T) {
 		if hexOf(StateColor(StateStarted)) == hexOf(StateColor(StateNotStarted)) {
 			t.Errorf("%s: 'ya empezó' y 'sin empezar' tienen el mismo color", name)
 		}
+	}
+}
+
+// TestDoneMarkHasNoWidth (ORD-022, apoyo): el marcador de tarea hecha no mide nada: no cambia dónde Glamour parte una línea ni el ancho de una celda de tabla.
+func TestDoneMarkHasNoWidth(t *testing.T) {
+	if w := textwidth.Width(string(DoneMark)); w != 0 {
+		t.Errorf("el marcador mide %d celdas, debe medir 0", w)
+	}
+	line := "- [x] tarea " + DateGlyph(storage.DateDue) + " 2026-10-01"
+	if textwidth.Width(MarkDoneDates(line, map[int]bool{1: true})) != textwidth.Width(line) {
+		t.Error("marcar una tarea hecha no cambia el ancho de su línea")
 	}
 }

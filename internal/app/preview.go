@@ -59,7 +59,13 @@ func (p *previewPanel) lines(note *storage.Note, width int) []string {
 		// pasárselo a Glamour, que mide y ajusta las líneas (y las tablas) con el ancho real de lo que se dibuja; los
 		// wikilinks, igual: por su texto visible entre marcadores
 		shown := *note
-		shown.Content = views.ReplaceDateEmoji(note.Content)
+		doneLines := map[int]bool{} // las tareas hechas según el dato parseado (no según el texto dibujado): sus fechas llevan un marcador que ColorDateLines lee
+		for _, t := range note.Tasks {
+			if t.Done {
+				doneLines[t.Line] = true
+			}
+		}
+		shown.Content = views.MarkDoneDates(views.ReplaceDateEmoji(note.Content), doneLines)
 		p.links = nil
 		if p.c != nil && p.c.links != nil {
 			shown.Content, p.links = markLinks(shown.Content, p.c.links, note.Path)
