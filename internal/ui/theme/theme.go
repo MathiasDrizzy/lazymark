@@ -347,9 +347,10 @@ var AvailableThemes = map[string]Palette{
 	"solarized-light":      SolarizedLight,
 }
 
-// ThemeNames devuelve los nombres de temas en orden para la UI de selección
+// ThemeNames devuelve los nombres de temas en orden para la UI de selección: los incluidos y después los
+// del usuario (LoadUserThemes)
 func ThemeNames() []string {
-	return []string{
+	return append([]string{
 		"catppuccin-mocha",
 		"catppuccin-latte",
 		"catppuccin-frappe",
@@ -364,7 +365,7 @@ func ThemeNames() []string {
 		"everforest-dark",
 		"solarized-dark",
 		"solarized-light",
-	}
+	}, userNames...)
 }
 
 // ─── Colores activos (variables globales usadas por todos los renders) ──

@@ -150,6 +150,7 @@ func main() {
 	flag.BoolVar(&showVersion, "version", false, i18n.T("Muestra la versión y sale", "Print the version and exit"))
 	flag.BoolVar(&showVersion, "v", false, i18n.T("Alias de --version", "Alias for --version"))
 	flag.BoolVar(&noMouse, "no-mouse", false, i18n.T("Desactiva el mouse", "Disable mouse input"))
+	theme.LoadUserThemes(config.ThemesDir()) // para que la ayuda de --theme los liste; config.Load los vuelve a cargar y avisa de los que no valen
 	flag.StringVar(&themeName, "theme", "", i18n.T("Tema de colores: ", "Color theme: ")+strings.Join(theme.ThemeNames(), ", "))
 
 	flag.Usage = func() {

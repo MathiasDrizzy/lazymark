@@ -118,7 +118,7 @@ Images in a note show up in the preview, in place, in terminals that support the
 
 ### Settings and themes
 
-Press `,`. The interface speaks eight languages (English, Spanish, Brazilian Portuguese, French, German, Italian, Japanese and Simplified Chinese) and starts in yours; `docs/i18n.md` says which translations a native speaker has reviewed. Fourteen themes (Catppuccin ×4, Tokyo Night, Gruvbox, Nord, Dracula, One Dark, Rosé Pine, Kanagawa, Everforest, Solarized Dark and Light), changed live, and the whole interface follows them, including the markdown preview. **Screen background** is `theme` by default and paints the whole screen with the theme's base color; `terminal` keeps your terminal's background, so a translucent terminal stays translucent. You can also pick the notes folder here.
+Press `,`. The interface speaks eight languages (English, Spanish, Brazilian Portuguese, French, German, Italian, Japanese and Simplified Chinese) and starts in yours; `docs/i18n.md` says which translations a native speaker has reviewed. Fourteen themes (Catppuccin ×4, Tokyo Night, Gruvbox, Nord, Dracula, One Dark, Rosé Pine, Kanagawa, Everforest, Solarized Dark and Light), changed live, and the whole interface follows them, including the markdown preview. You can add your own as a JSON file ([how](docs/configuration.md)). **Screen background** is `theme` by default and paints the whole screen with the theme's base color; `terminal` keeps your terminal's background, so a translucent terminal stays translucent. You can also pick the notes folder here.
 
 <img src="assets/readme/feature-settings.gif" alt="Switching to Solarized Light and Dracula live, then turning the screen background from theme to terminal" width="100%">
 
