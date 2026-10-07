@@ -56,7 +56,7 @@ func frames36() *sprite.Frames { loadMascot(); return mascot36 }
 type mascotState struct {
 	playing bool
 	anim    int // animación que suena
-	step    int // cuadro dentro de ella
+	step    int // cuadro dentro de ella; -1 es el instante previo, en que sigue dormida mientras la terminal recibe los cuadros
 	next    int // la que sonará en el próximo clic
 	gen     int // cambia con cada animación: los ticks de una anterior se ignoran
 
@@ -169,7 +169,7 @@ func (m *AppModel) mascotRect() Rect {
 
 // frameName es el cuadro que se dibuja: el que toca de la animación, o el dormido.
 func (m *AppModel) frameName() string {
-	if st := m.mascot; st.playing {
+	if st := m.mascot; st.playing && st.step >= 0 {
 		a := frames().Anims[st.anim]
 		return a.Frames[min(st.step, len(a.Frames)-1)]
 	}
@@ -238,9 +238,22 @@ func (m *AppModel) mascotClick(x, y int) (tea.Cmd, bool) {
 	st := &m.mascot
 	st.clicked = true // ya la encontró: el "click me!" no vuelve en esta sesión
 	st.gen++
-	st.playing, st.anim, st.step = true, st.next%len(frames().Anims), 0
+	// Los cuadros de la animación se transmiten antes de dibujarse: un cuadro nuevo lleva una imagen con ID nuevo, y si el
+	// texto que lo muestra llegara a la terminal antes que la imagen, ese cuadro saldría vacío (el parpadeo). Mientras
+	// tanto sigue el cuadro dormido y la animación empieza en el siguiente tick.
+	st.playing, st.anim, st.step = true, st.next%len(frames().Anims), -1
 	st.next++
+	m.warmMascotFrames(st.anim)
 	return m.mascotTickCmd(), true
+}
+
+// warmMascotFrames deja en la cola de transmisión los cuadros de la animación anim (los que ya están en la terminal no se repiten).
+func (m *AppModel) warmMascotFrames(anim int) {
+	cw, ch := m.cellSize()
+	for _, name := range frames().Anims[anim].Frames {
+		img, _ := frames36().Grids[name].Image(mascotCols*cw, mascotRows*ch)
+		m.c.kitty.BlockImage("mascot-"+name, img, mascotCols, mascotRows)
+	}
 }
 
 func (m *AppModel) mascotTickCmd() tea.Cmd {

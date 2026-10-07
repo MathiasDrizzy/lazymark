@@ -199,7 +199,10 @@ func TestMascotAnimates(t *testing.T) {
 		if !r.mascot.playing || frames().Anims[r.mascot.anim].Name != anim.Name {
 			t.Fatalf("clic %d: debía sonar %q y suena %q", i, anim.Name, frames().Anims[r.mascot.anim].Name)
 		}
-		seen := []string{r.frameName()}
+		if r.frameName() != "sleep" { // el instante previo: sigue dormida mientras la terminal recibe los cuadros nuevos (sin parpadeo)
+			t.Fatalf("%s: tras el clic debía seguir el cuadro dormido y se ve %q", anim.Name, r.frameName())
+		}
+		var seen []string
 		for r.mascot.playing {
 			r.Update(mascotTickMsg{gen: r.mascot.gen})
 			if r.mascot.playing {
