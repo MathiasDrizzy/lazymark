@@ -222,3 +222,30 @@ func TestCustomDateGlyphs(t *testing.T) {
 		t.Errorf("sin glifos propios una D no es un glifo de fecha: %q", got)
 	}
 }
+
+// TestDoneMarkCannotBeForged (ORD-026 N6): un U+2060 que venga del contenido de la nota no hace pasar por hecha una tarea pendiente: su fecha vencida sigue con su color de estado, igual que sin el carácter.
+func TestDoneMarkCannotBeForged(t *testing.T) {
+	clean := ReplaceDateEmoji("- [ ] tarea 📅 2026-10-01")
+	i := strings.Index(clean, " 2026")
+	forged := clean[:i-len(string([]rune(clean[:i])[len([]rune(clean[:i]))-1:]))] + string(DoneMark) + clean[i-len(string([]rune(clean[:i])[len([]rune(clean[:i]))-1:])):]
+	if !strings.ContainsRune(forged, DoneMark) {
+		t.Fatal("el texto de prueba lleva el marcador")
+	}
+	colored := func(s string) string {
+		return ColorDateLines([]string{MarkDoneDates(s, nil)}, "2026-10-06")[0]
+	}
+	want := colored(clean)
+	if !strings.Contains(want, "\x1b[") {
+		t.Fatalf("la fecha vencida de una tarea pendiente lleva color: %q", want)
+	}
+	if got := colored(forged); strings.ReplaceAll(got, string(DoneMark), "") != strings.ReplaceAll(want, string(DoneMark), "") {
+		t.Errorf("con un U+2060 pegado, la fecha sigue coloreada como pendiente:\n got %q\nwant %q", got, want)
+	}
+	if strings.ContainsRune(MarkDoneDates(forged, map[int]bool{5: true}), DoneMark) != false {
+		t.Error("sin líneas hechas, MarkDoneDates no deja marcadores")
+	}
+	// y una hecha de verdad sigue marcándose
+	if !strings.ContainsRune(MarkDoneDates("- [x] t "+ReplaceDateEmoji("📅 2026-10-01"), map[int]bool{1: true}), DoneMark) {
+		t.Error("una tarea hecha sí lleva su marcador")
+	}
+}

@@ -4,9 +4,12 @@
 package ops
 
 import (
+	"bytes"
 	"context"
 	"errors"
+	"fmt"
 	"github.com/MathiasDrizzy/lazymark/internal/safeio"
+	"io"
 	"os"
 	"path/filepath"
 	"sort"
@@ -652,4 +655,35 @@ func (s *Service) RetagKanban(from, to string, dryRun bool) (RetagDTO, error) {
 		out.Error = err.Error()
 	}
 	return out, err
+}
+
+// EscapeC1 reemplaza, en un JSON ya codificado, cada control de 8 bits (U+0080–U+009F, los bytes C2 80..9F) por su escape \u00XX. Go solo escapa los C0, y un U+009D o U+009B (OSC y CSI de
+// 8 bits) que viniera de una nota o de un nombre de archivo llegaría crudo a quien muestre la salida en una terminal. Fuera de una cadena JSON esos bytes no aparecen, así que es seguro
+// aplicarlo a todo el texto.
+func EscapeC1(b []byte) []byte {
+	if !bytes.Contains(b, []byte{0xC2}) {
+		return b
+	}
+	out := make([]byte, 0, len(b)+16)
+	for i := 0; i < len(b); i++ {
+		if b[i] == 0xC2 && i+1 < len(b) && b[i+1] >= 0x80 && b[i+1] <= 0x9F {
+			out = append(out, fmt.Sprintf(`\u%04x`, 0x80+int(b[i+1]-0x80))...)
+			i++
+			continue
+		}
+		out = append(out, b[i])
+	}
+	return out
+}
+
+// C1Escaper envuelve w para que todo lo que se escriba (una línea de JSON por Write) salga con EscapeC1.
+func C1Escaper(w io.Writer) io.Writer { return c1Writer{w} }
+
+type c1Writer struct{ w io.Writer }
+
+func (c c1Writer) Write(p []byte) (int, error) {
+	if _, err := c.w.Write(EscapeC1(p)); err != nil {
+		return 0, err
+	}
+	return len(p), nil
 }

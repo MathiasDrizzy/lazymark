@@ -25,12 +25,23 @@ type TrashItem struct {
 	DeletedAt    time.Time `json:"deleted_at"`
 	IsDir        bool      `json:"is_dir"`
 	Size         int64     `json:"size"`
+	// RetentionDays son los días que este elemento se guarda: el trash_days que valía cuando se borró. Cambiar trash_days después NUNCA purga lo que ya está en la papelera
+	// (cada elemento caduca con la retención que tenía); un elemento de antes de este campo vale los 20 de siempre.
+	RetentionDays int `json:"retention_days,omitempty"`
+}
+
+// retention son los días que se guarda este elemento.
+func (t *TrashItem) retention() int {
+	if t.RetentionDays > 0 {
+		return t.RetentionDays
+	}
+	return TrashRetentionDays
 }
 
 // DaysRemaining calcula cuántos días quedan antes de la eliminación permanente automática (20 días max)
 func (t *TrashItem) DaysRemaining() int {
 	elapsed := time.Since(t.DeletedAt)
-	daysLeft := TrashDays - int(elapsed.Hours()/24)
+	daysLeft := t.retention() - int(elapsed.Hours()/24)
 	if daysLeft < 0 {
 		return 0
 	}
@@ -104,12 +115,11 @@ func (s *Storage) ListTrash() ([]TrashItem, error) {
 
 	var validItems []TrashItem
 	now := time.Now()
-	cutoff := now.Add(-time.Duration(TrashDays) * 24 * time.Hour)
 	hasChanges := false
 
 	for _, item := range items {
-		// Purgar elementos con más de 20 días
-		if item.DeletedAt.Before(cutoff) {
+		// Purgar lo que ya cumplió SU retención (la de cuando se borró): cambiar trash_days no purga lo que ya estaba
+		if item.DeletedAt.Before(now.Add(-time.Duration(item.retention()) * 24 * time.Hour)) {
 			itemStoragePath := filepath.Join(s.trashDir(), item.ID)
 			_ = os.RemoveAll(itemStoragePath)
 			hasChanges = true
@@ -173,6 +183,8 @@ func (s *Storage) MoveToTrash(targetPath string) (*TrashItem, error) {
 		DeletedAt:    time.Now(),
 		IsDir:        info.IsDir(),
 		Size:         info.Size(),
+
+		RetentionDays: TrashDays,
 	}
 
 	items, _ := s.readTrashMeta()
@@ -259,4 +271,17 @@ func (s *Storage) EmptyTrash() error {
 		_ = os.RemoveAll(itemPath)
 	}
 	return s.saveTrashMeta([]TrashItem{})
+}
+
+// CountFiles cuenta los archivos (no las carpetas) que hay en path y debajo de él, de cualquier tipo y también los ocultos; es lo que se pierde al borrar una carpeta para siempre.
+// Para un archivo vale 1.
+func CountFiles(path string) int {
+	n := 0
+	_ = filepath.WalkDir(path, func(_ string, d os.DirEntry, err error) error {
+		if err == nil && !d.IsDir() {
+			n++
+		}
+		return nil
+	})
+	return n
 }

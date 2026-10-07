@@ -2,6 +2,9 @@ package config
 
 import (
 	"encoding/json"
+	"errors"
+	"fmt"
+	"github.com/MathiasDrizzy/lazymark/internal/i18n"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -592,14 +595,15 @@ func TestTolerantConfigWrongType(t *testing.T) {
 		t.Errorf("el campo inválido vuelve a su defecto: %d", cfg.TrashDays)
 	}
 	w := strings.Join(cfg.Warnings(), "\n")
-	if !strings.Contains(w, "trash_days") {
-		t.Errorf("avisa del campo inválido: %q", w)
+	if !strings.Contains(w, "trash_days") || !strings.Contains(w, "número entero") && !strings.Contains(w, "whole number") || strings.Contains(w, "unmarshal") || strings.Contains(w, "Go struct") {
+		t.Errorf("avisa del campo y del tipo esperado, sin el error interno de Go (F2): %q", w)
 	}
 	if err := cfg.Save(); err != nil {
 		t.Fatal(err)
 	}
 	b, _ := os.ReadFile(p)
-	for _, want := range []string{`"theme": "dracula"`, `"language": "es"`, `"date_format": "emoji"`, `"trash_days": 20`} {
+	// N4 (ORD-026): el valor que no valía NO se pisa con el defecto: el archivo conserva lo que decía ("20", para que quien lo editó lo corrija), y el aviso sigue saliendo
+	for _, want := range []string{`"theme": "dracula"`, `"language": "es"`, `"date_format": "emoji"`, `"trash_days": "20"`} {
 		if !strings.Contains(string(b), want) {
 			t.Errorf("tras guardar, el archivo conserva %s:\n%s", want, b)
 		}
@@ -707,5 +711,147 @@ func TestTolerantConfigUnreadableFile(t *testing.T) {
 	os.Chmod(p, 0o644)
 	if b, _ := os.ReadFile(p); string(b) != `{"theme":"nord"}` {
 		t.Errorf("el original sigue intacto: %q", b)
+	}
+}
+
+// TestWrongTypeIsKeptUntilChanged (ORD-026 N4): un valor con tipo equivocado se conserva tal cual al guardar; si el usuario cambia ese campo (desde Ajustes), se guarda el suyo.
+func TestWrongTypeIsKeptUntilChanged(t *testing.T) {
+	p := writeUserConfig(t, `{"theme":"nord","trash_days":"veinte"}`)
+	cfg, _ := Load(t.TempDir())
+	cfg.Theme = "dracula" // otro campo: no afecta al inválido
+	if err := cfg.Save(); err != nil {
+		t.Fatal(err)
+	}
+	if b, _ := os.ReadFile(p); !strings.Contains(string(b), `"trash_days": "veinte"`) || !strings.Contains(string(b), `"theme": "dracula"`) {
+		t.Errorf("conserva el inválido y guarda el tema nuevo:\n%s", b)
+	}
+	cfg2, _ := Load(t.TempDir())
+	cfg2.TrashDays = 7 // ahora el usuario sí lo cambia
+	if err := cfg2.Save(); err != nil {
+		t.Fatal(err)
+	}
+	if b, _ := os.ReadFile(p); !strings.Contains(string(b), `"trash_days": 7`) {
+		t.Errorf("lo que el usuario elige se guarda:\n%s", b)
+	}
+	if cfg3, _ := Load(t.TempDir()); len(cfg3.Warnings()) != 0 || cfg3.TrashDays != 7 {
+		t.Errorf("y deja de avisar: %v", cfg3.Warnings())
+	}
+}
+
+// TestOutOfRangeValueWarnsAndIsKept (ORD-026 N4): un valor fuera de rango que se normaliza avisa igual que uno de tipo equivocado y se conserva al guardar; las migraciones y los
+// valores vacíos de versiones anteriores no avisan; y un config.json recién guardado se vuelve a leer sin avisos.
+func TestOutOfRangeValueWarnsAndIsKept(t *testing.T) {
+	p := writeUserConfig(t, `{"sidebar_ratio":9,"due_soon_days":500,"trash_days":99999,"keybinding_mode":"lazygit","popup_background":"none","screen_background":""}`)
+	cfg, _ := Load(t.TempDir())
+	w := strings.Join(cfg.Warnings(), "\n")
+	for _, k := range []string{"sidebar_ratio", "due_soon_days", "trash_days"} {
+		if !strings.Contains(w, k) {
+			t.Errorf("avisa de %s fuera de rango:\n%s", k, w)
+		}
+	}
+	for _, k := range []string{"keybinding_mode", "popup_background", "screen_background"} {
+		if strings.Contains(w, k) {
+			t.Errorf("%s es una migración o un vacío, no avisa:\n%s", k, w)
+		}
+	}
+	if cfg.SidebarRatio >= 0.75 || cfg.DueSoonDays != 30 {
+		t.Errorf("se normaliza: %v %d", cfg.SidebarRatio, cfg.DueSoonDays)
+	}
+	cfg.Save()
+	if b, _ := os.ReadFile(p); !strings.Contains(string(b), `"sidebar_ratio": 9`) || !strings.Contains(string(b), `"trash_days": 99999`) {
+		t.Errorf("el archivo conserva lo que decía:\n%s", b)
+	}
+	// un archivo guardado desde cero se vuelve a leer sin avisos
+	os.Remove(p)
+	fresh, _ := Load(t.TempDir())
+	if err := fresh.Save(); err != nil {
+		t.Fatal(err)
+	}
+	if again, _ := Load(t.TempDir()); len(again.Warnings()) != 0 {
+		t.Errorf("lo guardado por lazymark no avisa: %v", again.Warnings())
+	}
+}
+
+// TestBackupNeverOverwritesOrFollowsLinks (ORD-026 N5): la copia de respaldo nunca pisa un .bak que ya existe ni escribe a través de un enlace simbólico; sin nombre libre no se
+// escribe nada y se avisa.
+func TestBackupNeverOverwritesOrFollowsLinks(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("los enlaces simbólicos necesitan permisos especiales en Windows")
+	}
+	broken := `{"theme":`
+	p := writeUserConfig(t, broken)
+	victim := filepath.Join(t.TempDir(), "victima.txt")
+	os.WriteFile(victim, []byte("no tocar"), 0o644)
+	os.Symlink(victim, p+".bak")                           // .bak es un enlace a un archivo ajeno
+	os.WriteFile(p+".bak.1", []byte("copia vieja"), 0o644) // y .bak.1 ya existe
+	cfg, _ := Load(t.TempDir())
+	if err := cfg.Save(); err != nil {
+		t.Fatal(err)
+	}
+	if b, _ := os.ReadFile(victim); string(b) != "no tocar" {
+		t.Errorf("no se escribe a través del enlace: %q", b)
+	}
+	if b, _ := os.ReadFile(p + ".bak.1"); string(b) != "copia vieja" {
+		t.Errorf("no se pisa una copia que ya existe: %q", b)
+	}
+	if b, _ := os.ReadFile(p + ".bak.2"); string(b) != broken {
+		t.Errorf("la copia va al primer nombre libre (.bak.2): %q", b)
+	}
+	// sin nombre libre: no se escribe y se avisa
+	p = writeUserConfig(t, broken)
+	os.WriteFile(p+".bak", []byte("x"), 0o644)
+	for i := 1; i <= 99; i++ {
+		os.WriteFile(fmt.Sprintf("%s.bak.%d", p, i), []byte("x"), 0o644)
+	}
+	cfg, _ = Load(t.TempDir())
+	if err := cfg.Save(); err == nil || !errors.Is(err, ErrNoBackupName) {
+		t.Errorf("sin nombre libre Save falla con ErrNoBackupName: %v", err)
+	}
+	if b, _ := os.ReadFile(p); string(b) != broken {
+		t.Errorf("y el original sigue intacto: %q", b)
+	}
+	if !strings.Contains(strings.Join(cfg.Warnings(), " "), "no se guardó") && !strings.Contains(strings.Join(cfg.Warnings(), " "), "not saved") {
+		t.Errorf("y avisa: %v", cfg.Warnings())
+	}
+}
+
+// TestRunOverridesAreNotSaved (ORD-026 F1): --no-mouse y --theme valen para esa ejecución y no se guardan en config.json; si el usuario cambia el tema desde Ajustes, ese sí se guarda.
+func TestRunOverridesAreNotSaved(t *testing.T) {
+	p := writeUserConfig(t, `{"theme":"nord","mouse_click":true}`)
+	cfg, _ := Load(t.TempDir())
+	cfg.OverrideMouse(false)
+	cfg.OverrideTheme("dracula")
+	if cfg.MouseClick || cfg.Theme != "dracula" {
+		t.Fatalf("valen en esta ejecución: %v %q", cfg.MouseClick, cfg.Theme)
+	}
+	cfg.TrashDays = 5 // el usuario cambia otra cosa y se guarda
+	if err := cfg.Save(); err != nil {
+		t.Fatal(err)
+	}
+	b, _ := os.ReadFile(p)
+	if !strings.Contains(string(b), `"theme": "nord"`) || !strings.Contains(string(b), `"mouse_click": true`) || !strings.Contains(string(b), `"trash_days": 5`) {
+		t.Errorf("no guarda las anulaciones y sí lo demás:\n%s", b)
+	}
+	cfg.Theme = "gruvbox" // elegido desde Ajustes
+	cfg.Save()
+	if b, _ := os.ReadFile(p); !strings.Contains(string(b), `"theme": "gruvbox"`) {
+		t.Errorf("el tema elegido en Ajustes sí se guarda:\n%s", b)
+	}
+}
+
+// TestWarningsFollowInterfaceLanguage (ORD-026 F2): el texto de un aviso se escribe al mostrarlo, en el idioma de ese momento (el de la interfaz se fija después de leer el archivo).
+func TestWarningsFollowInterfaceLanguage(t *testing.T) {
+	writeUserConfig(t, `{"trash_days":"20"}`)
+	old := i18n.CurrentLanguage()
+	t.Cleanup(func() { i18n.SetLanguage(string(old)) })
+	i18n.SetLanguage("en")
+	cfg, _ := Load(t.TempDir())
+	i18n.SetLanguage("es")
+	if w := strings.Join(cfg.Warnings(), ""); !strings.Contains(w, "debe ser un número entero") {
+		t.Errorf("en español: %q", w)
+	}
+	i18n.SetLanguage("en")
+	if w := strings.Join(cfg.Warnings(), ""); !strings.Contains(w, "must be a whole number") {
+		t.Errorf("en inglés: %q", w)
 	}
 }

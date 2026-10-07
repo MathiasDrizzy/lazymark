@@ -614,3 +614,31 @@ func TestToolsListLanguage(t *testing.T) {
 		t.Error("con language=es las descripciones salen en español")
 	}
 }
+
+// TestMCPEscapesC1 (ORD-026 N3): el JSON-RPC y los resultados en JSON del MCP escapan los controles C1 que vengan de una nota.
+func TestMCPEscapesC1(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("XDG_CONFIG_HOME", filepath.Join(home, ".config"))
+	t.Setenv("AppData", filepath.Join(home, "AppData"))
+	notes := filepath.Join(home, "notas")
+	os.MkdirAll(notes, 0o755)
+	os.WriteFile(filepath.Join(notes, "e.md"), []byte("# E\u009d\n- [ ] t \u009d52;c;x\u009c fin\n"), 0o644)
+	var in bytes.Buffer
+	for _, r := range []map[string]interface{}{call(1, "list_tasks", nil), call(2, "read_note", map[string]interface{}{"path": "e.md"})} {
+		r["jsonrpc"] = "2.0"
+		b, _ := json.Marshal(r)
+		in.Write(b)
+		in.WriteByte('\n')
+	}
+	var out bytes.Buffer
+	if err := NewServer(notes).Serve(&in, &out); err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(out.String(), "\xc2\x9d") || strings.Contains(out.String(), "\xc2\x9c") {
+		t.Errorf("la salida del MCP lleva un C1 crudo:\n%q", out.String())
+	}
+	if !strings.Contains(out.String(), `\u009d`) {
+		t.Errorf("lleva el escape: %.300s", out.String())
+	}
+}

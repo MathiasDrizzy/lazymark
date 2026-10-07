@@ -2,9 +2,11 @@ package config
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"github.com/MathiasDrizzy/lazymark/internal/safeio"
 	"github.com/MathiasDrizzy/lazymark/internal/ui/textwidth"
+	"io/fs"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -181,11 +183,20 @@ type Config struct {
 	ScreenBackground string `json:"screen_background"`
 	configPath       string `json:"-"`
 	// warnings son los avisos de la lectura de config.json (un campo con el tipo equivocado, una clave desconocida, un archivo que no se pudo leer); unknown guarda las claves que
-	// lazymark no conoce para volver a escribirlas tal cual; unreadable dice que el archivo no se pudo leer entero: antes de guardar encima se hace una copia (.bak).
-	warnings   []string
-	unknownKey []string // el aviso de cada clave desconocida (la CLI no lo repite en cada comando; la TUI sí lo muestra)
-	unknown    map[string]json.RawMessage
-	unreadable bool
+	// lazymark no conoce para volver a escribirlas tal cual; backupFirst dice que antes de guardar encima se hace una copia (.bak).
+	warnings    []cfgWarning
+	unknownKey  []cfgWarning // el aviso de cada clave desconocida (la CLI no lo repite en cada comando; la TUI sí lo muestra)
+	unknown     map[string]json.RawMessage
+	backupFirst bool // el archivo no se pudo leer entero o tenía valores que se reemplazaron: antes de guardar encima se hace una copia (.bak)
+
+	// valores del archivo que no valían (tipo equivocado o fuera de rango) y por los que se usó el defecto: se conservan tal cual al guardar mientras no se cambien desde
+	// Ajustes (invalid: lo que decía el archivo; invalidUsed: lo que se usó en su lugar).
+	invalid, invalidUsed map[string]json.RawMessage
+
+	// anulaciones de esta ejecución (--no-mouse, --theme): valen ahora pero no se guardan; se guarda lo que había en el archivo mientras no se hayan cambiado desde Ajustes.
+	mouseOverride, savedMouse, runMouse bool
+	themeOverride                       bool
+	savedTheme, runTheme                string
 
 	// notesDirFromFlag indica que NotesDir viene de --dir y vale solo para esta
 	// ejecución: Save conserva en el archivo savedNotesDir (la carpeta guardada
@@ -310,8 +321,8 @@ func load(customDir string, create bool) (*Config, error) {
 	// que no es JSON no se pierde: se usan los defectos y, antes de guardar encima, se hace una copia.
 	data, readErr := os.ReadFile(cfgPath)
 	if readErr != nil && !os.IsNotExist(readErr) { // existe pero no se puede leer (permisos, no es un archivo…): tampoco se pisa sin guardar antes lo que haya
-		cfg.unreadable = true
-		cfg.warnings = append(cfg.warnings, i18n.Errorf("config.json no se pudo leer (%v): se usan los valores por defecto; al guardar, el original queda en config.json.bak", "config.json could not be read (%v): the defaults are used; when saving, the original is kept as config.json.bak", readErr).Error())
+		cfg.backupFirst = true
+		cfg.warnings = append(cfg.warnings, cfgWarning{"config.json no se pudo leer (%v): se usan los valores por defecto; al guardar, el original queda en config.json.bak", "config.json could not be read (%v): the defaults are used; when saving, the original is kept as config.json.bak", []any{shortErr(readErr)}})
 	}
 	if readErr == nil {
 		disk := *cfg
@@ -320,10 +331,11 @@ func load(customDir string, create bool) (*Config, error) {
 		disk.NotesDir = ""       // para distinguir "no está en el archivo" del valor por defecto
 		var raw map[string]json.RawMessage
 		if err := json.Unmarshal(data, &raw); err != nil {
-			cfg.unreadable = true
-			cfg.warnings = append(cfg.warnings, i18n.Errorf("config.json no se pudo leer (%v): se usan los valores por defecto; al guardar, el original queda en config.json.bak", "config.json could not be read (%v): the defaults are used; when saving, the original is kept as config.json.bak", err).Error())
+			cfg.backupFirst = true
+			cfg.warnings = append(cfg.warnings, cfgWarning{"config.json no se pudo leer (%v): se usan los valores por defecto; al guardar, el original queda en config.json.bak", "config.json could not be read (%v): the defaults are used; when saving, the original is kept as config.json.bak", []any{shortErr(err)}})
 		} else {
 			disk.applyRaw(raw)
+			before := configMap(&disk) // lo que dijo el archivo, para avisar de lo que la normalización de abajo cambie
 			if disk.KeymapVersion < KeymapVersion {
 				// Atajos de una versión anterior: se reemplazan por los nuevos.
 				disk.Keybindings = DefaultKeybindings()
@@ -361,6 +373,7 @@ func load(customDir string, create bool) (*Config, error) {
 			default: // ausente o desconocido: el de por defecto, como la pantalla
 				disk.PopupBackground = PopupBackgroundTheme
 			}
+			disk.noteRejected(raw, before, configMap(&disk))
 			disk.savedNotesDir = disk.NotesDir
 			disk.notesDirFromFlag = customDir != ""
 			if customDir != "" || disk.NotesDir == "" {
@@ -497,7 +510,29 @@ func (c *Config) Save() error {
 	if err != nil {
 		return err
 	}
-	if len(c.unknown) > 0 { // las claves que lazymark no conoce se vuelven a escribir tal cual
+	if c.backupFirst { // lo que había se guarda antes de escribir encima (el archivo no se pudo leer entero)
+		dest, err := backupConfig(c.configPath)
+		if err != nil {
+			c.warnings = append(c.warnings, cfgWarning{"no se guardó la configuración: %v", "the configuration was not saved: %v", []any{err}})
+			return err // sin copia no se pisa el original
+		}
+		if dest != "" {
+			c.warnings = append(c.warnings, cfgWarning{"el config.json de antes quedó guardado en %s", "the previous config.json was kept as %s", []any{dest}})
+		}
+		c.backupFirst = false
+	}
+	if c.mouseOverride && c.MouseClick == c.runMouse { // --no-mouse vale para esta ejecución: se guarda lo que había
+		out.MouseClick = c.savedMouse
+	}
+	if c.themeOverride && c.Theme == c.runTheme { // y --theme también
+		out.Theme = c.savedTheme
+	}
+	if len(c.unknown) > 0 || len(c.invalid) > 0 || out.MouseClick != c.MouseClick || out.Theme != c.Theme {
+		if data, err = json.MarshalIndent(&out, "", "  "); err != nil {
+			return err
+		}
+	}
+	if len(c.unknown) > 0 || len(c.invalid) > 0 { // las claves que lazymark no conoce y los valores que no valían se vuelven a escribir tal cual
 		var known map[string]json.RawMessage
 		if json.Unmarshal(data, &known) == nil {
 			for k, v := range c.unknown {
@@ -505,20 +540,15 @@ func (c *Config) Save() error {
 					known[k] = v
 				}
 			}
+			for k, v := range c.invalid {
+				if now, ok := known[k]; ok && c.invalidUsed[k] != nil && string(now) == string(c.invalidUsed[k]) {
+					known[k] = v // el campo no se cambió desde que se leyó: se conserva lo que decía el archivo
+				}
+			}
 			if merged, err := json.MarshalIndent(known, "", "  "); err == nil {
 				data = merged
 			}
 		}
-	}
-	if c.unreadable { // el archivo no se pudo leer entero: lo que había queda guardado antes de escribir encima
-		dest, err := backupUnreadable(c.configPath)
-		if err != nil {
-			return err // sin copia no se pisa el original
-		}
-		if dest != "" {
-			c.warnings = append(c.warnings, i18n.Errorf("el config.json que no se pudo leer quedó guardado en %s", "the config.json that could not be read was kept as %s", dest).Error())
-		}
-		c.unreadable = false
 	}
 	return safeio.WriteFileAtomic(c.configPath, data, 0o644)
 }
@@ -765,42 +795,197 @@ func (c *Config) applyRaw(raw map[string]json.RawMessage) {
 				c.unknown = map[string]json.RawMessage{}
 			}
 			c.unknown[k] = raw[k]
-			c.unknownKey = append(c.unknownKey, i18n.Errorf("config.json: la clave %q no existe en lazymark (se conserva tal cual)", "config.json: the key %q does not exist in lazymark (it is kept as it is)", k).Error())
+			c.unknownKey = append(c.unknownKey, cfgWarning{"config.json: la clave %q no existe en lazymark (se conserva tal cual)", "config.json: the key %q does not exist in lazymark (it is kept as it is)", []any{k}})
 			continue
 		}
 		one, _ := json.Marshal(map[string]json.RawMessage{k: raw[k]})
 		tmp := *c
 		if err := json.Unmarshal(one, &tmp); err != nil {
-			c.warnings = append(c.warnings, i18n.Errorf("config.json: el valor de %q no es válido (%v): se usa el valor por defecto", "config.json: the value of %q is not valid (%v): the default is used", k, err).Error())
+			c.warnings = append(c.warnings, cfgWarning{"config.json: %q debe ser %s: se usa el valor por defecto (el del archivo se conserva hasta que lo cambies)", "config.json: %q must be %s: the default is used (the file's value is kept until you change it)", []any{k, expectedType(k)}})
+			c.keepInvalid(k, raw[k])
 			continue
 		}
 		*c = tmp
 	}
 }
 
-// Warnings son los avisos de la lectura de la configuración (campos inválidos, claves desconocidas, archivo ilegible), listos para mostrar; vacío si todo estaba bien.
-func (c *Config) Warnings() []string {
-	return append(append([]string(nil), c.warnings...), c.unknownKey...)
+// cfgWarning es un aviso de la lectura de la configuración. Guarda el texto en los dos idiomas y sus argumentos, y se escribe al MOSTRARLO (no al leer el archivo): así sigue el
+// idioma de la interfaz, que se fija después de leer la configuración. Un argumento func() string se evalúa también al mostrarlo.
+type cfgWarning struct {
+	es, en string
+	args   []any
 }
 
-// Problems son los avisos que importan en cada comando (un valor inválido que se reemplazó, un archivo ilegible): sin los de claves desconocidas, que solo informan.
-func (c *Config) Problems() []string { return append([]string(nil), c.warnings...) }
+func (w cfgWarning) String() string {
+	args := make([]any, len(w.args))
+	for i, a := range w.args {
+		if f, ok := a.(func() string); ok {
+			a = f()
+		}
+		args[i] = a
+	}
+	return fmt.Sprintf(i18n.E(w.es, w.en), args...)
+}
 
-// backupUnreadable copia el config.json que no se pudo leer a config.json.bak (o .bak.1, .bak.2… si ya hay uno) antes de que Save lo reemplace; devuelve la ruta de la copia.
-func backupUnreadable(path string) (string, error) {
+func warningTexts(ws ...[]cfgWarning) []string {
+	var out []string
+	for _, l := range ws {
+		for _, w := range l {
+			out = append(out, w.String())
+		}
+	}
+	return out
+}
+
+// Warnings son los avisos de la lectura de la configuración (campos inválidos, claves desconocidas, archivo ilegible), listos para mostrar en el idioma actual; vacío si todo estaba bien.
+func (c *Config) Warnings() []string { return warningTexts(c.warnings, c.unknownKey) }
+
+// Problems son los avisos que importan en cada comando (un valor inválido que se reemplazó, un archivo ilegible): sin los de claves desconocidas, que solo informan.
+func (c *Config) Problems() []string { return warningTexts(c.warnings) }
+
+// shortErr dice en palabras por qué no se pudo leer el archivo, sin el texto interno de Go (se evalúa al mostrar el aviso, en el idioma de ese momento).
+func shortErr(err error) func() string {
+	return func() string {
+		var se *json.SyntaxError
+		var pe *fs.PathError
+		switch {
+		case errors.As(err, &se):
+			return fmt.Sprintf(i18n.E("no es JSON válido (cerca del byte %d)", "it is not valid JSON (near byte %d)"), se.Offset)
+		case errors.As(err, &pe):
+			return pe.Err.Error()
+		}
+		return err.Error()
+	}
+}
+
+// expectedType dice en palabras qué tipo de valor lleva la clave k de config.json (por el tipo del campo de Config), para el aviso de un valor equivocado.
+func expectedType(k string) func() string {
+	return func() string {
+		t := reflect.TypeOf(Config{})
+		for i := 0; i < t.NumField(); i++ {
+			if strings.Split(t.Field(i).Tag.Get("json"), ",")[0] != k {
+				continue
+			}
+			switch t.Field(i).Type.Kind() {
+			case reflect.Bool:
+				return i18n.E("true o false", "true or false")
+			case reflect.Int, reflect.Int64:
+				return i18n.E("un número entero", "a whole number")
+			case reflect.Float64:
+				return i18n.E("un número", "a number")
+			case reflect.String:
+				return i18n.E("un texto", "a text")
+			case reflect.Slice:
+				return i18n.E("una lista", "a list")
+			case reflect.Map, reflect.Struct:
+				return i18n.E("un objeto", "an object")
+			}
+		}
+		return i18n.E("otro tipo de valor", "another kind of value")
+	}
+}
+
+// keepInvalid recuerda el valor que traía el archivo para la clave k (no valía y se usó el defecto): al guardar se escribe tal cual mientras el campo no se cambie.
+func (c *Config) keepInvalid(k string, raw json.RawMessage) {
+	if c.invalid == nil {
+		c.invalid, c.invalidUsed = map[string]json.RawMessage{}, map[string]json.RawMessage{}
+	}
+	c.invalid[k] = raw
+}
+
+// configMap es la configuración como mapa clave → valor JSON.
+func configMap(c *Config) map[string]json.RawMessage {
+	b, _ := json.Marshal(c)
+	m := map[string]json.RawMessage{}
+	_ = json.Unmarshal(b, &m)
+	return m
+}
+
+// normalizedKeys son las claves cuya normalización al leer es una migración o una forma equivalente y no un valor rechazado (no avisan): los atajos y su versión, el modo
+// de atajos antiguo "lazygit", el fondo "none" de antes, el idioma ("pt-BR" → "pt"), la carpeta de notas (la decide --dir o el defecto) y las columnas del kanban (se comparan aparte).
+var normalizedKeys = map[string]bool{"keybindings": true, "keymap_version": true, "keybinding_mode": true, "popup_background": true, "language": true, "notes_dir": true}
+
+// noteRejected compara lo que traía el archivo (before, tras aplicar cada clave) con lo que quedó tras normalizar (after): una clave presente en el archivo cuyo valor cambió estaba
+// fuera de rango o no se reconoce; se avisa (igual que un tipo equivocado) y se conserva tal cual al guardar.
+func (c *Config) noteRejected(raw, before, after map[string]json.RawMessage) {
+	for k := range c.invalid { // lo que se usó en lugar de un tipo equivocado es lo que quedó tras normalizar
+		c.invalidUsed[k] = after[k]
+	}
+	keys := make([]string, 0, len(after))
+	for k := range after {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+	for _, k := range keys {
+		if normalizedKeys[k] || c.invalid[k] != nil {
+			continue
+		}
+		if _, inFile := raw[k]; !inFile || string(before[k]) == string(after[k]) {
+			continue
+		}
+		if r := strings.TrimSpace(string(raw[k])); r == `""` || r == "null" { // vacío = ausente (lo que escribían versiones anteriores): no es un valor rechazado
+			continue
+		}
+		c.warnings = append(c.warnings, cfgWarning{"config.json: el valor de %q (%s) está fuera de rango o no se reconoce: se usa %s (el del archivo se conserva hasta que lo cambies)", "config.json: the value of %q (%s) is out of range or not recognized: %s is used (the file's value is kept until you change it)", []any{k, string(raw[k]), string(after[k])}})
+		c.keepInvalid(k, raw[k])
+		c.invalidUsed[k] = after[k]
+	}
+}
+
+// OverrideMouse apaga (o enciende) el mouse solo en esta ejecución (--no-mouse): no se guarda en config.json mientras no se cambie desde Ajustes.
+func (c *Config) OverrideMouse(on bool) {
+	if !c.mouseOverride {
+		c.savedMouse = c.MouseClick
+	}
+	c.mouseOverride, c.MouseClick, c.runMouse = true, on, on
+}
+
+// OverrideTheme fija el tema solo en esta ejecución (--theme): no se guarda en config.json mientras no se cambie desde Ajustes.
+func (c *Config) OverrideTheme(name string) {
+	if !c.themeOverride {
+		c.savedTheme = c.Theme
+	}
+	c.themeOverride, c.Theme, c.runTheme = true, name, name
+}
+
+// ErrNoBackupName es el error de no haber un nombre libre para la copia de config.json: no se escribe encima.
+var ErrNoBackupName = i18n.NewError("no hay un nombre libre para la copia de config.json (config.json.bak … .bak.99): bórralas o muévelas; no se guardó nada", "there is no free name for the copy of config.json (config.json.bak … .bak.99): remove or move them; nothing was saved")
+
+// backupConfig copia el config.json actual a config.json.bak (o .bak.1, .bak.2… hasta .bak.99) antes de que Save lo reemplace; devuelve la ruta de la copia. Nunca pisa una copia
+// que ya existe ni escribe a través de un enlace simbólico: la crea con O_EXCL (falla si el nombre existe, también si es un enlace, aunque apunte a nada) y sin nombre libre devuelve
+// ErrNoBackupName. Un archivo que ya no existe no tiene nada que guardar.
+func backupConfig(path string) (string, error) {
 	data, err := os.ReadFile(path)
 	if os.IsNotExist(err) {
-		return "", nil // ya no está: no hay nada que guardar
+		return "", nil
 	}
 	if err != nil {
 		return "", err // existe y no se puede leer: sin copia no se pisa
 	}
-	dest := path + ".bak"
-	for i := 1; ; i++ {
-		if _, err := os.Lstat(dest); os.IsNotExist(err) || i > 9 {
-			break
+	for i := 0; i <= 99; i++ {
+		dest := path + ".bak"
+		if i > 0 {
+			dest = fmt.Sprintf("%s.bak.%d", path, i)
 		}
-		dest = fmt.Sprintf("%s.bak.%d", path, i)
+		f, err := os.OpenFile(dest, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o600)
+		if err != nil {
+			if os.IsExist(err) {
+				continue
+			}
+			return "", err
+		}
+		_, werr := f.Write(data)
+		if serr := f.Sync(); werr == nil {
+			werr = serr
+		}
+		if cerr := f.Close(); werr == nil {
+			werr = cerr
+		}
+		if werr != nil {
+			os.Remove(dest)
+			return "", werr
+		}
+		return dest, nil
 	}
-	return dest, safeio.WriteFileAtomic(dest, data, 0o600)
+	return "", ErrNoBackupName
 }

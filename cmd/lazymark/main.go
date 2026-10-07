@@ -178,11 +178,11 @@ func main() {
 	}
 
 	if noMouse {
-		cfg.MouseClick = false
+		cfg.OverrideMouse(false) // solo esta ejecución: no se guarda en config.json
 	}
 
 	if themeName != "" {
-		cfg.Theme = themeName
+		cfg.OverrideTheme(themeName) // solo esta ejecución: no se guarda en config.json
 	}
 
 	appModel, err := app.New(cfg)

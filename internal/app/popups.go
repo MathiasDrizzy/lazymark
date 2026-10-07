@@ -415,7 +415,7 @@ func (p *settingsPopup) change(id settingID, dir int) {
 			cfg.ClickHintShowSeconds = stepInt(hintSecondsPresets, cfg.ClickHintEverySeconds, -1)
 		}
 	case setTrashDays:
-		cfg.TrashDays = stepInt(trashDaysPresets, cfg.TrashDays, dir)
+		cfg.TrashDays = stepIntClamp(trashDaysPresets, cfg.TrashDays, dir) // sin dar la vuelta: de 365 no se pasa a 0 (0 = sin papelera)
 	case setNotesSort:
 		if cfg.NotesSort == "modified" {
 			cfg.NotesSort = "name"
@@ -625,7 +625,11 @@ func (p *trashPopup) render(l Layout) string {
 	w := popupWidth(l, 56)
 	p.top = 2
 	p.height = clamp(p.n, 1, max(1, l.H-12))
-	lines := []string{dim(fmt.Sprintf(i18n.T("Se borra sola a los %d días", "Auto-deleted after %d days"), storage.TrashDays))}
+	head := fmt.Sprintf(i18n.T("Se borra sola a los %d días", "Auto-deleted after %d days"), storage.TrashDays)
+	if storage.TrashDays == 0 { // lo que ya está aquí conserva los días con que se borró (a la derecha de cada fila); lo nuevo no pasa por la papelera
+		head = i18n.T("Lo que borres ahora no pasa por aquí", "What you delete now does not come here")
+	}
+	lines := []string{dim(head)}
 	if p.n == 0 {
 		lines = append(lines, "  "+dim(i18n.T("La papelera está vacía", "Trash is empty")))
 	} else {
@@ -786,4 +790,13 @@ func glyphFields(cfg *config.Config) []string {
 		out[i] = g
 	}
 	return out
+}
+
+// stepIntClamp es stepInt sin dar la vuelta: en el último valor, → se queda; en el primero, ← se queda.
+func stepIntClamp(presets []int, cur, dir int) int {
+	next := stepInt(presets, cur, dir)
+	if (dir > 0 && next < cur) || (dir < 0 && next > cur) {
+		return cur
+	}
+	return next
 }

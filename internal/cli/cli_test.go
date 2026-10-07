@@ -1305,3 +1305,60 @@ func TestConfigSurvivesAWrongTypeCLI(t *testing.T) {
 		t.Errorf("avisa por stderr del campo inválido: %q", errBuf.String())
 	}
 }
+
+// TestJSONEscapesC1 (ORD-026 N3): `--json` escapa los controles C0 y C1 (U+009D, U+009B…) de lo que venga de una nota o de un nombre de archivo: ni un byte C2 9D/9B crudo en la salida.
+func TestJSONEscapesC1(t *testing.T) {
+	dir := fixture(t)
+	evil := "\u009d52;c;cHduZWQ=\u009c\u009b31m\x07\x1b[0m"
+	os.WriteFile(filepath.Join(dir, "evil.md"), []byte("# T "+evil+"\n- [ ] tarea "+evil+" fin\n"), 0o644)
+	for _, args := range [][]string{{"task", "list", "--json"}, {"note", "list", "--json"}, {"note", "show", "evil.md", "--json"}, {"search", "tarea", "--json"}} {
+		out, err := run(t, dir, args...)
+		if err != nil {
+			t.Fatalf("%v: %v", args, err)
+		}
+		for _, bad := range []string{"\xc2\x9d", "\xc2\x9b", "\xc2\x9c", "\x07", "\x1b"} {
+			if strings.Contains(out, bad) {
+				t.Errorf("%v: la salida lleva el byte crudo %q", args, bad)
+			}
+		}
+		if !strings.Contains(out, `\u009d`) && args[1] != "list" && args[0] != "search" { // la búsqueda ya los cambia por "?" al armar el fragmento
+			t.Errorf("%v: lleva el escape \\u009d: %.200s", args, out)
+		}
+		var any1 any
+		if err := json.Unmarshal([]byte(out), &any1); err != nil {
+			t.Errorf("%v: sigue siendo JSON válido: %v", args, err)
+		}
+	}
+	// y el contenido original se recupera al decodificar
+	out, _ := run(t, dir, "note", "show", "evil.md", "--json")
+	var n struct{ Content string }
+	if err := json.Unmarshal([]byte(out), &n); err != nil || !strings.Contains(n.Content, evil) {
+		t.Errorf("al decodificar vuelve el contenido exacto: %v", err)
+	}
+}
+
+// TestConfigWarningLanguageCLI (ORD-026 F2): el prefijo "aviso:"/"note:" y el texto del aviso de config.json siguen el idioma de la interfaz (el de la configuración), y el aviso dice
+// en palabras qué campo y qué tipo se esperaba, sin el error interno de Go.
+func TestConfigWarningLanguageCLI(t *testing.T) {
+	for _, c := range []struct{ lang, prefix, want string }{
+		{"en", "note: ", `"trash_days" must be a whole number`},
+		{"es", "aviso: ", `"trash_days" debe ser un número entero`},
+	} {
+		dir := fixture(t)
+		base, _ := os.UserConfigDir()
+		os.MkdirAll(filepath.Join(base, "lazymark"), 0o755)
+		os.WriteFile(filepath.Join(base, "lazymark", "config.json"), []byte(`{"language":"`+c.lang+`","trash_days":"20"}`), 0o644)
+		var errBuf bytes.Buffer
+		old := Stderr
+		Stderr = &errBuf
+		_, err := run(t, dir, "task", "list")
+		Stderr = old
+		if err != nil {
+			t.Fatal(err)
+		}
+		got := errBuf.String()
+		if !strings.Contains(got, c.prefix+"config.json: "+c.want) || strings.Contains(got, "unmarshal") || strings.Contains(got, "Go struct") {
+			t.Errorf("%s: prefijo e idioma coinciden, sin error de Go: %q", c.lang, got)
+		}
+	}
+}

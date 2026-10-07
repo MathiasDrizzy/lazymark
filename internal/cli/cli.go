@@ -96,7 +96,7 @@ func plain(s string) string {
 
 // printJSON escribe v con sangría (el esquema de cada comando está en docs/cli.md).
 func printJSON(w io.Writer, v any) error {
-	enc := json.NewEncoder(w)
+	enc := json.NewEncoder(ops.C1Escaper(w)) // los controles C1 (U+009D…) salen escapados: el JSON no los lleva crudos
 	enc.SetIndent("", "  ")
 	return enc.Encode(v)
 }

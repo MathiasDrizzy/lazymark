@@ -271,6 +271,9 @@ func dateRe() *regexp.Regexp {
 
 // MarkDoneDates pone DoneMark delante de cada "glifo fecha" de las líneas de content (1-based) que son tareas hechas. No cambia el número de líneas.
 func MarkDoneDates(content string, doneLines map[int]bool) string {
+	// El marcador es interno: un U+2060 que venga del texto de la nota (pegado a propósito delante de la fecha de una tarea pendiente) la haría pasar por hecha y sin color. Se
+	// quita siempre, antes de poner los propios.
+	content = strings.ReplaceAll(content, string(DoneMark), "")
 	if len(doneLines) == 0 {
 		return content
 	}

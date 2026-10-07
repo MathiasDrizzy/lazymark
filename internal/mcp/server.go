@@ -74,7 +74,7 @@ func RunServer(notesDir string) error {
 func (s *Server) Serve(r io.Reader, w io.Writer) error {
 	ops.SetAgentLanguage(s.notesDir) // el idioma de la configuración o, sin uno, inglés
 	reader := bufio.NewReaderSize(r, 64*1024)
-	encoder := json.NewEncoder(w)
+	encoder := json.NewEncoder(ops.C1Escaper(w)) // lo que venga de una nota con controles C1 sale escapado en el JSON
 
 	for {
 		line, tooLong, rerr := readLine(reader, maxLineBytes)
@@ -416,6 +416,7 @@ func fail(err error) CallToolResult {
 
 func ok(v interface{}) CallToolResult {
 	data, _ := json.MarshalIndent(v, "", "  ")
+	data = ops.EscapeC1(data)
 	return CallToolResult{Content: []ToolContent{{Type: "text", Text: string(data)}}}
 }
 
