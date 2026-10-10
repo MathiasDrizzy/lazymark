@@ -180,13 +180,16 @@ func TestUserThemeNamesRestricted(t *testing.T) {
 	cleanUserThemes(t)
 	dir := t.TempDir()
 	bad := []string{"my theme, x.json", "Noche.json", "a\x1b[31mb.json", "a‮b.json", "a\u009db.json", "ñandú.json"}
+	written := 0
 	for _, name := range bad {
-		writeTheme(t, dir, name, userThemeJSON)
+		if os.WriteFile(filepath.Join(dir, name), []byte(userThemeJSON), 0o644) == nil { // Windows no admite ESC ni algunos otros en un nombre
+			written++
+		}
 	}
 	writeTheme(t, dir, "noche-2.v1_x.json", userThemeJSON)
 	problems := LoadUserThemes(dir)
-	if len(problems) != len(bad) {
-		t.Fatalf("avisos: %d, se esperaban %d: %v", len(problems), len(bad), problems)
+	if len(problems) != written {
+		t.Fatalf("avisos: %d, se esperaban %d: %v", len(problems), written, problems)
 	}
 	for _, p := range problems {
 		for _, text := range []string{problemText(p), fmt.Sprintf(p.ES, p.Args...)} {

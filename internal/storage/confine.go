@@ -127,13 +127,27 @@ func (s *Storage) confineNewPath(path string) error {
 	return nil
 }
 
+// walkVault recorre la carpeta de notas aunque sea un enlace simbólico (WalkDir no sigue la raíz si lo es, y "/." no basta en Windows):
+// recorre la ruta real y le pasa a fn las rutas con la grafía de BaseDir, que es la que se guarda.
+func (s *Storage) walkVault(fn fs.WalkDirFunc) error {
+	root := s.BaseDir
+	if real, err := filepath.EvalSymlinks(root); err == nil {
+		root = real
+	}
+	return filepath.WalkDir(root, func(path string, d fs.DirEntry, err error) error {
+		if rel, relErr := filepath.Rel(root, path); relErr == nil {
+			path = filepath.Join(s.BaseDir, rel)
+		}
+		return fn(path, d, err)
+	})
+}
+
 // NotePaths devuelve las rutas de todas las notas .md de la carpeta de notas, sin leerlas: las mismas que ListNotes (sin carpetas
 // ocultas ni assets/) y con la misma regla de enlaces simbólicos (uno que sale de la carpeta no cuenta). Las usan la búsqueda y
 // todo lo que necesite recorrer las notas sin cargar su contenido.
 func (s *Storage) NotePaths() []string {
 	var paths []string
-	// The literal /. follows a symlinked vault root without changing stored paths.
-	filepath.WalkDir(s.BaseDir+string(filepath.Separator)+".", func(path string, d fs.DirEntry, err error) error {
+	s.walkVault(func(path string, d fs.DirEntry, err error) error {
 		if err != nil {
 			return nil
 		}

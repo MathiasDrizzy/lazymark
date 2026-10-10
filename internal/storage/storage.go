@@ -261,8 +261,7 @@ func (s *Storage) ListEntries() ([]NoteEntry, error) {
 func (s *Storage) ListNotes() ([]Note, error) {
 	var notes []Note
 
-	// The literal /. follows a symlinked vault root without changing stored paths.
-	err := filepath.WalkDir(s.BaseDir+string(filepath.Separator)+".", func(path string, d fs.DirEntry, err error) error {
+	err := s.walkVault(func(path string, d fs.DirEntry, err error) error {
 		if err != nil {
 			return nil
 		}
