@@ -99,6 +99,9 @@ type Storage struct {
 }
 
 func New(baseDir string) *Storage {
+	if abs, err := filepath.Abs(baseDir); err == nil {
+		baseDir = abs
+	}
 	return &Storage{BaseDir: baseDir, CurrentSubDir: ""}
 }
 
@@ -109,7 +112,6 @@ var (
 	taskRegex     = regexp.MustCompile(`^(?:[-*+]|\d+[.)])\s+\[([ xX])\]\s+(.*)$`)
 	listItemRegex = regexp.MustCompile(`^(?:[-*+]|\d+[.)])(?:\s|$)`)
 	imageRegex    = regexp.MustCompile(`!\[(.*?)\]\(((?:\\.|[^\\)])*?)\)`)
-	tagRegex      = regexp.MustCompile(`#([a-zA-Z0-9_-]+)(/[a-zA-Z0-9_/-]*)?`)
 	unsafeChars   = regexp.MustCompile(`[\\/:*?"<>|\[\]#^]`) // además de lo que el sistema de archivos no admite, lo que rompe un [[wikilink]]
 )
 
@@ -259,7 +261,8 @@ func (s *Storage) ListEntries() ([]NoteEntry, error) {
 func (s *Storage) ListNotes() ([]Note, error) {
 	var notes []Note
 
-	err := filepath.WalkDir(s.BaseDir, func(path string, d fs.DirEntry, err error) error {
+	// The literal /. follows a symlinked vault root without changing stored paths.
+	err := filepath.WalkDir(s.BaseDir+string(filepath.Separator)+".", func(path string, d fs.DirEntry, err error) error {
 		if err != nil {
 			return nil
 		}
@@ -320,25 +323,6 @@ func (s *Storage) ListNotes() ([]Note, error) {
 	})
 
 	return notes, nil
-}
-
-func (s *Storage) extractTags(content string) []string {
-	matches := tagRegex.FindAllStringSubmatch(wikilinkRe.ReplaceAllString(content, ""), -1) // el # de [[nota#Título]] no es una etiqueta
-	tagMap := make(map[string]bool)
-	for _, m := range matches {
-		if len(m) > 1 {
-			if strings.EqualFold(m[1], KanbanTag) && len(m) > 2 && m[2] != "" {
-				continue // #kb/<columna> es del tablero, no una categoría
-			}
-			tagMap[strings.ToLower(m[1])] = true
-		}
-	}
-	var tags []string
-	for t := range tagMap {
-		tags = append(tags, t)
-	}
-	sort.Strings(tags)
-	return tags
 }
 
 func (s *Storage) extractTasks(title, path, content string) []Task {

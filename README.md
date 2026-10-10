@@ -60,7 +60,9 @@ To use Dataview dates in Obsidian, open the Tasks plugin settings and set **Task
 
 ### Categories
 
-Every `#tag` in your notes. `Enter` on a tag shows only the notes that have it.
+Inline `#tags` in your notes become categories; code fences, inline code, link
+destinations and frontmatter are excluded. `Enter` on a category shows only the
+notes that have it. See [docs/tags.md](docs/tags.md) for the parsing rules.
 
 <img src="assets/readme/feature-categories.gif" alt="Filtering the notes tree by the design tag" width="100%">
 
@@ -135,7 +137,9 @@ A lazymark notes folder is an Obsidian vault: open the same folder in both and t
 What lazymark reads and writes the way Obsidian does:
 
 - **Wikilinks**: `[[note]]`, `[[note|alias]]`, `[[note#Heading]]`, `[[note#^block]]` and `[[folder/note]]`. Renaming a note or a folder offers to update the links that point to it ([docs/links.md](docs/links.md)).
-- **Tags**: every `#tag` in a note, and nested ones such as `#project/web`.
+- **Tags**: inline `#tags`, including Unicode names such as `#café` and nested
+  ones such as `#project/web` (category `project`). See [docs/tags.md](docs/tags.md)
+  for boundaries and exclusions.
 - **Tasks**: `- [ ]` and `- [x]` lines, nested at any depth.
 - **Task dates** of the [Obsidian Tasks](https://publish.obsidian.md/tasks/Introduction) plugin, in both of its formats. It always reads both, mixed in the same vault if you like:
 

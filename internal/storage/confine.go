@@ -49,6 +49,9 @@ func (s *Storage) resolveFile(path string, requireMD bool) (string, error) {
 		}
 		return "", err
 	}
+	if real, err = filepath.Abs(real); err != nil {
+		return "", err
+	}
 	rel, err := filepath.Rel(base, real)
 	if err != nil || rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) || filepath.IsAbs(rel) {
 		return "", i18n.Errorf("%w: %q está fuera de %q", "%w: %q is outside %q", ErrOutsideNotes, path, s.BaseDir)
@@ -129,7 +132,8 @@ func (s *Storage) confineNewPath(path string) error {
 // todo lo que necesite recorrer las notas sin cargar su contenido.
 func (s *Storage) NotePaths() []string {
 	var paths []string
-	filepath.WalkDir(s.BaseDir, func(path string, d fs.DirEntry, err error) error {
+	// The literal /. follows a symlinked vault root without changing stored paths.
+	filepath.WalkDir(s.BaseDir+string(filepath.Separator)+".", func(path string, d fs.DirEntry, err error) error {
 		if err != nil {
 			return nil
 		}

@@ -4,6 +4,10 @@ lazymark has headless commands for scripts and agents. They read and write the s
 
 All commands take `--dir <folder>` (default: the notes folder of your config) and `--json`. Flags and arguments can come in any order. `-h` prints the usage.
 
+`--dir` accepts relative paths (including `.`), absolute paths and symlinked folders.
+Note and task IDs are independent of that spelling. Expand `~` through your shell
+when using a home-relative path; see [notes folder configuration](configuration.md#notes-folder).
+
 ```
 lazymark note list [--json]
 lazymark note show <path> [--json]
@@ -69,6 +73,9 @@ The fields below are stable: they are only ever added to. See `internal/cli/test
 | `tags` | string[] | categories (`#kb/…` is not one) |
 | `tasks_count` | number | |
 | `mod_time` | string | RFC 3339 |
+
+The `tags` array uses the shared [inline tag and category rules](tags.md), including
+Unicode names, first-segment categories and code, link and frontmatter exclusions.
 
 `note show` → a note with `content` (string) added.
 

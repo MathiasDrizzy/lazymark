@@ -142,6 +142,12 @@ type NoteContentDTO struct {
 func (s *Service) noteID(path string) string {
 	rel, err := filepath.Rel(s.Store.BaseDir, path)
 	if err != nil || rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
+		// Resolved folders return canonical paths even when the vault root is a symlink.
+		if base, resolveErr := filepath.EvalSymlinks(s.Store.BaseDir); resolveErr == nil {
+			rel, err = filepath.Rel(base, path)
+		}
+	}
+	if err != nil || rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
 		return filepath.ToSlash(path)
 	}
 	return filepath.ToSlash(rel)
