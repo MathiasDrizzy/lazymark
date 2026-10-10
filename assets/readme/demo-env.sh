@@ -13,6 +13,10 @@ go build -o "$DEMO_TMP/lazymark" ./cmd/lazymark || return 1   # before changing 
 export HOME="$DEMO_TMP/home"
 mkdir -p "$HOME"
 cp -R assets/readme/demo-home/. "$HOME/"
+# The mascot is off in the recordings: without Kitty graphics (VHS cannot draw them) it would show up as a smudge of blocks.
+if [ "$(uname)" = "Darwin" ]; then CONFIG_DIR="$HOME/Library/Application Support/lazymark"; else CONFIG_DIR="${XDG_CONFIG_HOME:-$HOME/.config}/lazymark"; fi
+mkdir -p "$CONFIG_DIR"
+printf '{"mascot": false}\n' > "$CONFIG_DIR/config.json"
 # The dates of the demo tasks are written for 2026-10-06; they are moved by as many days as separate that day from today, so that the recorded colors
 # (overdue, due today, on time, started, not started, completed) always look the same whichever day you record.
 python3 - "$HOME/Documents/notes" <<'PYDEMO'
