@@ -249,6 +249,9 @@ func (m *AppModel) mascotClick(x, y int) (tea.Cmd, bool) {
 
 // warmMascotFrames deja en la cola de transmisión los cuadros de la animación anim (los que ya están en la terminal no se repiten).
 func (m *AppModel) warmMascotFrames(anim int) {
+	if !m.c.kitty.Supported() {
+		return // sin Kitty los cuadros son bloques de texto: no hay imágenes que transmitir
+	}
 	cw, ch := m.cellSize()
 	for _, name := range frames().Anims[anim].Frames {
 		img, _ := frames36().Grids[name].Image(mascotCols*cw, mascotRows*ch)

@@ -752,3 +752,14 @@ func TestMascotClickPreloadsFrames(t *testing.T) {
 		t.Errorf("tras el clic debía seguir el cuadro dormido y se ve %q", r.frameName())
 	}
 }
+
+// TestMascotWarmDoesNothingWithoutKitty: sin Kitty los cuadros se dibujan con bloques y no hay nada que transmitir; precargarlos escalaba 19 a
+// 29 imágenes por clic para descartarlas. Sin Kitty, warmMascotFrames no debe reservar nada.
+func TestMascotWarmDoesNothingWithoutKitty(t *testing.T) {
+	r := newEmptyRig(t, 120, 35, false)
+	anim := r.mascot.next % len(frames().Anims)
+	r.warmMascotFrames(anim) // la primera vez carga los sprites; lo que se mide es lo siguiente
+	if allocs := testing.AllocsPerRun(5, func() { r.warmMascotFrames(anim) }); allocs != 0 {
+		t.Errorf("sin Kitty, warmMascotFrames hizo %.0f reservas por llamada y no debía hacer ninguna", allocs)
+	}
+}
