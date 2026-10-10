@@ -199,7 +199,10 @@ func TestMascotAnimates(t *testing.T) {
 		if !r.mascot.playing || frames().Anims[r.mascot.anim].Name != anim.Name {
 			t.Fatalf("clic %d: debía sonar %q y suena %q", i, anim.Name, frames().Anims[r.mascot.anim].Name)
 		}
-		seen := []string{r.frameName()}
+		if r.frameName() != "sleep" { // el instante previo: sigue dormida mientras la terminal recibe los cuadros nuevos (sin parpadeo)
+			t.Fatalf("%s: tras el clic debía seguir el cuadro dormido y se ve %q", anim.Name, r.frameName())
+		}
+		var seen []string
 		for r.mascot.playing {
 			r.Update(mascotTickMsg{gen: r.mascot.gen})
 			if r.mascot.playing {
@@ -722,5 +725,30 @@ func TestHintCadenceOption(t *testing.T) {
 	r.c.cfg.ClickHintIdleSeconds, r.c.cfg.ClickHintShowSeconds, r.c.cfg.ClickHintEverySeconds = 1, 99, 3
 	if r.hintTimes() != defaultHintTimes {
 		t.Errorf("fuera de rango cae en el defecto: %+v", r.hintTimes())
+	}
+}
+
+// TestMascotClickPreloadsFrames: un cuadro nuevo es una imagen Kitty con ID nuevo, y si el texto que lo muestra llega a la terminal
+// antes que la imagen, ese cuadro sale vacío (el parpadeo). El clic debe dejar en cola la transmisión de todos los cuadros de la
+// animación antes de dibujar el primero, y mientras tanto la mascota sigue dormida.
+func TestMascotClickPreloadsFrames(t *testing.T) {
+	r := newEmptyRig(t, 120, 35, true)
+	r.View()
+	r.c.kitty.TakePending() // lo que ya mostraba la pantalla (la mascota dormida)
+	rect := r.mascotRect()
+	if _, ok := r.mascotClick(rect.X+5, rect.Y+3); !ok {
+		t.Fatal("el clic no lanzó la animación")
+	}
+	distinct := map[string]bool{}
+	for _, name := range frames().Anims[r.mascot.anim].Frames {
+		if name != "sleep" {
+			distinct[name] = true
+		}
+	}
+	if got := len(r.c.kitty.TakePending()); got < len(distinct) {
+		t.Errorf("tras el clic hay %d transmisiones en cola y la animación necesita %d cuadros nuevos", got, len(distinct))
+	}
+	if r.frameName() != "sleep" {
+		t.Errorf("tras el clic debía seguir el cuadro dormido y se ve %q", r.frameName())
 	}
 }
