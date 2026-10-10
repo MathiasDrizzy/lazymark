@@ -37,13 +37,21 @@ lazymark never throws your configuration away because of a typo. Each key is rea
   goes into a folder, `..` goes up and `s` picks the current one. The tree reloads
   at once and the choice is saved as your default.
 
+Relative folders (including `.`) are resolved against the working directory when
+the store is opened. Absolute paths and symlinked vault roots also work; note and
+task IDs stay relative to the vault and do not depend on how its root was spelled.
+For a home-relative command-line path, let the shell expand `~` (for example,
+`lazymark --dir ~/notes`); a literal `~` is not expanded by storage.
+
 Notes are plain markdown files. lazymark only rewrites the line you change (toggling
 a task) or appends to the end of the note (pasting an image), and it refuses to write
 if the note was modified by another program since it loaded it.
 
 What lazymark reads from your notes:
 
-- **Tags**: any `#word`. They fill the Categories panel.
+- **Tags**: inline `#word` at line start or after whitespace. Code fences, inline
+  code, link destinations and frontmatter are excluded; nested tags use their
+  first segment as the category. See [tags.md](tags.md) for the full rules.
 - **Tasks**: list items that start with a checkbox, `- [ ] something` or `- [x] something`. The bullet can be `-`, `*`, `+` or a number (`1.`, `1)`), and the item can be nested at any depth (spaces or tabs, also under an item with no checkbox). Moving, ticking or dating a nested task rewrites only its line and keeps its indentation, and its id does not change. Checkboxes inside a code block (fenced with ``` or ~~~, or indented 4 spaces outside a list) and inside a quote (`> - [ ]`) are not tasks.
 - **Card order**: the cards of a column follow the order of the notes (the board lists the most recently modified note first, so a note you just edited or reordered goes to the top) and, inside a note, the order of its lines. `K`/`J` (or `Shift+↑`/`Shift+↓`) and a vertical drag reorder by swapping the two task lines of the same note (with their subtasks; only sibling tasks, the same indentation); across different notes the order is the notes' order and cannot be changed from the board.
 - **Kanban column**: a tag at the end of the task line, `- [ ] task #kb/doing`. No tag is the first
