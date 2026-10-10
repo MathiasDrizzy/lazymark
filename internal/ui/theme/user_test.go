@@ -172,3 +172,49 @@ func TestUserThemeFIFO(t *testing.T) {
 		t.Errorf("la carpeta es un FIFO, avisos: %v", problems)
 	}
 }
+
+// TestUserThemeNamesRestricted: el nombre del archivo es el nombre del tema y sale en la ayuda de --theme y en la barra de estado; con
+// comas o espacios parecería más de un tema, y con caracteres de control podría escribir secuencias de escape en la terminal. Solo valen
+// [a-z0-9._-]; los demás se saltan con un aviso que no repite el nombre sin escapar.
+func TestUserThemeNamesRestricted(t *testing.T) {
+	cleanUserThemes(t)
+	dir := t.TempDir()
+	bad := []string{"my theme, x.json", "Noche.json", "a\x1b[31mb.json", "a‮b.json", "a\u009db.json", "ñandú.json"}
+	for _, name := range bad {
+		writeTheme(t, dir, name, userThemeJSON)
+	}
+	writeTheme(t, dir, "noche-2.v1_x.json", userThemeJSON)
+	problems := LoadUserThemes(dir)
+	if len(problems) != len(bad) {
+		t.Fatalf("avisos: %d, se esperaban %d: %v", len(problems), len(bad), problems)
+	}
+	for _, p := range problems {
+		for _, text := range []string{problemText(p), fmt.Sprintf(p.ES, p.Args...)} {
+			for _, r := range text {
+				if r < 0x20 || (r >= 0x7f && r <= 0x9f) || r == 0x202e {
+					t.Errorf("el aviso lleva el carácter de control %U sin escapar: %q", r, text)
+				}
+			}
+		}
+	}
+	if got := strings.Join(userNames, ","); got != "noche-2.v1_x" {
+		t.Errorf("temas cargados %q, se esperaba solo noche-2.v1_x", got)
+	}
+}
+
+// TestUserThemeColorWarningEscapes: el valor de un color mal escrito se muestra tal cual en el aviso; sus caracteres de control van escapados.
+func TestUserThemeColorWarningEscapes(t *testing.T) {
+	cleanUserThemes(t)
+	dir := t.TempDir()
+	body := strings.Replace(userThemeJSON, `"#0a1014"`, `"\u001b[2J\u009d‮"`, 1)
+	writeTheme(t, dir, "malo.json", body)
+	problems := LoadUserThemes(dir)
+	if len(problems) != 1 {
+		t.Fatalf("avisos: %v", problems)
+	}
+	for _, r := range problemText(problems[0]) {
+		if r < 0x20 || (r >= 0x7f && r <= 0x9f) || r == 0x202e {
+			t.Errorf("el aviso lleva el carácter de control %U sin escapar: %q", r, problemText(problems[0]))
+		}
+	}
+}

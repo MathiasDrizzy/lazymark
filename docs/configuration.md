@@ -161,7 +161,8 @@ Kanban card. `source` is optional.
 Themes are read when lazymark starts, so restart it after editing one. A file
 with a mistake (a missing color, a misspelled key, broken JSON) is skipped and
 the status bar says why. A file cannot replace a built-in theme: `nord.json` is
-skipped.
+skipped. The name can only use `a-z`, `0-9`, `.`, `-` and `_`; any other file name
+(spaces, commas, capitals, accents) is skipped with a warning.
 
 ## Command line
 

@@ -9,7 +9,9 @@ import (
 	"path/filepath"
 	"regexp"
 	"sort"
+	"strconv"
 	"strings"
+	"unicode"
 
 	"charm.land/lipgloss/v2"
 	"github.com/MathiasDrizzy/lazymark/internal/safeio"
@@ -33,6 +35,10 @@ type UserThemeProblem struct {
 var userNames []string
 
 var hexColor = regexp.MustCompile(`^#[0-9a-fA-F]{6}$`)
+
+// themeNameRe: el nombre del archivo es el del tema y sale en la ayuda de --theme y en la barra de estado. Con comas o espacios parecería
+// más de un tema, y con caracteres de control o de dirección podría escribir secuencias de escape en la terminal.
+var themeNameRe = regexp.MustCompile(`^[a-z0-9._-]+$`)
 
 type paletteSlot struct {
 	key string
@@ -70,6 +76,10 @@ func LoadUserThemes(dir string) []UserThemeProblem {
 		if !isTheme || name == "" || strings.HasPrefix(name, ".") {
 			continue
 		}
+		if !themeNameRe.MatchString(name) {
+			problems = append(problems, UserThemeProblem{"el tema %q no se cargó: el nombre solo admite a-z, 0-9, punto, guion y guion bajo", "theme %q was not loaded: the name only allows a-z, 0-9, dot, dash and underscore", []any{name}})
+			continue
+		}
 		p, problem := readUserTheme(filepath.Join(dir, e.Name()), name)
 		if problem != nil {
 			problems = append(problems, *problem)
@@ -79,6 +89,17 @@ func LoadUserThemes(dir string) []UserThemeProblem {
 		userNames = append(userNames, name)
 	}
 	return problems
+}
+
+// safeText es s tal cual si todo es imprimible; si lleva caracteres de control, C1 o de dirección (U+202E...), va escapado, para que un
+// archivo de tema no escriba secuencias en la terminal a través del aviso.
+func safeText(s string) string {
+	for _, r := range s {
+		if !unicode.IsPrint(r) {
+			return strconv.Quote(s)
+		}
+	}
+	return s
 }
 
 // readUserTheme lee un archivo de tema o dice por qué no vale.
@@ -128,7 +149,7 @@ func readUserTheme(path, name string) (Palette, *UserThemeProblem) {
 		}
 		var s string
 		if json.Unmarshal(v, &s) != nil || !hexColor.MatchString(s) {
-			return fail("el color %q vale %s y no es #rrggbb", "the color %q is %s, not #rrggbb", slot.key, string(v))
+			return fail("el color %q vale %s y no es #rrggbb", "the color %q is %s, not #rrggbb", slot.key, safeText(string(v)))
 		}
 		*slot.dst = lipgloss.Color(s)
 	}
