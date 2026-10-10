@@ -12,6 +12,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/MathiasDrizzy/lazymark/internal/ui/theme"
 )
 
 // isolate apunta HOME y XDG_CONFIG_HOME a un directorio temporal para que
@@ -853,5 +855,36 @@ func TestWarningsFollowInterfaceLanguage(t *testing.T) {
 	i18n.SetLanguage("en")
 	if w := strings.Join(cfg.Warnings(), ""); !strings.Contains(w, "must be a whole number") {
 		t.Errorf("en inglés: %q", w)
+	}
+}
+
+// TestLoadReadsUserThemes: Load carga los temas de la carpeta themes junto a config.json, así el tema guardado
+// puede ser uno de ellos, y un archivo de tema que no vale llega a los avisos.
+func TestLoadReadsUserThemes(t *testing.T) {
+	isolate(t)
+	t.Cleanup(func() { theme.LoadUserThemes(t.TempDir()) })
+	writeDiskConfig(t, `{"theme": "noche"}`)
+	dir := ThemesDir()
+	if filepath.Dir(dir) != filepath.Dir(configFilePath()) {
+		t.Fatalf("la carpeta de temas %s no está junto a config.json", dir)
+	}
+	colors := `"base": "#0a1014", "mantle": "#070b0d", "surface0": "#162128", "surface1": "#222e36", "overlay0": "#758a96", "text": "#cccfd1", "subtext0": "#a9b0b5", "peach": "#99c1dc", "mauve": "#b389a7", "teal": "#5ba1a3", "green": "#7b9f7e", "red": "#bf878c", "blue": "#7f97be"`
+	os.MkdirAll(dir, 0o755)
+	os.WriteFile(filepath.Join(dir, "noche.json"), []byte(`{`+colors+`, "yellow": "#a1966d"}`), 0o644)
+	os.WriteFile(filepath.Join(dir, "incompleto.json"), []byte(`{`+colors+`}`), 0o644)
+
+	cfg, err := Load(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg.Theme != "noche" || !theme.ApplyThemeByName(cfg.Theme) {
+		t.Errorf("el tema guardado noche no se pudo aplicar (Theme = %q)", cfg.Theme)
+	}
+	theme.ApplyThemeByName("catppuccin-mocha")
+	if w := strings.Join(cfg.Warnings(), "\n"); !strings.Contains(w, "incompleto") || !strings.Contains(w, `"yellow"`) {
+		t.Errorf("falta el aviso del tema incompleto: %q", w)
+	}
+	if p := strings.Join(cfg.Problems(), "\n"); strings.Contains(p, "incompleto") { // la CLI no lo repite en cada comando
+		t.Errorf("el aviso de un tema llegó a Problems: %q", p)
 	}
 }

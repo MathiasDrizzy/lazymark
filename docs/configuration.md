@@ -69,7 +69,7 @@ What lazymark reads from your notes:
 |---|---|---|---|
 | `notes_dir` | a folder path | `~/Documents/notes` | The notes folder. |
 | `editor` | a command, with arguments if you want | `$EDITOR`, else `micro`, `vim` or `nano` | Opened with `Enter` or `e`. A path with spaces works. |
-| `theme` | `catppuccin-mocha`, `catppuccin-latte`, `catppuccin-frappe`, `catppuccin-macchiato`, `tokyo-night`, `gruvbox-dark`, `nord`, `dracula`, `one-dark`, `rose-pine`, `kanagawa`, `everforest-dark`, `solarized-dark`, `solarized-light` | `catppuccin-mocha` | Colors of the whole interface, including the markdown preview and its code blocks. Changes live in Settings. |
+| `theme` | `catppuccin-mocha`, `catppuccin-latte`, `catppuccin-frappe`, `catppuccin-macchiato`, `tokyo-night`, `gruvbox-dark`, `nord`, `dracula`, `one-dark`, `rose-pine`, `kanagawa`, `everforest-dark`, `solarized-dark`, `solarized-light`, or one of [your own](#your-own-themes) | `catppuccin-mocha` | Colors of the whole interface, including the markdown preview and its code blocks. Changes live in Settings. |
 | `kanban_columns` | a list of 2 to 6 columns: `{"id": "doing", "title": "Writing"}` or `{"id": "doing", "titles": {"en": "Doing", "es": "En curso"}}` | `todo`, `doing`, `done` | The Kanban columns, in order. `id` is lowercase letters, digits, `_` or `-` and goes in the `#kb/<id>` tag; the title is free, per language, or (if missing) the default one for `todo`/`doing`/`done`, else the id. The column called `done` (or the last) holds the finished tasks. An invalid list goes back to the default. |
 | `language` | `auto`, `en`, `es`, `pt`, `fr`, `de`, `it`, `ja`, `zh` | `auto` | `auto` follows `LC_ALL`, `LC_MESSAGES` and `LANG` (the first one that is set, as POSIX does): `pt_BR` is Portuguese, `zh_CN` Chinese, and any other language English. `pt` is Brazilian Portuguese and `zh` Simplified Chinese; `pt-BR` and `zh-CN` are accepted. Changes live in Settings ("Language"). Which translations were reviewed by a native speaker: [i18n.md](i18n.md). |
 | `screen_background` | `theme`, `terminal` | `theme` | `theme` paints the whole screen with the theme's base color (panels, gaps, bottom bar, popups, Kanban and preview). `terminal` leaves your terminal's background, so a translucent terminal stays translucent. Changes live in Settings ("Screen background"). |
@@ -120,6 +120,48 @@ Available names: `new_note`, `new_folder`, `edit`, `delete`, `move`, `paste_imag
 `toggle_panel`, `settings`, `cheatsheet` and `quit`. Keys are written as lazymark
 shows them (`a`, `F`, `ctrl+v`, `tab`, `?`). The in-app list (`?`) and
 [keybindings.md](keybindings.md) describe the defaults.
+
+### Your own themes
+
+A theme is a JSON file in a `themes` folder next to `config.json` (on Linux,
+`~/.config/lazymark/themes/`). The file name without `.json` is the theme's name:
+it comes after the built-in themes in Settings, and works with `--theme` and in
+`"theme"`. It sets the same 14 colors as the built-in ones, all of them, as
+`#rrggbb`. This is Catppuccin Mocha written as a file:
+
+```json
+{
+  "source": "https://catppuccin.com/palette/",
+  "base": "#1e1e2e",
+  "mantle": "#181825",
+  "surface0": "#313244",
+  "surface1": "#45475a",
+  "overlay0": "#6c7086",
+  "text": "#cdd6f4",
+  "subtext0": "#a6adc8",
+  "peach": "#fab387",
+  "mauve": "#cba6f7",
+  "teal": "#94e2d5",
+  "green": "#a6e3a1",
+  "red": "#f38ba8",
+  "blue": "#89b4fa",
+  "yellow": "#f9e2af"
+}
+```
+
+`base` is the background and `mantle` the Kanban title bar. `surface0` is the
+background of code, and of the cursor row in a panel that is not focused;
+`surface1` is the selection bar. `overlay0` is dim text and the borders of
+inactive panels; `text` and `subtext0` are the main and secondary text. `peach`
+is the accent: popup borders, search matches, folder icons, list bullets and the
+first heading. The other six are used for tags, headings, code and task dates;
+`green` also draws the border of the focused panel, and `blue` the selected
+Kanban card. `source` is optional.
+
+Themes are read when lazymark starts, so restart it after editing one. A file
+with a mistake (a missing color, a misspelled key, broken JSON) is skipped and
+the status bar says why. A file cannot replace a built-in theme: `nord.json` is
+skipped.
 
 ## Command line
 

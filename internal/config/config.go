@@ -21,6 +21,7 @@ import (
 	"unicode/utf8"
 
 	"github.com/MathiasDrizzy/lazymark/internal/i18n"
+	"github.com/MathiasDrizzy/lazymark/internal/ui/theme"
 )
 
 // Version es la versión del programa. El release la inyecta con -ldflags
@@ -188,6 +189,9 @@ type Config struct {
 	unknownKey  []cfgWarning // el aviso de cada clave desconocida (la CLI no lo repite en cada comando; la TUI sí lo muestra)
 	unknown     map[string]json.RawMessage
 	backupFirst bool // el archivo no se pudo leer entero o tenía valores que se reemplazaron: antes de guardar encima se hace una copia (.bak)
+
+	// themeWarnings son los temas de la carpeta themes que no se cargaron. Como unknownKey, solo los muestra la TUI.
+	themeWarnings []cfgWarning
 
 	// valores del archivo que no valían (tipo equivocado o fuera de rango) y por los que se usó el defecto: se conservan tal cual al guardar mientras no se cambien desde
 	// Ajustes (invalid: lo que decía el archivo; invalidUsed: lo que se usó en su lugar).
@@ -392,7 +396,17 @@ func load(customDir string, create bool) (*Config, error) {
 		}
 	}
 
+	// Los temas del usuario, antes de que nadie aplique cfg.Theme: el guardado puede ser uno de ellos.
+	for _, p := range theme.LoadUserThemes(ThemesDir()) {
+		cfg.themeWarnings = append(cfg.themeWarnings, cfgWarning{p.ES, p.EN, p.Args})
+	}
+
 	return cfg, nil
+}
+
+// ThemesDir es la carpeta de los temas del usuario, junto a config.json: un archivo <nombre>.json por tema.
+func ThemesDir() string {
+	return filepath.Join(filepath.Dir(configFilePath()), "themes")
 }
 
 // normalizeKeybindingMode migra el valor antiguo "lazygit" a "lazy"; todo lo que no
@@ -838,7 +852,7 @@ func warningTexts(ws ...[]cfgWarning) []string {
 }
 
 // Warnings son los avisos de la lectura de la configuración (campos inválidos, claves desconocidas, archivo ilegible), listos para mostrar en el idioma actual; vacío si todo estaba bien.
-func (c *Config) Warnings() []string { return warningTexts(c.warnings, c.unknownKey) }
+func (c *Config) Warnings() []string { return warningTexts(c.warnings, c.unknownKey, c.themeWarnings) }
 
 // Problems son los avisos que importan en cada comando (un valor inválido que se reemplazó, un archivo ilegible): sin los de claves desconocidas, que solo informan.
 func (c *Config) Problems() []string { return warningTexts(c.warnings) }
