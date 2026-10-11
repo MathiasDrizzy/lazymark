@@ -7,6 +7,8 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [1.2.0] - 2026-10-11
+
 ### Added
 - Kanban: `o` (and a `Hide done (o)` button in the top bar) hides the finished cards, and the bar counts what is
   hidden. New option `hide_completed_kanban` (default `false`: nothing changes for existing users).
@@ -83,6 +85,7 @@ over the same files.
 - `--json` output escapes C1 control characters.
 - The config backup neither overwrites an existing file nor follows links.
 
-[Unreleased]: https://github.com/MathiasDrizzy/lazymark/compare/v1.1.0...HEAD
+[Unreleased]: https://github.com/MathiasDrizzy/lazymark/compare/v1.2.0...HEAD
+[1.2.0]: https://github.com/MathiasDrizzy/lazymark/compare/v1.1.0...v1.2.0
 [1.1.0]: https://github.com/MathiasDrizzy/lazymark/compare/v1.0.0...v1.1.0
 [1.0.0]: https://github.com/MathiasDrizzy/lazymark/releases/tag/v1.0.0
