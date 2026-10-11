@@ -58,10 +58,7 @@ checksum:
 snapshot:
   version_template: "{{ incpatch .Version }}-snapshot"
 
+# The release notes are the CHANGELOG.md section of the version (scripts/release-notes.sh, passed with
+# --release-notes), so goreleaser does not generate a changelog from commits.
 changelog:
-  sort: asc
-  filters:
-    exclude:
-      - "^docs:"
-      - "^test:"
-      - "Merge pull request"
+  disable: true
