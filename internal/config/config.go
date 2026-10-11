@@ -123,7 +123,7 @@ type Config struct {
 	ShowTasksTab       bool   `json:"show_tasks_tab"`
 	ConfirmDelete      bool   `json:"confirm_delete"`
 	HideCompletedTasks bool   `json:"hide_completed_tasks"`
-	// HideCompletedKanban hides the finished cards of the Kanban board (toggled with `x` there); the Kanban counterpart of HideCompletedTasks.
+	// HideCompletedKanban hides the finished cards of the Kanban board (toggled with `o` there); the Kanban counterpart of HideCompletedTasks.
 	HideCompletedKanban bool `json:"hide_completed_kanban"`
 	// DoneTag is the tag (without "#") that marks a task as "put away": a task that carries it is hidden from the views DoneTagHides names.
 	// DoneTagHides is where it hides: "both" (default), "kanban", "tasks" or "none". It only changes the view, never the notes.
