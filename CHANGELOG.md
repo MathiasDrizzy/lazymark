@@ -15,6 +15,9 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 - CI builds the `Dockerfile` (without publishing it) on every push, so the image is checked on GitHub's runners.
+- CI starts the Docker image and checks that it answers an MCP `initialize` request with its `serverInfo`.
+- CI dry-runs the release (`goreleaser release --snapshot --skip=publish`) on the disposable `ci/` branches, so a
+  broken release workflow shows up before a tag is pushed.
 - Dependencies: `chroma` 2.20.0 → 2.27.0, and the GitHub Actions `checkout` 4 → 7, `setup-go` 5 → 7 and
   `goreleaser-action` 6 → 7, pinned to the commit of each official release.
 - README GIFs were re-recorded in an isolated home directory with the mascot turned off, so they no longer
