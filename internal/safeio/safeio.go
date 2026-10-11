@@ -25,7 +25,7 @@ func ReadRegular(path string, max int64) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer f.Close()
+	defer f.Close() //nolint:errcheck // read-only: a failed close loses nothing
 	fi, err := f.Stat()
 	if err != nil {
 		return nil, err

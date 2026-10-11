@@ -9,9 +9,6 @@ linters:
         - fmt.Fprintf
         - fmt.Fprintln
         - fmt.Sscanf
-        - os.Remove
-        - (*os.File).Close
-        - (*github.com/MathiasDrizzy/lazymark/internal/storage.Storage).walkVault
     staticcheck:
       checks:
         - all
