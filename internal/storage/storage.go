@@ -263,7 +263,10 @@ func (s *Storage) ListNotes() ([]Note, error) {
 
 	err := s.walkVault(func(path string, d fs.DirEntry, err error) error {
 		if err != nil {
-			return nil
+			if path == s.BaseDir {
+				return err // the notes folder itself is missing or unreadable: the caller must hear about it
+			}
+			return nil // an unreadable subfolder or entry is skipped
 		}
 		if d.IsDir() {
 			name := d.Name()

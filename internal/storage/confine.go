@@ -147,7 +147,8 @@ func (s *Storage) walkVault(fn fs.WalkDirFunc) error {
 // todo lo que necesite recorrer las notas sin cargar su contenido.
 func (s *Storage) NotePaths() []string {
 	var paths []string
-	s.walkVault(func(path string, d fs.DirEntry, err error) error {
+	// The callback never returns an error, so the walk has none to report; ListNotes is the one that reports a bad root.
+	_ = s.walkVault(func(path string, d fs.DirEntry, err error) error {
 		if err != nil {
 			return nil
 		}
