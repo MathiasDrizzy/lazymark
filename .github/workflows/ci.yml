@@ -73,3 +73,12 @@ jobs:
           persist-credentials: false
       - name: Build the Dockerfile
         run: docker build -t lazymark-mcp:ci .
+      - name: Smoke test the MCP server in the image
+        run: |
+          request='{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"ci","version":"0"}}}'
+          reply="$(printf '%s\n' "$request" | timeout 30 docker run -i --rm --name lazymark-smoke lazymark-mcp:ci)"
+          echo "$reply"
+          echo "$reply" | grep -q '"serverInfo"'
+      - name: Remove the smoke container
+        if: always()
+        run: docker rm -f lazymark-smoke || true
