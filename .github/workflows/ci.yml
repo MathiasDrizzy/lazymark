@@ -82,3 +82,28 @@ jobs:
       - name: Remove the smoke container
         if: always()
         run: docker rm -f lazymark-smoke || true
+
+  release-dry-run:
+    name: release dry run (snapshot, not published)
+    # Only on the disposable ci/** branches that ci-push.sh creates: exercises release.yml's steps without a tag.
+    if: startsWith(github.ref, 'refs/heads/ci/')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+          cache: false
+      - uses: goreleaser/goreleaser-action@f06c13b6b1a9625abc9e6e439d9c05a8f2190e94 # v7.2.3
+        with:
+          distribution: goreleaser
+          version: v2.18.2 # keep equal to release.yml
+          args: release --snapshot --clean --skip=publish
+        env:
+          # not a secret: the cask template reads the variable, but nothing is published
+          HOMEBREW_TAP_GITHUB_TOKEN: dry-run
+      - name: List the artifacts
+        run: ls -1 dist | grep -E '\.(tar\.gz|zip)$|checksums' | sort
