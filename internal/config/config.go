@@ -114,20 +114,26 @@ func DefaultKeybindings() KeybindingsConfig {
 
 // Config almacena las preferencias de ejecución de la aplicación.
 type Config struct {
-	NotesDir           string            `json:"notes_dir"`
-	Editor             string            `json:"editor"`
-	MouseClick         bool              `json:"mouse_click"`
-	Theme              string            `json:"theme"`
-	Language           string            `json:"language"`
-	ShowTagsTab        bool              `json:"show_tags_tab"`
-	ShowTasksTab       bool              `json:"show_tasks_tab"`
-	ConfirmDelete      bool              `json:"confirm_delete"`
-	HideCompletedTasks bool              `json:"hide_completed_tasks"`
-	SidebarRatio       float64           `json:"sidebar_ratio"`
-	KeybindingMode     string            `json:"keybinding_mode"`
-	Keybindings        KeybindingsConfig `json:"keybindings"`
-	KeymapVersion      int               `json:"keymap_version"`
-	TaskScope          string            `json:"task_scope"`
+	NotesDir           string `json:"notes_dir"`
+	Editor             string `json:"editor"`
+	MouseClick         bool   `json:"mouse_click"`
+	Theme              string `json:"theme"`
+	Language           string `json:"language"`
+	ShowTagsTab        bool   `json:"show_tags_tab"`
+	ShowTasksTab       bool   `json:"show_tasks_tab"`
+	ConfirmDelete      bool   `json:"confirm_delete"`
+	HideCompletedTasks bool   `json:"hide_completed_tasks"`
+	// HideCompletedKanban hides the finished cards of the Kanban board (toggled with `x` there); the Kanban counterpart of HideCompletedTasks.
+	HideCompletedKanban bool `json:"hide_completed_kanban"`
+	// DoneTag is the tag (without "#") that marks a task as "put away": a task that carries it is hidden from the views DoneTagHides names.
+	// DoneTagHides is where it hides: "both" (default), "kanban", "tasks" or "none". It only changes the view, never the notes.
+	DoneTag        string            `json:"done_tag"`
+	DoneTagHides   string            `json:"done_tag_hides"`
+	SidebarRatio   float64           `json:"sidebar_ratio"`
+	KeybindingMode string            `json:"keybinding_mode"`
+	Keybindings    KeybindingsConfig `json:"keybindings"`
+	KeymapVersion  int               `json:"keymap_version"`
+	TaskScope      string            `json:"task_scope"`
 	// PopupBackground: "theme" (por defecto, como la pantalla) pinta el color base del tema; "terminal" deja el
 	// fondo de la terminal en los popups, respetando su transparencia, aunque la pantalla esté pintada con el tema.
 	PopupBackground string `json:"popup_background"`
@@ -248,6 +254,8 @@ func DefaultConfig(notesDir string) *Config {
 		ShowTasksTab:          true,
 		ConfirmDelete:         true,
 		HideCompletedTasks:    false,
+		DoneTag:               "lm-done",
+		DoneTagHides:          "both",
 		SidebarRatio:          0.33,
 		KeybindingMode:        KeybindingModeDual,
 		Keybindings:           DefaultKeybindings(),
@@ -687,6 +695,14 @@ func (c *Config) normalizeOptions() {
 	if !KanbanTagRe.MatchString(c.KanbanTag) {
 		c.KanbanTag = d.KanbanTag
 	}
+	if !KanbanTagRe.MatchString(c.DoneTag) {
+		c.DoneTag = d.DoneTag
+	}
+	switch c.DoneTagHides {
+	case "both", "kanban", "tasks", "none":
+	default:
+		c.DoneTagHides = d.DoneTagHides
+	}
 	if c.NotesSort != "modified" {
 		c.NotesSort = d.NotesSort
 	}
@@ -1020,4 +1036,14 @@ func writeBackup(f backupFile, dest string, data []byte) error {
 		return errors.Join(werr, fmt.Errorf("could not remove the partial copy %s: %w", dest, rerr))
 	}
 	return werr
+}
+
+// DoneTagHidesKanban reports whether tasks with the done tag are hidden from the Kanban board.
+func (c *Config) DoneTagHidesKanban() bool {
+	return c.DoneTagHides == "both" || c.DoneTagHides == "kanban"
+}
+
+// DoneTagHidesTasks reports whether tasks with the done tag are hidden from the Tasks panel.
+func (c *Config) DoneTagHidesTasks() bool {
+	return c.DoneTagHides == "both" || c.DoneTagHides == "tasks"
 }
