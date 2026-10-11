@@ -1,0 +1,39 @@
+version: "2"
+linters:
+  default: standard
+  settings:
+    errcheck:
+      # Best-effort output and cleanup; see docs/adr/0002-golangci-lint-baseline.md.
+      exclude-functions:
+        - fmt.Fprint
+        - fmt.Fprintf
+        - fmt.Fprintln
+        - fmt.Sscanf
+        - os.Remove
+        - (*os.File).Close
+        - (*github.com/MathiasDrizzy/lazymark/internal/storage.Storage).walkVault
+    staticcheck:
+      checks:
+        - all
+        # Style-only suggestions that would rewrite working code; see docs/adr/0002-golangci-lint-baseline.md.
+        - -QF1001
+        - -QF1008
+        - -ST1018
+        # Package comments and naming style are not enforced in this repo.
+        - -ST1000
+        - -ST1003
+        - -ST1005
+        - -ST1016
+        - -ST1020
+        - -ST1021
+        - -ST1022
+  exclusions:
+    rules:
+      # Best-effort calls in tests and in user-facing output; see the ADR.
+      - path: _test\.go
+        linters: [errcheck]
+      - path: internal/storage/dates\.go
+        linters: [ineffassign]
+formatters:
+  enable:
+    - gofmt
