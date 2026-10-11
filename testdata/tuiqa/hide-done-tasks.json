@@ -1,0 +1,147 @@
+{
+  "name": "lazymark-hide-done-tasks",
+  "criterio": "order 2026-10-11-13",
+  "cmd": [
+    "${LAZYMARK_BIN}"
+  ],
+  "cols": 120,
+  "rows": 35,
+  "fixtures": "fixtures/hide",
+  "fixtures_mtime": "2026-09-01T12:00:00Z",
+  "env": {
+    "LANG": "en_US.UTF-8",
+    "EDITOR": "true"
+  },
+  "steps": [
+    {
+      "desc": "starts and lists the note",
+      "wait": {
+        "regex": "board\\.md",
+        "timeout_ms": 8000
+      }
+    },
+    {
+      "desc": "2 focuses the Tasks panel",
+      "keys": [
+        "2"
+      ]
+    },
+    {
+      "assert": {
+        "contains": "gamma-done",
+        "region": {
+          "box_with": "\\[2\\]\u2500Tasks"
+        }
+      },
+      "desc": "finished tasks are listed by default"
+    },
+    {
+      "desc": "H hides the finished tasks and the panel counts them",
+      "keys": [
+        "H"
+      ]
+    },
+    {
+      "wait": {
+        "regex": "3 hidden",
+        "timeout_ms": 3000,
+        "region": {
+          "box_with": "\\[2\\]\u2500Tasks"
+        }
+      }
+    },
+    {
+      "assert": {
+        "not_contains": "gamma-done",
+        "region": {
+          "box_with": "\\[2\\]\u2500Tasks"
+        }
+      }
+    },
+    {
+      "assert": {
+        "contains": "alpha-open",
+        "region": {
+          "box_with": "\\[2\\]\u2500Tasks"
+        }
+      }
+    },
+    {
+      "snapshot": {
+        "name": "tasks-hidden"
+      }
+    },
+    {
+      "desc": "H shows them again",
+      "keys": [
+        "H"
+      ]
+    },
+    {
+      "wait": {
+        "regex": "hidden",
+        "timeout_ms": 3000,
+        "absent": true,
+        "region": {
+          "box_with": "\\[2\\]\u2500Tasks"
+        }
+      }
+    },
+    {
+      "assert": {
+        "contains": "gamma-done",
+        "region": {
+          "box_with": "\\[2\\]\u2500Tasks"
+        }
+      }
+    },
+    {
+      "desc": "a tags the task under the cursor and it hides",
+      "keys": [
+        "a"
+      ]
+    },
+    {
+      "wait": {
+        "regex": "1 hidden",
+        "timeout_ms": 3000,
+        "region": {
+          "box_with": "\\[2\\]\u2500Tasks"
+        }
+      }
+    },
+    {
+      "assert": {
+        "not_contains": "alpha-open",
+        "region": {
+          "box_with": "\\[2\\]\u2500Tasks"
+        }
+      }
+    },
+    {
+      "desc": "A reveals it",
+      "keys": [
+        "A"
+      ]
+    },
+    {
+      "wait": {
+        "regex": "alpha-open",
+        "timeout_ms": 3000,
+        "region": {
+          "box_with": "\\[2\\]\u2500Tasks"
+        }
+      }
+    },
+    {
+      "keys": [
+        "q"
+      ]
+    },
+    {
+      "wait_exit": {
+        "timeout_ms": 3000
+      }
+    }
+  ]
+}

@@ -1,0 +1,165 @@
+{
+  "name": "lazymark-hide-done-kanban",
+  "criterio": "order 2026-10-11-13",
+  "cmd": [
+    "${LAZYMARK_BIN}"
+  ],
+  "cols": 120,
+  "rows": 35,
+  "fixtures": "fixtures/hide",
+  "fixtures_mtime": "2026-09-01T12:00:00Z",
+  "env": {
+    "LANG": "en_US.UTF-8",
+    "EDITOR": "true"
+  },
+  "steps": [
+    {
+      "desc": "starts and lists the note",
+      "wait": {
+        "regex": "board\\.md",
+        "timeout_ms": 8000
+      }
+    },
+    {
+      "desc": "W opens the board",
+      "keys": [
+        "W"
+      ]
+    },
+    {
+      "wait": {
+        "regex": "Kanban board",
+        "timeout_ms": 3000
+      }
+    },
+    {
+      "assert": {
+        "contains": "gamma-done"
+      },
+      "desc": "by default finished cards are visible (nothing changes for upgraders)"
+    },
+    {
+      "assert": {
+        "not_contains": "hidden"
+      },
+      "desc": "and nothing is counted as hidden"
+    },
+    {
+      "desc": "o hides the finished cards",
+      "keys": [
+        "o"
+      ]
+    },
+    {
+      "wait": {
+        "regex": "3 hidden",
+        "timeout_ms": 3000
+      }
+    },
+    {
+      "assert": {
+        "not_contains": "gamma-done"
+      }
+    },
+    {
+      "assert": {
+        "not_contains": "epsilon-done"
+      }
+    },
+    {
+      "assert": {
+        "contains": "alpha-open"
+      }
+    },
+    {
+      "assert": {
+        "contains": "beta-doing"
+      }
+    },
+    {
+      "snapshot": {
+        "name": "kanban-hidden"
+      }
+    },
+    {
+      "desc": "o shows them again",
+      "keys": [
+        "o"
+      ]
+    },
+    {
+      "wait": {
+        "regex": "hidden",
+        "timeout_ms": 3000,
+        "absent": true
+      }
+    },
+    {
+      "assert": {
+        "contains": "gamma-done"
+      }
+    },
+    {
+      "desc": "a tags the selected card with #lm-done and it hides by itself",
+      "keys": [
+        "a"
+      ]
+    },
+    {
+      "wait": {
+        "regex": "1 hidden",
+        "timeout_ms": 3000
+      }
+    },
+    {
+      "assert": {
+        "not_contains": "alpha-open"
+      }
+    },
+    {
+      "desc": "A reveals what the tag hides",
+      "keys": [
+        "A"
+      ]
+    },
+    {
+      "wait": {
+        "regex": "1 hidden",
+        "timeout_ms": 3000,
+        "absent": true
+      }
+    },
+    {
+      "assert": {
+        "contains": "alpha-open"
+      }
+    },
+    {
+      "desc": "a on the tagged card removes the tag",
+      "keys": [
+        "a"
+      ]
+    },
+    {
+      "wait": {
+        "regex": "Removed #lm-done",
+        "timeout_ms": 3000
+      }
+    },
+    {
+      "assert": {
+        "contains": "alpha-open"
+      }
+    },
+    {
+      "keys": [
+        "q"
+      ]
+    },
+    {
+      "wait_exit": {
+        "timeout_ms": 3000
+      }
+    }
+  ]
+}
