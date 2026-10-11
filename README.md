@@ -169,7 +169,7 @@ What is **not** compatible, so you are not surprised:
 
 ## Install
 
-Install a [Nerd Font](https://www.nerdfonts.com/) in your terminal for the folder and note icons. Building needs Go 1.27.1 or newer.
+Install a [Nerd Font](https://www.nerdfonts.com/) in your terminal for the folder and note icons. Building needs Go 1.27.2 or newer.
 
 **With Go**
 

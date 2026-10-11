@@ -26,6 +26,11 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - Without a Kitty-compatible terminal, clicking the mascot no longer scales and queues animation images
   that would be discarded.
 
+### Security
+- Built with Go 1.27.2, which fixes 13 advisories in the Go 1.27.1 standard library reported by `govulncheck`
+  (none of them reachable from lazymark's code). The Docker build image was moved to the matching Go 1.27.2
+  digest.
+
 ## [1.1.0] - 2026-10-10
 
 ### Added
