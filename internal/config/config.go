@@ -988,18 +988,36 @@ func backupConfig(path string) (string, error) {
 			}
 			return "", err
 		}
-		_, werr := f.Write(data)
-		if serr := f.Sync(); werr == nil {
-			werr = serr
-		}
-		if cerr := f.Close(); werr == nil {
-			werr = cerr
-		}
-		if werr != nil {
-			os.Remove(dest)
-			return "", werr
+		if err := writeBackup(f, dest, data); err != nil {
+			return "", err
 		}
 		return dest, nil
 	}
 	return "", ErrNoBackupName
+}
+
+// backupFile is the part of *os.File that writeBackup uses.
+type backupFile interface {
+	Write([]byte) (int, error)
+	Sync() error
+	Close() error
+}
+
+// writeBackup writes, syncs and closes the copy at dest. If any of that fails it removes the partial copy; if the removal
+// fails too, the error says which file stays behind, because a later backup would skip that name.
+func writeBackup(f backupFile, dest string, data []byte) error {
+	_, werr := f.Write(data)
+	if serr := f.Sync(); werr == nil {
+		werr = serr
+	}
+	if cerr := f.Close(); werr == nil {
+		werr = cerr
+	}
+	if werr == nil {
+		return nil
+	}
+	if rerr := os.Remove(dest); rerr != nil && !errors.Is(rerr, fs.ErrNotExist) {
+		return errors.Join(werr, fmt.Errorf("could not remove the partial copy %s: %w", dest, rerr))
+	}
+	return werr
 }
