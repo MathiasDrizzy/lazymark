@@ -7,6 +7,11 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Changed
+- Release notes are now the matching section of this changelog (`scripts/release-notes.sh`, see ADR 0005) instead
+  of a list of commit subjects; a release fails if its version has no section here. The notes of v1.1.0 and v1.2.0
+  were corrected.
+
 ## [1.2.0] - 2026-10-11
 
 ### Added
