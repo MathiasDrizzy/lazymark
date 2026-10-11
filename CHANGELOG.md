@@ -14,10 +14,15 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - `govulncheck` runs in CI and in the local verification script.
 
 ### Changed
+- Dependencies: `chroma` 2.20.0 → 2.27.0, and the GitHub Actions `checkout` 4 → 7, `setup-go` 5 → 7 and
+  `goreleaser-action` 6 → 7, pinned to the commit of each official release.
 - README GIFs were re-recorded in an isolated home directory with the mascot turned off, so they no longer
   show a block-character smudge where the mascot would be.
 
 ### Fixed
+- A missing or unreadable notes folder is reported as an error instead of looking like an empty one.
+- If a half-written `config.json.bak` cannot be removed after a failed backup, the error now names the file
+  that stays behind.
 - Without a Kitty-compatible terminal, clicking the mascot no longer scales and queues animation images
   that would be discarded.
 
