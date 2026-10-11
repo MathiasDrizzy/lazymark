@@ -23,12 +23,25 @@ type FlatTask struct {
 
 // CollectTasks extrae todas las tareas de todas las notas y las aplana en una lista única
 func CollectTasks(notes []storage.Note, filter TaskFilter) []FlatTask {
+	tasks, _ := CollectTasksHiding(notes, filter, nil)
+	return tasks
+}
+
+// CollectTasksHiding is CollectTasks without the tasks hide reports true for. It also returns how many tasks were left out because
+// they were hidden or because the Pending filter dropped them as finished. A nil hide hides nothing.
+func CollectTasksHiding(notes []storage.Note, filter TaskFilter, hide func(storage.Task) bool) ([]FlatTask, int) {
 	var tasks []FlatTask
+	hidden := 0
 	for _, note := range notes {
 		for _, task := range note.Tasks {
+			if hide != nil && hide(task) {
+				hidden++
+				continue
+			}
 			switch filter {
 			case TaskFilterPending:
 				if task.Done {
+					hidden++
 					continue
 				}
 			case TaskFilterDone:
@@ -42,7 +55,7 @@ func CollectTasks(notes []storage.Note, filter TaskFilter) []FlatTask {
 			})
 		}
 	}
-	return tasks
+	return tasks, hidden
 }
 
 // TaskFilterLabel devuelve la etiqueta del filtro actual

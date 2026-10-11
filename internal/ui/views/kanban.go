@@ -27,6 +27,8 @@ type KanbanBoard struct {
 	IDs    []string
 	Titles []string
 	Cols   [][]KanbanCard
+	// Hidden counts the cards left out of Cols by the hide predicate of CollectKanbanHiding.
+	Hidden int
 }
 
 // NumCols es la cantidad de columnas.
@@ -51,12 +53,21 @@ func (b *KanbanBoard) TotalCards() int {
 
 // CollectKanban extrae las tareas de todas las notas y las reparte en las columnas cols (con sus títulos).
 func CollectKanban(notes []storage.Note, cols storage.Columns, titles []string) KanbanBoard {
+	return CollectKanbanHiding(notes, cols, titles, nil)
+}
+
+// CollectKanbanHiding is CollectKanban without the tasks hide reports true for; they are counted in Hidden. A nil hide hides nothing.
+func CollectKanbanHiding(notes []storage.Note, cols storage.Columns, titles []string, hide func(storage.Task) bool) KanbanBoard {
 	board := KanbanBoard{IDs: append([]string(nil), cols...), Titles: titles, Cols: make([][]KanbanCard, len(cols))}
 	for len(board.Titles) < len(cols) {
 		board.Titles = append(board.Titles, cols[len(board.Titles)])
 	}
 	for _, note := range notes {
 		for _, task := range note.Tasks {
+			if hide != nil && hide(task) {
+				board.Hidden++
+				continue
+			}
 			col := cols.Of(task)
 			board.Cols[col] = append(board.Cols[col], KanbanCard{
 				Task:      task,

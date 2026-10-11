@@ -127,7 +127,7 @@ func (m *AppModel) renderFolderPreview(e *storage.NoteEntry, r Rect, active bool
 }
 
 // renderKanbanBar dibuja la fila de arriba del Kanban: el botón "← Notas (Esc)"
-// que vuelve a la vista de notas, clicable.
+// que vuelve a la vista de notas, y a la derecha el contador de ocultas y los botones de ocultar hechas y de marcar; todos clicables.
 func (m *AppModel) renderKanbanBar() string {
 	r := m.layout.KanbanBar
 	label := " ← " + i18n.T("Notas", "Notes") + " (" + buttonKey(m.c.keys.Key(actKanban, ctxKanban)) + ") "
@@ -137,8 +137,44 @@ func (m *AppModel) renderKanbanBar() string {
 	// la franja lleva fondo en todo el ancho: así el compositor no recorta los espacios finales
 	bar := lipgloss.NewStyle().Background(theme.ColorMantle)
 	title := bar.Foreground(theme.ColorOverlay0).Render("  " + i18n.T("Tablero Kanban", "Kanban board"))
-	pad := bar.Render(strings.Repeat(" ", max(0, r.W-w-textwidth.Width("  "+i18n.T("Tablero Kanban", "Kanban board")))))
-	return textwidth.Fit(btn+title+pad, r.W)
+	left := btn + title
+	used := w + textwidth.Width("  "+i18n.T("Tablero Kanban", "Kanban board"))
+
+	// derecha: "3 ocultas", "Ocultar hechas (o)" y "Marcar (a)"; lo que no cabe se omite, de izquierda a derecha
+	hideLabel := i18n.T("Ocultar hechas", "Hide done")
+	if m.c.cfg.HideCompletedKanban {
+		hideLabel = i18n.T("Mostrar hechas", "Show done")
+	}
+	type barBtn struct {
+		text string
+		act  Action
+	}
+	var right []barBtn
+	if n := m.c.board.Hidden; n > 0 {
+		right = append(right, barBtn{fmt.Sprintf(i18n.T("%d ocultas", "%d hidden"), n), actNone})
+	}
+	right = append(right,
+		barBtn{" " + hideLabel + " (" + buttonKey(m.c.keys.Key(actHideDone, ctxKanban)) + ") ", actHideDone},
+		barBtn{" " + i18n.T("Marcar", "Tag done") + " (" + buttonKey(m.c.keys.Key(actTagDone, ctxKanban)) + ") ", actTagDone})
+	btnStyle := lipgloss.NewStyle().Foreground(theme.ColorBase).Background(theme.ColorSurface1)
+	x := r.X + r.W
+	var tail string
+	for i := len(right) - 1; i >= 0; i-- {
+		b := right[i]
+		bw := textwidth.Width(b.text) + 1 // y un espacio de separación
+		if x-bw < r.X+used+1 {
+			break
+		}
+		x -= bw
+		if b.act == actNone {
+			tail = bar.Foreground(theme.ColorYellow).Render(b.text) + bar.Render(" ") + tail
+			continue
+		}
+		m.ht.Register("kanban-"+strconv.Itoa(int(b.act)), mouse.ZoneAction, x, r.Y, x+bw-2, r.Y, int(b.act), "")
+		tail = btnStyle.Render(b.text) + bar.Render(" ") + tail
+	}
+	pad := bar.Render(strings.Repeat(" ", max(0, r.W-used-textwidth.Width(tail))))
+	return textwidth.Fit(left+pad+tail, r.W)
 }
 
 // hint es un atajo de la barra inferior: un botón clicable con su acción. long es

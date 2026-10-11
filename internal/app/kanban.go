@@ -94,6 +94,20 @@ func (k *kanbanSheet) key(a Action) tea.Cmd {
 			}
 			return k.setColumn(card, target)
 		}
+	case actHideDone:
+		k.c.cfg.HideCompletedKanban = !k.c.cfg.HideCompletedKanban
+		k.c.save()
+		k.refresh()
+		if k.c.cfg.HideCompletedKanban {
+			k.c.setStatus("%s", i18n.T("Tablero: hechas ocultas", "Board: finished cards hidden"))
+		} else {
+			k.c.setStatus("%s", i18n.T("Tablero: hechas visibles", "Board: finished cards shown"))
+		}
+	case actTagDone:
+		return k.tagDone()
+	case actRevealHidden:
+		k.c.revealHidden = !k.c.revealHidden
+		k.refresh()
 	case actDates:
 		if card := k.current(); card != nil {
 			k.openDates(card)
@@ -104,6 +118,40 @@ func (k *kanbanSheet) key(a Action) tea.Cmd {
 		}
 	}
 	return nil
+}
+
+// refresh rebuilds the board after a change in what is hidden and keeps the cursors inside it.
+func (k *kanbanSheet) refresh() {
+	k.c.reload()
+	k.clampSelection()
+}
+
+// tagDone adds the done tag to the selected card's task line, or removes it if it is there. It is the only thing that writes to the note.
+func (k *kanbanSheet) tagDone() tea.Cmd {
+	card := k.current()
+	if card == nil {
+		return nil
+	}
+	added, err := k.c.store.ToggleTaskTag(card.NotePath, card.Task.Line, k.c.cfg.DoneTag, k.noteTime(card.NotePath))
+	switch {
+	case errors.Is(err, storage.ErrNoteChanged):
+		k.refresh()
+		k.c.setStatus("%s", i18n.T("Cambió por fuera: recargada", "Changed outside: reloaded"))
+	case err != nil:
+		k.c.errStatus("No se pudo marcar la tarjeta", "Could not tag the card", err)
+	default:
+		k.refresh()
+		k.c.setStatus("%s", tagStatus(added, k.c.cfg.DoneTag))
+	}
+	return nil
+}
+
+// tagStatus is the status line after adding or removing the done tag.
+func tagStatus(added bool, tag string) string {
+	if added {
+		return fmt.Sprintf(i18n.T("Marcada con #%s", "Tagged #%s"), tag)
+	}
+	return fmt.Sprintf(i18n.T("Sin #%s", "Removed #%s"), tag)
 }
 
 // openDates abre el popup de fechas de la tarjeta; al guardar el cursor sigue a la tarjeta (la nota pasa a ser la más reciente y se reordena).

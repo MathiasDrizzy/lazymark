@@ -74,6 +74,8 @@ Panel `[2]`: the checkboxes found in your notes. The preview follows the selecte
 | `H` | Hide done |
 | `d` | Dates |
 | `f` | Filter tasks |
+| `a` | Tag as done |
+| `A` | Reveal hidden |
 
 ## Categories panel
 
@@ -107,6 +109,9 @@ Opened with `W`. Cards are the tasks of your notes.
 | `J` `shift+down` | Move down |
 | `Space` | Toggle task |
 | `d` | Dates |
+| `o` | Hide done |
+| `a` | Tag as done |
+| `A` | Reveal hidden |
 | `Enter` `e` | Edit |
 | `Esc` `W` | Back to notes |
 

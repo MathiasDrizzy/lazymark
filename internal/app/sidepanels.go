@@ -61,6 +61,11 @@ func (p *tasksPanel) key(a Action, reload func()) tea.Cmd {
 		p.c.collectTasks()
 		p.list.set(0, len(p.c.tasks))
 		p.c.setStatus("%s: %s", i18n.T("Tareas", "Tasks"), views.TaskFilterLabel(p.c.taskFilter))
+	case actTagDone:
+		return p.tagDone(reload)
+	case actRevealHidden:
+		p.c.revealHidden = !p.c.revealHidden
+		reload()
 	case actTaskFilter:
 		p.c.taskFilter = (p.c.taskFilter + 1) % 3
 		p.c.collectTasks()
@@ -123,6 +128,30 @@ func (p *tasksPanel) toggle(reload func()) tea.Cmd {
 	return nil
 }
 
+// tagDone adds the done tag to the task under the cursor, or removes it if it is there. It rewrites only that line.
+func (p *tasksPanel) tagDone(reload func()) tea.Cmd {
+	t := p.current()
+	if t == nil {
+		return nil
+	}
+	path, line := t.NotePath, t.Line
+	added, err := p.c.store.ToggleTaskTag(path, line, p.c.cfg.DoneTag, p.noteMod(path))
+	switch {
+	case errors.Is(err, storage.ErrNoteChanged):
+		reload()
+		p.selectTask(path, line)
+		p.c.setStatus("%s", i18n.T("La nota cambió por fuera: se recargó, vuelve a intentarlo", "The note changed outside: reloaded, try again"))
+	case err != nil:
+		p.c.errStatus("No se pudo marcar la tarea", "Could not tag the task", err)
+	default:
+		reload()
+		p.selectTask(path, line)
+		p.list.set(p.list.cursor, len(p.c.tasks))
+		p.c.setStatus("%s", tagStatus(added, p.c.cfg.DoneTag))
+	}
+	return nil
+}
+
 // Posición de la casilla dentro de la fila (columna relativa al borde del
 // panel): borde(0) + margen(1) + casilla(2). La zona de clic abarca margen,
 // casilla y el espacio que la sigue.
@@ -170,6 +199,9 @@ func (p *tasksPanel) view(r Rect, active bool) string {
 	title := i18n.T("[2]─Tareas", "[2]─Tasks")
 	if p.c.taskFilter != views.TaskFilterAll {
 		title += " · " + views.TaskFilterLabel(p.c.taskFilter)
+	}
+	if p.c.hiddenTasks > 0 {
+		title += " · " + fmt.Sprintf(i18n.T("%d ocultas", "%d hidden"), p.c.hiddenTasks)
 	}
 	return theme.RenderPanel(title, counter(p.list.cursor, len(p.c.tasks)), lines, r.W, r.H, active)
 }

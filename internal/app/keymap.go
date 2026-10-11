@@ -61,6 +61,8 @@ const (
 	actRestore
 	actEmptyTrash
 	actConfirm
+	actTagDone
+	actRevealHidden
 )
 
 // Context agrupa los atajos que valen en una zona de la interfaz.
@@ -173,6 +175,8 @@ func defaultBindings() []Binding {
 		{actHideDone, ctxTasks, []string{"H"}, "Ocultar hechas", "Hide done", true},
 		{actDates, ctxTasks, []string{"d"}, "Fechas", "Dates", true},
 		{actTaskFilter, ctxTasks, []string{"f"}, "Filtrar tareas", "Filter tasks", false},
+		{actTagDone, ctxTasks, []string{"a"}, "Marcar como archivada", "Tag as done", false},
+		{actRevealHidden, ctxTasks, []string{"A"}, "Mostrar ocultas", "Reveal hidden", false},
 
 		{actEnter, ctxTags, []string{"enter"}, "Filtrar notas", "Filter notes", true},
 
@@ -188,6 +192,9 @@ func defaultBindings() []Binding {
 		{actMoveCardDown, ctxKanban, []string{"J", "shift+down"}, "Bajar en la columna", "Move down", true},
 		{actToggleTask, ctxKanban, []string{"space"}, "Alternar tarea", "Toggle task", true},
 		{actDates, ctxKanban, []string{"d"}, "Fechas", "Dates", true},
+		{actHideDone, ctxKanban, []string{"o"}, "Ocultar hechas", "Hide done", false},
+		{actTagDone, ctxKanban, []string{"a"}, "Marcar como archivada", "Tag as done", false},
+		{actRevealHidden, ctxKanban, []string{"A"}, "Mostrar ocultas", "Reveal hidden", false},
 		{actEdit, ctxKanban, []string{"enter", "e"}, "Editar", "Edit", true},
 		{actKanban, ctxKanban, []string{"esc", "W"}, "Volver a notas", "Back to notes", false},
 

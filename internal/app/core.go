@@ -34,15 +34,19 @@ type core struct {
 	clip  *clipboard.Saver
 	keys  Keymap
 
-	notes       []storage.Note
-	links       *links.Index // para resolver wikilinks y calcular backlinks (se rehace en cada reload)
-	gen         int          // cambia en cada reload: invalida lo que dependa del conjunto de notas
-	tags        []views.TagInfo
-	tasks       []views.FlatTask
-	taskFilter  views.TaskFilter
-	board       views.KanbanBoard
-	trashCount  int
-	trashWarned int // cuántas entradas inválidas de la papelera ya se avisaron
+	notes      []storage.Note
+	links      *links.Index // para resolver wikilinks y calcular backlinks (se rehace en cada reload)
+	gen        int          // cambia en cada reload: invalida lo que dependa del conjunto de notas
+	tags       []views.TagInfo
+	tasks      []views.FlatTask
+	taskFilter views.TaskFilter
+	board      views.KanbanBoard
+	// hiddenTasks counts the tasks the Tasks panel leaves out (finished ones under the Pending filter, or tagged with the done tag).
+	hiddenTasks int
+	// revealHidden shows what the done tag hides, until it is pressed again or the app closes; it never touches the config.
+	revealHidden bool
+	trashCount   int
+	trashWarned  int // cuántas entradas inválidas de la papelera ya se avisaron
 
 	status string
 	popups []popup
@@ -64,7 +68,7 @@ func (c *core) reload() {
 	c.gen++
 	c.tags = views.CollectTags(c.notes)
 	c.collectTasks()
-	c.board = views.CollectKanban(c.notes, c.cols(), c.columnTitles())
+	c.board = views.CollectKanbanHiding(c.notes, c.cols(), c.columnTitles(), c.hidesCard)
 	c.trashCount = c.store.CountTrash()
 	if issues := c.store.TrashIssues(); len(issues) > 0 && len(issues) != c.trashWarned {
 		c.trashWarned = len(issues) // se avisa una vez por cambio, no en cada recarga
@@ -272,8 +276,22 @@ func (c *core) columnTitles() []string {
 
 // collectTasks arma la lista del panel Tareas (con el alcance y el filtro de ahora) en el orden de tasks_sort: el de las notas (por defecto) o por vencimiento.
 func (c *core) collectTasks() {
-	c.tasks = views.CollectTasks(c.scopedNotes(), c.taskFilter)
+	c.tasks, c.hiddenTasks = views.CollectTasksHiding(c.scopedNotes(), c.taskFilter, c.hidesTask)
 	if c.cfg.TasksSort == "due" {
 		views.SortTasksByDue(c.tasks)
 	}
+}
+
+// hidesCard reports whether the Kanban board leaves the task out: it is finished and hide_completed_kanban is on, or it carries the
+// done tag where done_tag_hides says so. Hiding only changes the view; revealHidden turns it off for the session.
+func (c *core) hidesCard(t storage.Task) bool {
+	if c.revealHidden {
+		return false
+	}
+	return (c.cfg.HideCompletedKanban && t.Done) || (c.cfg.DoneTagHidesKanban() && storage.HasTag(t.Text, c.cfg.DoneTag))
+}
+
+// hidesTask is hidesCard for the Tasks panel (finished tasks are the Pending filter's job there).
+func (c *core) hidesTask(t storage.Task) bool {
+	return !c.revealHidden && c.cfg.DoneTagHidesTasks() && storage.HasTag(t.Text, c.cfg.DoneTag)
 }
