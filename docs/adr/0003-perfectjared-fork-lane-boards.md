@@ -60,3 +60,24 @@ the commit that does it must credit the author (`Co-authored-by: perfectjared`) 
 * Bad: people who keep Obsidian Kanban plugin boards cannot open them as boards in lazymark yet.
 * To revisit: lane boards as an optional board source, decided by the maintainer as a product feature.
   The cheapest first step would be read-only (`get_board`) before any editing in place.
+
+## Appendix: how the fork's lane boards work
+
+Read on 2026-10-11 from commit `4885cf5` of the fork, kept here so a future decision does not need to start over.
+
+* **Model.** One note is the whole board. Each `## Title` heading is a lane (at most 32), and each `- [ ]`, `- [x]` or
+  `- [X]` line at the margin under it is a card. The card's block is its line plus the indented lines right below it,
+  up to the first blank line. Front matter (`---` … `---`) and `%%` blocks (such as `%% kanban:settings %%`) are skipped.
+  The rules are shared on purpose with `wb`, another tool of the fork's author.
+* **Moving.** `storage.MoveCardToLane` moves the card's lines to the end of the target lane and leaves the checkbox and
+  the text alone. It uses the same atomic, mtime-checked rewrite as lazymark (`ErrNoteChanged`).
+* **Interface.** `lazymark --board <note>` opens that note as the board (without `--dir`, its folder becomes the notes
+  folder). `H`/`L`, `Shift+←/→` and dragging move a card between lanes, `K`/`J` reorder inside a lane, and `Space` ticks
+  a card in place without moving it. A lane called `Done` is drawn as the done column. MCP gets `get_board(board)` and
+  `move_card(id, lane)`.
+* **Difference with lazymark.** Here the column is a `#kb/<id>` tag and the board gathers the tasks of every note;
+  ticking a task moves it to the Done column. In the fork the column is the position under a heading, the board is one
+  note, and ticking never moves a card.
+* **Cost of adopting it.** The code branches on `board.Lanes != nil` in `core.go`, `kanban.go` and `views/kanban.go`,
+  and its comments and strings are in Spanish, so it would have to be rewritten in English first.
+* **Not reviewed.** `internal/ops/ops.go` and the edge cases beyond what the fork's own tests cover.
