@@ -14,6 +14,7 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - `govulncheck` runs in CI and in the local verification script.
 
 ### Changed
+- CI builds the `Dockerfile` (without publishing it) on every push, so the image is checked on GitHub's runners.
 - Dependencies: `chroma` 2.20.0 → 2.27.0, and the GitHub Actions `checkout` 4 → 7, `setup-go` 5 → 7 and
   `goreleaser-action` 6 → 7, pinned to the commit of each official release.
 - README GIFs were re-recorded in an isolated home directory with the mascot turned off, so they no longer
@@ -30,6 +31,8 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - Built with Go 1.27.2, which fixes 13 advisories in the Go 1.27.1 standard library reported by `govulncheck`
   (none of them reachable from lazymark's code). The Docker build image was moved to the matching Go 1.27.2
   digest.
+- `golang.org/x/net` v0.59.0 → v0.61.0 (and `x/sync`, `x/sys`, `x/text` with it), which clears five advisories
+  that `govulncheck` listed for it (none reachable from lazymark's code). `govulncheck` now reports nothing.
 
 ## [1.1.0] - 2026-10-10
 
