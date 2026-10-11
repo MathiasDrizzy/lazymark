@@ -3,9 +3,9 @@
 #   docker build -t lazymark-mcp .
 #   docker run -i --rm lazymark-mcp            # speaks MCP over stdin/stdout, on the sample notes below
 #   docker run -i --rm -v "$PWD/notes:/notes" lazymark-mcp   # on your own notes
-# Base images are pinned by digest (the multi-arch index of the tag shown, checked 2026-10-06) so a build is reproducible and a moved tag cannot change what we ship; refresh the digests
+# Base images are pinned by digest (the multi-arch index of the tag shown, checked 2026-10-11) so a build is reproducible and a moved tag cannot change what we ship; refresh the digests
 # (and rebuild) to pick up base-image security updates.
-FROM golang:1.27-alpine@sha256:8a5910f31396cd4d89662f56c68b3ae31d374308270a1c3bd96672ee5ed43414 AS build
+FROM golang:1.27-alpine@sha256:f92b6ef800e499660581efdabdf25d9d817a9d124eaf900924f0504e7e27e12d AS build
 WORKDIR /src
 COPY go.mod go.sum ./
 RUN go mod download
