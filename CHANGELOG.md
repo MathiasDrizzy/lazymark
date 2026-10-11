@@ -8,6 +8,11 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
 ### Added
+- Kanban: `o` (and a `Hide done (o)` button in the top bar) hides the finished cards, and the bar counts what is
+  hidden. New option `hide_completed_kanban` (default `false`: nothing changes for existing users).
+- A done tag (`done_tag`, default `lm-done`): `a` in the Kanban board and in the Tasks panel adds it to the task's
+  line, a task that carries it is hidden, `A` shows it again. Where it hides is `done_tag_hides` (`both`, `kanban`,
+  `tasks`, `none`). The Tasks panel title shows how many tasks are hidden. See ADR 0004.
 - Sponsor button: `.github/FUNDING.yml`.
 - Repository standards: `SECURITY.md`, this changelog, `.editorconfig`, Dependabot for GitHub Actions, Go
   modules and Docker, a `golangci-lint` v2 configuration and architecture decision records in `docs/adr/`.

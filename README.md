@@ -42,7 +42,7 @@ Put notes in a `templates/` folder and start new ones from them with `C`; `{{dat
 
 ### Tasks
 
-Every `- [ ]` and `- [x]` in your notes, in one list. `Space` ticks a task and rewrites only its line; `H` hides the finished ones. The preview shows the note at the task's line.
+Every `- [ ]` and `- [x]` in your notes, in one list. `Space` ticks a task and rewrites only its line; `H` hides the finished ones, `a` tags the task under the cursor with the done tag (`#lm-done`, see below) so it hides by itself, and `A` shows what the tag hides. The panel title says how many are hidden ("3 hidden"). The preview shows the note at the task's line.
 
 <img src="assets/readme/feature-tasks.gif" alt="Ticking tasks in the Tasks panel and hiding the finished ones" width="100%">
 
@@ -71,6 +71,8 @@ notes that have it. See [docs/tags.md](docs/tags.md) for the parsing rules.
 Each task is a card with a rounded border: its text (up to 2 lines), its note and its dates (set them with `d`, see Dates). Settings has "Cards: rectangles | compact" for the one-row view.
 
 The same tasks as columns: To Do, In Progress and Done by default. Move a card with `H` and `L` or `Shift+←` and `Shift+→`, or drag it with the mouse to another column: the card and the target column are highlighted while you drag, `Esc` cancels. Inside a column, `K` and `J` (or `Shift+↑` and `Shift+↓`) move a card up and down, and dragging it over another card of the same column does the same: it swaps the two tasks (each with its subtasks) in the note, so it works between sibling tasks of the same note; across different notes the cards always follow the order of the notes. The change is written back to the note, on that line only, and never over a note that changed outside lazymark (it reloads and tells you). `Kanban (W)` opens the board, `Notes (W)` and `← Notes (Esc)` go back, and the bottom bar lists what the selected card can do.
+
+**Keeping a long board readable.** `o` (or the `Hide done (o)` button in the top bar) hides the finished cards and shows them again; the bar counts them ("3 hidden") so nothing looks lost. `a` (or `Tag done (a)`) adds the done tag, `#lm-done` by default, to the end of the selected card's task line: a card that carries it is hidden automatically, in the board and in the Tasks panel, until you press `a` on it again after `A` reveals it. Hiding only changes what you see; the only thing ever written to a note is the tag you asked for. All of it is configurable: `hide_completed_kanban` (hide finished cards by default, `false`), `done_tag` (the tag name, `lm-done`) and `done_tag_hides` (where the tag hides: `both`, `kanban`, `tasks` or `none`), plus `hide_completed_tasks` for the Tasks panel. See [docs/configuration.md](docs/configuration.md). With the defaults nothing is hidden until you press a key.
 
 The column is a tag at the end of the task line, so it works in any editor: `- [ ] write report #kb/doing`. Set your own columns (2 to 6) in the config:
 
