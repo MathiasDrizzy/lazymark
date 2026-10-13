@@ -7,6 +7,11 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Fixed
+- Releases are published with the notes from this changelog: v1.2.1 went out with an empty body because
+  `.goreleaser.yaml` disabled GoReleaser's changelog step, which is the one that loads `--release-notes`. The setting
+  is removed and a test guards it. The notes of v1.2.1 were corrected.
+
 ## [1.2.1] - 2026-10-13
 
 ### Fixed
