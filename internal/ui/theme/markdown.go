@@ -33,15 +33,15 @@ func MarkdownStyle() ansi.StyleConfig {
 	s.H4.Color = hex(ColorTeal)
 	s.H5.Color = hex(ColorGreen)
 	s.H6.Color = hex(ColorSubtext0)
-	s.HorizontalRule.Color = hex(ColorOverlay0)
+	s.HorizontalRule.Color = hex(ColorMuted)
 	s.Link.Color = hex(ColorBlue)
 	s.LinkText.Color = hex(ColorTeal)
 	s.Image.Color = hex(ColorMauve)
-	s.ImageText.Color = hex(ColorOverlay0)
+	s.ImageText.Color = hex(ColorMuted)
 	s.Code.Color, s.Code.BackgroundColor = hex(ColorPeach), hex(ColorSurface0)
 	s.Strong.Color = hex(ColorText)
 	s.Emph.Color = hex(ColorText)
-	s.Strikethrough.Color = hex(ColorOverlay0)
+	s.Strikethrough.Color = hex(ColorMuted)
 	s.Task.Color = hex(ColorGreen)
 	s.Item.Color = hex(ColorPeach)
 	s.Enumeration.Color = hex(ColorPeach)
@@ -71,7 +71,7 @@ func registerChromaStyle() string {
 	chromastyles.Register(chroma.MustNewStyle(name, chroma.StyleEntries{
 		chroma.Text:                fg(ColorText),
 		chroma.Error:               fg(ColorBase) + " bg:" + fg(ColorRed),
-		chroma.Comment:             fg(ColorOverlay0),
+		chroma.Comment:             fg(ColorMuted),
 		chroma.CommentPreproc:      fg(ColorPeach),
 		chroma.Keyword:             fg(ColorBlue),
 		chroma.KeywordReserved:     fg(ColorMauve),
@@ -98,7 +98,7 @@ func registerChromaStyle() string {
 		chroma.GenericEmph:         "italic",
 		chroma.GenericInserted:     fg(ColorGreen),
 		chroma.GenericStrong:       "bold",
-		chroma.GenericSubheading:   fg(ColorOverlay0),
+		chroma.GenericSubheading:   fg(ColorMuted),
 		chroma.Background:          "bg:" + fg(ColorSurface0),
 	}))
 	return name

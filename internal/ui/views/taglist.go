@@ -86,7 +86,7 @@ func RenderTagPreview(notes []storage.Note, tag string, width, height int, activ
 
 		noteRow := fmt.Sprintf("    %s  %s",
 			theme.NormalItem.Render(title),
-			theme.NormalItem.Foreground(theme.ColorOverlay0).Render(timeStr),
+			theme.NormalItem.Foreground(theme.ColorMuted).Render(timeStr),
 		)
 		rows = append(rows, noteRow)
 

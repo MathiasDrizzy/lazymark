@@ -434,6 +434,7 @@ func ApplyPalette(p Palette) {
 	ColorRed = p.Red
 	ColorBlue = p.Blue
 	ColorYellow = p.Yellow
+	applyRoles(p)
 
 	// Reconstruir estilos
 	ActivePanelBorder = lipgloss.NewStyle().
@@ -453,12 +454,12 @@ func ApplyPalette(p Palette) {
 		Padding(0, 2)
 
 	TabInactive = lipgloss.NewStyle().
-		Foreground(ColorSubtext0).
+		Foreground(legible([]color.Color{p.Subtext0, p.Text}, p.Surface0)).
 		Background(ColorSurface0).
 		Padding(0, 2)
 
 	SelectedItem = lipgloss.NewStyle().
-		Foreground(ColorPeach).
+		Foreground(ColorAccent).
 		Bold(true)
 
 	SelectedLineActive = lipgloss.NewStyle().
@@ -467,7 +468,7 @@ func ApplyPalette(p Palette) {
 		Bold(true)
 
 	SelectedLineInactive = lipgloss.NewStyle().
-		Background(ColorSurface1).
+		Background(ColorSelection).
 		Foreground(ColorText)
 
 	NormalItem = lipgloss.NewStyle().
@@ -480,7 +481,7 @@ func ApplyPalette(p Palette) {
 		MarginRight(1)
 
 	TaskDone = lipgloss.NewStyle().
-		Foreground(ColorOverlay0).
+		Foreground(ColorMuted).
 		Strikethrough(true)
 
 	TaskPending = lipgloss.NewStyle().
@@ -488,11 +489,11 @@ func ApplyPalette(p Palette) {
 
 	FooterBar = lipgloss.NewStyle().
 		Background(ColorSurface0).
-		Foreground(ColorSubtext0).
+		Foreground(legible([]color.Color{p.Subtext0, p.Text}, p.Surface0)).
 		Padding(0, 1)
 
 	FooterKey = lipgloss.NewStyle().
-		Foreground(ColorMauve).
+		Foreground(legible([]color.Color{p.Mauve, p.Blue, p.Teal, p.Peach, p.Text}, p.Surface0)).
 		Bold(true)
 }
 

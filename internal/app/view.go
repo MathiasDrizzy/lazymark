@@ -136,7 +136,7 @@ func (m *AppModel) renderKanbanBar() string {
 	btn := theme.Button(theme.ColorBlue, theme.ColorTeal, theme.ColorMauve).Render(label)
 	// la franja lleva fondo en todo el ancho: así el compositor no recorta los espacios finales
 	bar := lipgloss.NewStyle().Background(theme.ColorMantle)
-	title := bar.Foreground(theme.ColorOverlay0).Render("  " + i18n.T("Tablero Kanban", "Kanban board"))
+	title := bar.Foreground(theme.ColorMuted).Render("  " + i18n.T("Tablero Kanban", "Kanban board"))
 	left := btn + title
 	used := w + textwidth.Width("  "+i18n.T("Tablero Kanban", "Kanban board"))
 
@@ -278,7 +278,7 @@ func (m *AppModel) footerHints() (panel, global []hint, pinned bool) {
 func (m *AppModel) renderFooter() string {
 	f := m.layout.Footer
 	keyStyle := lipgloss.NewStyle().Foreground(theme.ColorBlue)
-	sep := lipgloss.NewStyle().Foreground(theme.ColorOverlay0).Render(" | ")
+	sep := lipgloss.NewStyle().Foreground(theme.ColorMuted).Render(" | ")
 	const sepW, gap = 3, 2
 
 	trash := "\U000f0a7a " + strconv.Itoa(m.c.trashCount)
@@ -430,7 +430,7 @@ func (m *AppModel) renderFooter() string {
 		}
 		x += w
 	}
-	right := lipgloss.NewStyle().Foreground(theme.ColorGreen).Render(status)
+	right := lipgloss.NewStyle().Foreground(theme.ColorActive).Render(status)
 	return textwidth.Fit(textwidth.Pad(out, f.W-statusW)+right, f.W)
 }
 

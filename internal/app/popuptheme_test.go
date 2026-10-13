@@ -111,7 +111,7 @@ func TestPopupsFollowThemeAndBackground(t *testing.T) {
 							}
 							// 3) el fondo según el modo
 							bg := a.Style.Bg
-							isSel := bg != nil && rgb(bg) == rgb(pal.Surface1)
+							isSel := bg != nil && rgb(bg) == rgb(theme.ColorSelection) // Surface1, or Surface0 where the text does not read on it
 							sawSelection = sawSelection || isSel
 							switch mode {
 							case config.PopupBackgroundTerminal:

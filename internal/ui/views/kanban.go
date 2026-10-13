@@ -120,7 +120,7 @@ func RenderKanban(board KanbanBoard, activeCol int, selectedRows []int, width, h
 	colWidths[n-1] += width - (width/n)*n // absorbe el remanente de la división entera
 
 	usableHeight := max(height-2, 1)
-	emptyMsg := lipgloss.NewStyle().Foreground(theme.ColorOverlay0).Italic(true).Render(i18n.T("  (Sin tareas)", "  (No tasks)"))
+	emptyMsg := lipgloss.NewStyle().Foreground(theme.ColorMuted).Italic(true).Render(i18n.T("  (Sin tareas)", "  (No tasks)"))
 
 	// registrar primero las zonas de columna (menor prioridad), después las de tarjeta
 	if ht != nil {
@@ -172,7 +172,7 @@ func RenderKanban(board KanbanBoard, activeCol int, selectedRows []int, width, h
 				markColor := theme.ColorSubtext0
 				switch {
 				case c == doneCol:
-					mark, markColor = "☑", theme.ColorGreen
+					mark, markColor = "☑", theme.ColorActive
 				case c != 0:
 					mark, markColor = "◓", theme.ColorYellow
 				}
@@ -199,7 +199,7 @@ func RenderKanban(board KanbanBoard, activeCol int, selectedRows []int, width, h
 					case c != 0:
 						text = theme.TaskPending.Foreground(theme.ColorPeach).Render(ReplaceDateEmoji(card.CleanText))
 					}
-					origin := theme.NormalItem.Foreground(theme.ColorOverlay0).Render(fmt.Sprintf("(%s)", ReplaceDateEmoji(textwidth.NoControl(card.NoteTitle))))
+					origin := theme.NormalItem.Foreground(theme.ColorMuted).Render(fmt.Sprintf("(%s)", ReplaceDateEmoji(textwidth.NoControl(card.NoteTitle))))
 					rowText = textwidth.Truncate(fmt.Sprintf("  %s %s %s", theme.NormalItem.Foreground(markColor).Render(mark), text, origin), contentWidth, "")
 				}
 				lines = append(lines, rowText)

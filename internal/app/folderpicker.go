@@ -135,7 +135,7 @@ func (p *folderPickerPopup) render(l Layout) string {
 	} else {
 		lines = append(lines, p.rows(w-3, func(i int) string {
 			if p.name(i) == ".." {
-				return lipgloss.NewStyle().Foreground(theme.ColorOverlay0).Render(".. " + i18n.T("(subir)", "(up)"))
+				return lipgloss.NewStyle().Foreground(theme.ColorMuted).Render(".. " + i18n.T("(subir)", "(up)"))
 			}
 			return lipgloss.NewStyle().Foreground(theme.ColorPeach).Render(iconFolderClosed) + " " + lipgloss.NewStyle().Foreground(theme.ColorText).Render(p.name(i))
 		})...)

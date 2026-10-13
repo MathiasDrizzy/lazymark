@@ -448,7 +448,7 @@ func (p *notesPanel) view(r Rect, active bool) string {
 		if p.tagFilter != "" {
 			empty = fmt.Sprintf(i18n.T("Sin notas con #%s. Esc: quitar filtro", "No notes with #%s. Esc: clear filter"), p.tagFilter)
 		}
-		lines = append(lines, lipgloss.NewStyle().Foreground(theme.ColorOverlay0).Italic(true).Render(empty))
+		lines = append(lines, lipgloss.NewStyle().Foreground(theme.ColorMuted).Italic(true).Render(empty))
 	}
 	for i := from; i < to; i++ {
 		lines = append(lines, p.row(p.entries[i], r.W-2, i == p.list.cursor, active))
@@ -479,7 +479,7 @@ func (p *notesPanel) row(e storage.NoteEntry, w int, cursor, active bool) string
 	}
 	mark := " "
 	if p.selected[e.Path] {
-		mark = lipgloss.NewStyle().Foreground(theme.ColorGreen).Bold(true).Render(iconChecked)
+		mark = lipgloss.NewStyle().Foreground(theme.ColorActive).Bold(true).Render(iconChecked)
 	}
 	left := mark + indent + iconStyle.Render(icon) + " " + lipgloss.NewStyle().Foreground(theme.ColorText).Render(textwidth.NoControl(e.Name)) // un nombre de archivo no es de fiar
 	return listRow(left, right, w, cursor, active)
@@ -502,14 +502,14 @@ func listRow(left, right string, w int, cursor, active bool) string {
 	}
 	line := textwidth.Fit(left, leftW)
 	if rw > 0 {
-		line += " " + lipgloss.NewStyle().Foreground(theme.ColorOverlay0).Render(right)
+		line += " " + lipgloss.NewStyle().Foreground(theme.ColorMuted).Render(right)
 	}
 	if !cursor {
 		return line
 	}
 	bg := theme.ColorSurface0
 	if active {
-		bg = theme.ColorSurface1
+		bg = theme.ColorSelection
 		line = lipgloss.NewStyle().Bold(true).Render(line)
 	}
 	return theme.Paint(line, bg)

@@ -39,10 +39,10 @@ func popupWidth(l Layout, want int) int { return min(want, l.W-4) }
 
 var escHint = "[Esc]"
 
-func dim(s string) string { return lipgloss.NewStyle().Foreground(theme.ColorOverlay0).Render(s) }
+func dim(s string) string { return lipgloss.NewStyle().Foreground(theme.ColorMuted).Render(s) }
 
 func accent(s string) string {
-	return lipgloss.NewStyle().Foreground(theme.ColorPeach).Bold(true).Render(s)
+	return lipgloss.NewStyle().Foreground(theme.ColorAccent).Bold(true).Render(s)
 }
 
 // popupList es la parte común de los popups con una lista navegable: el primer
@@ -168,7 +168,7 @@ func (p *inputPopup) suggested() *inputPopup {
 // defecto Bubbles usa sus propios grises, que no siguen al tema).
 func themedInputStyles() textinput.Styles {
 	text := lipgloss.NewStyle().Foreground(theme.ColorText)
-	faint := lipgloss.NewStyle().Foreground(theme.ColorOverlay0)
+	faint := lipgloss.NewStyle().Foreground(theme.ColorMuted)
 	state := textinput.StyleState{Text: text, Placeholder: faint, Suggestion: faint, Prompt: lipgloss.NewStyle().Foreground(theme.ColorPeach)}
 	st := textinput.DefaultDarkStyles()
 	st.Focused, st.Blurred = state, state

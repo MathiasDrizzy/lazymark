@@ -188,9 +188,9 @@ func (p *tasksPanel) view(r Rect, active bool) string {
 		box := lipgloss.NewStyle().Foreground(theme.ColorYellow).Render("☐")
 		text := lipgloss.NewStyle().Foreground(theme.ColorText).Render(views.ReplaceDateEmoji(storage.CleanTaskText(t.Text)))
 		if t.Done {
-			box = lipgloss.NewStyle().Foreground(theme.ColorGreen).Render("☑")
+			box = lipgloss.NewStyle().Foreground(theme.ColorActive).Render("☑")
 			// El tachado se abre y se cierra en la misma línea (H2-5).
-			text = lipgloss.NewStyle().Foreground(theme.ColorOverlay0).Strikethrough(true).Render(views.ReplaceDateEmoji(storage.CleanTaskText(t.Text)))
+			text = lipgloss.NewStyle().Foreground(theme.ColorMuted).Strikethrough(true).Render(views.ReplaceDateEmoji(storage.CleanTaskText(t.Text)))
 		}
 		if dates := views.PanelDates(t.Dates, t.Done, storage.Today()); dates != "" {
 			text += " " + dates // las fechas con glifos monocromos, detrás del texto (el tachado ya se cerró)
@@ -258,8 +258,8 @@ func (p *tagsPanel) view(r Rect, active bool, activeTag string) string {
 		style := lipgloss.NewStyle().Foreground(theme.ColorBlue)
 		mark := " "
 		if t.Name == activeTag {
-			style = style.Bold(true).Foreground(theme.ColorGreen)
-			mark = lipgloss.NewStyle().Foreground(theme.ColorGreen).Render("●")
+			style = style.Bold(true).Foreground(theme.ColorActive)
+			mark = lipgloss.NewStyle().Foreground(theme.ColorActive).Render("●")
 		}
 		lines = append(lines, listRow(mark+style.Render("#"+t.Name), fmt.Sprintf("%d", t.NoteCount), r.W-2, i == p.list.cursor, active))
 	}

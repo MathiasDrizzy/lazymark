@@ -26,9 +26,9 @@ func RenderPanel(title, footer string, lines []string, width, height int, active
 	if height < 2 {
 		height = 2
 	}
-	borderCol, titleCol := ColorOverlay0, ColorSubtext0
+	borderCol, titleCol := ColorOverlay0, ColorSoft
 	if active {
-		borderCol, titleCol = ColorGreen, ColorGreen
+		borderCol, titleCol = ColorGreen, ColorActive // the border keeps the theme's color; only the text moves where it does not read
 	}
 	border := lipgloss.NewStyle().Foreground(borderCol)
 	titleStyle := lipgloss.NewStyle().Foreground(titleCol).Bold(active)
@@ -100,7 +100,7 @@ func RenderPopup(title, hint string, lines []string, width int) string {
 		}
 		return s
 	}
-	border, titleStyle, hintStyle := style(ColorPeach, false), style(ColorPeach, true), style(ColorOverlay0, false)
+	border, titleStyle, hintStyle := style(ColorPeach, false), style(ColorAccent, true), style(ColorMuted, false)
 	inner := width - 2
 
 	rows := make([]string, 0, len(lines)+2)
@@ -113,7 +113,7 @@ func RenderPopup(title, hint string, lines []string, width int) string {
 }
 
 // Selected pinta la fila seleccionada de una lista con el color de selección del tema.
-func Selected(line string) string { return Paint(line, ColorSurface1) }
+func Selected(line string) string { return Paint(line, ColorSelection) }
 
 // bgReset encuentra las secuencias SGR que apagan el color de fondo.
 var bgReset = regexp.MustCompile(`\x1b\[(0?|49)m`)

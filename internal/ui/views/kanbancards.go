@@ -144,12 +144,12 @@ func renderCard(c KanbanCard, w int, doneCol bool, midCol bool, selected, active
 	if selected || dragged {
 		border = border.Bold(true)
 	}
-	muted := lipgloss.NewStyle().Foreground(theme.ColorOverlay0)
+	muted := lipgloss.NewStyle().Foreground(theme.ColorMuted)
 
 	mark, markColor := "☐", theme.ColorSubtext0
 	switch {
 	case doneCol:
-		mark, markColor = "☑", theme.ColorGreen
+		mark, markColor = "☑", theme.ColorActive
 	case midCol:
 		mark, markColor = "◓", theme.ColorYellow
 	}
@@ -165,7 +165,7 @@ func renderCard(c KanbanCard, w int, doneCol bool, midCol bool, selected, active
 	case doneCol:
 		textStyle = theme.TaskDone
 	case midCol:
-		textStyle = lipgloss.NewStyle().Foreground(theme.ColorPeach)
+		textStyle = lipgloss.NewStyle().Foreground(theme.ColorAccent)
 	}
 	if selected || dragged {
 		textStyle = textStyle.Bold(true)

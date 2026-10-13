@@ -127,7 +127,7 @@ func (p *previewPanel) scroll(dy, dx int) {
 func (p *previewPanel) view(note *storage.Note, r Rect, active bool) string {
 	inner, h := r.W-2, r.H-2
 	if note == nil {
-		empty := lipgloss.NewStyle().Foreground(theme.ColorOverlay0).Italic(true).Render(" " + i18n.T("Selecciona una nota para ver su contenido", "Select a note to see its content"))
+		empty := lipgloss.NewStyle().Foreground(theme.ColorMuted).Italic(true).Render(" " + i18n.T("Selecciona una nota para ver su contenido", "Select a note to see its content"))
 		return theme.RenderPanel(i18n.T("[4]─Vista previa", "[4]─Preview"), "", []string{empty}, r.W, r.H, active)
 	}
 	all := p.lines(note, inner-1)

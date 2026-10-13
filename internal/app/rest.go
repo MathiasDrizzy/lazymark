@@ -61,7 +61,7 @@ func filepathSlash(p string) string { return strings.ReplaceAll(p, "\\", "/") }
 
 // restMessage devuelve las líneas de texto que acompañan al perezoso.
 func (m *AppModel) restMessage(kind string) []string {
-	dim := lipgloss.NewStyle().Foreground(theme.ColorOverlay0).Italic(true)
+	dim := lipgloss.NewStyle().Foreground(theme.ColorMuted).Italic(true)
 	key := lipgloss.NewStyle().Foreground(theme.ColorBlue).Bold(true)
 	switch kind {
 	case restWelcome:
@@ -102,7 +102,7 @@ func (m *AppModel) renderRest(kind string, title, footer string, r Rect, active 
 			lines[y] = textwidth.Pad(lines[y], left) + l
 		}
 		if hint && hintRow >= 0 && hintRow < len(lines) && inner >= len([]rune(hintText)) { // justo encima de la cabeza (la primera fila visible del sprite), centrado sobre ella; sin borde ni fondo
-			lines[hintRow] = textwidth.Pad(base[hintRow], hintCol) + lipgloss.NewStyle().Foreground(theme.ColorSubtext0).Italic(true).Render(hintText)
+			lines[hintRow] = textwidth.Pad(base[hintRow], hintCol) + lipgloss.NewStyle().Foreground(theme.ColorSoft).Italic(true).Render(hintText)
 		}
 	}
 	return theme.RenderPanel(title, footer, lines, r.W, r.H, active)

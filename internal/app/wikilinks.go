@@ -66,10 +66,10 @@ func backlinkLines(back []links.Backlink, width int) ([]string, []previewLink) {
 	if len(back) == 0 {
 		return nil, nil
 	}
-	head := lipgloss.NewStyle().Foreground(theme.ColorOverlay0).Render(fmt.Sprintf("── "+i18n.T("Enlaces a esta nota (%d)", "Links to this note (%d)")+" ", len(back)) + strings.Repeat("─", max(2, width/3)))
+	head := lipgloss.NewStyle().Foreground(theme.ColorMuted).Render(fmt.Sprintf("── "+i18n.T("Enlaces a esta nota (%d)", "Links to this note (%d)")+" ", len(back)) + strings.Repeat("─", max(2, width/3)))
 	out := []string{"", head}
 	var pls []previewLink
-	dim := lipgloss.NewStyle().Foreground(theme.ColorOverlay0)
+	dim := lipgloss.NewStyle().Foreground(theme.ColorMuted)
 	for _, b := range back {
 		title := textwidth.NoControl(b.Note.Title) // el nombre de la nota y su texto no son de fiar: sin caracteres de control hacia la terminal
 		pls = append(pls, previewLink{Display: title, Path: b.Note.Path, Line: b.Line, Back: true})
@@ -344,7 +344,7 @@ func (p *renameLinksPopup) render(l Layout) string {
 	lines := []string{lipgloss.NewStyle().Foreground(theme.ColorText).Render(head), ""}
 	room := max(4, l.H-12)
 	shown := 0
-	red, green := lipgloss.NewStyle().Foreground(theme.ColorRed), lipgloss.NewStyle().Foreground(theme.ColorGreen)
+	red, green := lipgloss.NewStyle().Foreground(theme.ColorRed), lipgloss.NewStyle().Foreground(theme.ColorActive)
 	for _, e := range p.edits {
 		if shown+3 > room {
 			lines = append(lines, dim(fmt.Sprintf("… "+i18n.T("y %d más", "and %d more"), len(p.edits)-shown/3)))
