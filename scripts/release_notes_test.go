@@ -80,3 +80,27 @@ func TestReleaseNotesFailWithoutTheSection(t *testing.T) {
 		t.Error("no version must fail")
 	}
 }
+
+// TestGoreleaserKeepsItsChangelogStep guards a bug that shipped in v1.2.1: with `changelog: disable: true`, GoReleaser skips the step
+// that loads --release-notes (checked with a real run: "generating changelog" does not appear), so the release was published with an
+// empty body. The flag itself already turns off the generated changelog, so the config must not disable it.
+func TestGoreleaserKeepsItsChangelogStep(t *testing.T) {
+	cfg, err := os.ReadFile(filepath.Join("..", ".goreleaser.yaml"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var inChangelog bool
+	for _, line := range strings.Split(string(cfg), "\n") {
+		trimmed := strings.TrimSpace(line)
+		if strings.HasPrefix(trimmed, "#") || trimmed == "" {
+			continue
+		}
+		if !strings.HasPrefix(line, " ") {
+			inChangelog = strings.HasPrefix(line, "changelog:")
+			continue
+		}
+		if inChangelog && strings.HasPrefix(trimmed, "disable:") && strings.Contains(trimmed, "true") {
+			t.Fatal(".goreleaser.yaml sets changelog.disable: true, which makes GoReleaser ignore --release-notes (empty release body)")
+		}
+	}
+}
