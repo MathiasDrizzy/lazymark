@@ -104,3 +104,29 @@ func TestGoreleaserKeepsItsChangelogStep(t *testing.T) {
 		}
 	}
 }
+
+// TestReleaseKeepsItsSBOMAndAttestation guards the supply-chain items of ED-11: an SPDX SBOM per archive in GoReleaser, and a build
+// provenance attestation over checksums.txt in release.yml with the write permissions on the release job only. Dropping any of them
+// would publish releases that `gh attestation verify` rejects, and a dry run would not notice.
+func TestReleaseKeepsItsSBOMAndAttestation(t *testing.T) {
+	read := func(parts ...string) string {
+		b, err := os.ReadFile(filepath.Join(parts...))
+		if err != nil {
+			t.Fatal(err)
+		}
+		return string(b)
+	}
+	if cfg := read("..", ".goreleaser.yaml"); !strings.Contains(cfg, "\nsboms:\n") || !strings.Contains(cfg, "artifacts: archive") {
+		t.Error(".goreleaser.yaml has no sboms entry for the archives")
+	}
+	wf := read("..", ".github", "workflows", "release.yml")
+	for _, want := range []string{"actions/attest@", "subject-checksums: dist/checksums.txt", "id-token: write", "attestations: write", "download-syft@"} {
+		if !strings.Contains(wf, want) {
+			t.Errorf("release.yml lacks %q", want)
+		}
+	}
+	top, _, _ := strings.Cut(wf, "\njobs:")
+	if strings.Contains(top, "write") {
+		t.Error("release.yml grants a write permission at workflow level: it belongs to the release job only")
+	}
+}

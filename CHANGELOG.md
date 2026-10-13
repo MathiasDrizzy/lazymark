@@ -7,6 +7,11 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+- Releases now ship an SPDX SBOM next to each archive (`*.sbom.json`, made by Syft) and a signed build provenance
+  attestation for `checksums.txt`, which lists every archive and SBOM. Verify a download with
+  `gh attestation verify <file> -R MathiasDrizzy/lazymark` (see SECURITY.md). The binary is unchanged.
+
 ### Fixed
 - Text that could not be read in some themes now takes another color of the same palette where the usual one falls under
   3:1: the selected row in solarized-dark (text 1.7:1, accent 1.2:1), the dim text in nord and solarized-dark (1.2:1 to

@@ -52,6 +52,10 @@ homebrew_casks:
                            args: ["-dr", "com.apple.quarantine", "#{staged_path}/lazymark"]
           end
 
+sboms:
+  - id: archive
+    artifacts: archive # one SPDX JSON per archive, made by syft
+
 checksum:
   name_template: "checksums.txt"
 
