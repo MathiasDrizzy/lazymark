@@ -8,6 +8,9 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
 ### Fixed
+- The Kanban bar buttons (`Hide done`, `Tag done`, the hidden counter and the back button) were grey and almost unreadable
+  (1.1:1 to 2.8:1 against the bar, in every theme). They now take their colors from the theme's palette, the pressed
+  state of `Hide done` looks different from the idle one, and a test checks the contrast in all 14 built-in themes.
 - Releases are published with the notes from this changelog: v1.2.1 went out with an empty body because
   `.goreleaser.yaml` disabled GoReleaser's changelog step, which is the one that loads `--release-notes`. The setting
   is removed and a test guards it. The notes of v1.2.1 were corrected.

@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"github.com/MathiasDrizzy/lazymark/internal/config"
 	"image/color"
-	"math"
 	"regexp"
 	"strings"
 	"sync"
@@ -117,26 +116,8 @@ var defaultChains = map[string][]string{
 	"done":       {"success", "info", "text"},
 }
 
-func luminance(c color.Color) float64 {
-	r, g, b, _ := c.RGBA()
-	lin := func(v uint32) float64 {
-		x := float64(v>>8) / 255
-		if x <= 0.03928 {
-			return x / 12.92
-		}
-		return math.Pow((x+0.055)/1.055, 2.4)
-	}
-	return 0.2126*lin(r) + 0.7152*lin(g) + 0.0722*lin(b)
-}
-
 // Contrast es la razón de contraste WCAG (1 a 21) entre dos colores.
-func Contrast(a, b color.Color) float64 {
-	la, lb := luminance(a), luminance(b)
-	if la < lb {
-		la, lb = lb, la
-	}
-	return (la + 0.05) / (lb + 0.05)
-}
+func Contrast(a, b color.Color) float64 { return theme.Contrast(a, b) }
 
 // defaultOrder es el orden en que se resuelven los colores por defecto: los estados que más importan eligen primero, y un estado no toma un color que ya tiene otro
 // (en Rosé Pine el verde y el azul de la paleta son el mismo).

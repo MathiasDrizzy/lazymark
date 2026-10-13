@@ -133,7 +133,7 @@ func (m *AppModel) renderKanbanBar() string {
 	label := " ← " + i18n.T("Notas", "Notes") + " (" + buttonKey(m.c.keys.Key(actKanban, ctxKanban)) + ") "
 	w := textwidth.Width(label)
 	m.ht.Register("kanban-back", mouse.ZoneAction, r.X, r.Y, r.X+w-1, r.Y, int(actKanban), "")
-	btn := lipgloss.NewStyle().Foreground(theme.ColorBase).Background(theme.ColorBlue).Bold(true).Render(label)
+	btn := theme.Button(theme.ColorBlue, theme.ColorTeal, theme.ColorMauve).Render(label)
 	// la franja lleva fondo en todo el ancho: así el compositor no recorta los espacios finales
 	bar := lipgloss.NewStyle().Background(theme.ColorMantle)
 	title := bar.Foreground(theme.ColorOverlay0).Render("  " + i18n.T("Tablero Kanban", "Kanban board"))
@@ -151,12 +151,19 @@ func (m *AppModel) renderKanbanBar() string {
 	}
 	var right []barBtn
 	if n := m.c.board.Hidden; n > 0 {
-		right = append(right, barBtn{fmt.Sprintf(i18n.T("%d ocultas", "%d hidden"), n), actNone})
+		right = append(right, barBtn{fmt.Sprintf(" "+i18n.T("%d ocultas", "%d hidden")+" ", n), actNone})
 	}
 	right = append(right,
 		barBtn{" " + hideLabel + " (" + buttonKey(m.c.keys.Key(actHideDone, ctxKanban)) + ") ", actHideDone},
 		barBtn{" " + i18n.T("Marcar", "Tag done") + " (" + buttonKey(m.c.keys.Key(actTagDone, ctxKanban)) + ") ", actTagDone})
-	btnStyle := lipgloss.NewStyle().Foreground(theme.ColorBase).Background(theme.ColorSurface1)
+	// colores de la paleta del tema: ocultar hechas es azul en reposo y verde cuando está activo (si el tema repite un color, el siguiente);
+	// marcar es malva; el contador, un distintivo amarillo
+	hideStyle := theme.Button(theme.ColorBlue, theme.ColorTeal, theme.ColorMauve)
+	if m.c.cfg.HideCompletedKanban {
+		hideStyle = theme.ButtonExcept(theme.Button(theme.ColorBlue, theme.ColorTeal, theme.ColorMauve).GetBackground(), theme.ColorGreen, theme.ColorPeach, theme.ColorMauve)
+	}
+	tagStyle := theme.Button(theme.ColorMauve, theme.ColorTeal, theme.ColorBlue)
+	badgeStyle := theme.ButtonExcept(tagStyle.GetBackground(), theme.ColorYellow, theme.ColorPeach, theme.ColorGreen)
 	x := r.X + r.W
 	var tail string
 	for i := len(right) - 1; i >= 0; i-- {
@@ -167,11 +174,15 @@ func (m *AppModel) renderKanbanBar() string {
 		}
 		x -= bw
 		if b.act == actNone {
-			tail = bar.Foreground(theme.ColorYellow).Render(b.text) + bar.Render(" ") + tail
+			tail = badgeStyle.Render(b.text) + bar.Render(" ") + tail
 			continue
 		}
 		m.ht.Register("kanban-"+strconv.Itoa(int(b.act)), mouse.ZoneAction, x, r.Y, x+bw-2, r.Y, int(b.act), "")
-		tail = btnStyle.Render(b.text) + bar.Render(" ") + tail
+		style := tagStyle
+		if b.act == actHideDone {
+			style = hideStyle
+		}
+		tail = style.Render(b.text) + bar.Render(" ") + tail
 	}
 	pad := bar.Render(strings.Repeat(" ", max(0, r.W-used-textwidth.Width(tail))))
 	return textwidth.Fit(left+pad+tail, r.W)
