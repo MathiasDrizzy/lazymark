@@ -93,7 +93,7 @@ func TestKanbanHideRevealTagQA(t *testing.T) {
 						seq[:i+1], k, w.word, got, want, hide, reveal, tagged, plain(m))
 				}
 			}
-			if kb, _ := savedHide(t, m); contains(seq[:i+1], "o") && kb != hide {
+			if kb, _ := savedHide(t, m); pressed(seq[:i+1], "o") && kb != hide {
 				t.Fatalf("keys %v: config.json says hide_completed_kanban=%v, want %v", seq[:i+1], kb, hide)
 			}
 		}
@@ -126,7 +126,7 @@ func TestTasksHideRevealTagQA(t *testing.T) {
 						seq[:i+1], k, w.word, got, want, hide, reveal, tagged)
 				}
 			}
-			if _, ts := savedHide(t, m); contains(seq[:i+1], "H") && ts != hide {
+			if _, ts := savedHide(t, m); pressed(seq[:i+1], "H") && ts != hide {
 				t.Fatalf("keys %v: config.json says hide_completed_tasks=%v, want %v", seq[:i+1], ts, hide)
 			}
 		}
