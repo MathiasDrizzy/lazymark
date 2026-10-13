@@ -24,16 +24,17 @@ the [changelog](CHANGELOG.md) unless you ask to stay anonymous.
 
 ## Verifying a release
 
-Every release archive and its SBOM (an SPDX JSON file next to each archive, made by Syft) is listed in `checksums.txt`,
-and `checksums.txt` has a signed build provenance attestation that ties the files to the commit and the workflow
-that built them. With the GitHub CLI and nothing else installed:
+Every release archive has an SPDX SBOM next to it (a `.sbom.json` file made by Syft), and a signed build
+provenance attestation ties each archive and each SBOM to the commit and the workflow that built them. With the GitHub
+CLI and nothing else installed:
 
 ```sh
 gh attestation verify lazymark_<version>_<os>_<arch>.tar.gz -R MathiasDrizzy/lazymark
 ```
 
-It prints the workflow and the commit that built the file, or fails if the file was changed. The same works for the
-`.sbom.json` files and for `checksums.txt`.
+It exits with 0 when the file is the one the release workflow built, and fails if the file was changed. The same
+command works for the `.sbom.json` files. `checksums.txt` is an index and has no attestation of its own; the checksum
+of a download is still checked with `shasum -a 256 -c checksums.txt --ignore-missing`.
 
 ## Scope
 

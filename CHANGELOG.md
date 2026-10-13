@@ -11,7 +11,7 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 - Releases now ship an SPDX SBOM next to each archive (`*.sbom.json`, made by Syft) and a signed build provenance
-  attestation for `checksums.txt`, which lists every archive and SBOM. Verify a download with
+  attestation for each archive and each SBOM. Verify a download with
   `gh attestation verify <file> -R MathiasDrizzy/lazymark` (see SECURITY.md). The binary is unchanged.
 
 ### Fixed
