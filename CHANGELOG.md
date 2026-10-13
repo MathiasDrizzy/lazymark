@@ -7,6 +7,8 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [1.2.1] - 2026-10-13
+
 ### Fixed
 - After `A` (reveal hidden), `o` in the Kanban board and `H` in the Tasks panel looked dead: they changed the setting but
   the reveal kept everything on screen. They now end the reveal, `A` says in the status line which way it went, and a
@@ -95,7 +97,8 @@ over the same files.
 - `--json` output escapes C1 control characters.
 - The config backup neither overwrites an existing file nor follows links.
 
-[Unreleased]: https://github.com/MathiasDrizzy/lazymark/compare/v1.2.0...HEAD
+[Unreleased]: https://github.com/MathiasDrizzy/lazymark/compare/v1.2.1...HEAD
+[1.2.1]: https://github.com/MathiasDrizzy/lazymark/compare/v1.2.0...v1.2.1
 [1.2.0]: https://github.com/MathiasDrizzy/lazymark/compare/v1.1.0...v1.2.0
 [1.1.0]: https://github.com/MathiasDrizzy/lazymark/compare/v1.0.0...v1.1.0
 [1.0.0]: https://github.com/MathiasDrizzy/lazymark/releases/tag/v1.0.0
