@@ -96,6 +96,7 @@ func (k *kanbanSheet) key(a Action) tea.Cmd {
 		}
 	case actHideDone:
 		k.c.cfg.HideCompletedKanban = !k.c.cfg.HideCompletedKanban
+		k.c.revealHidden = false // the last explicit choice wins: a reveal must not keep this key from doing anything
 		k.c.save()
 		k.refresh()
 		if k.c.cfg.HideCompletedKanban {
@@ -108,6 +109,7 @@ func (k *kanbanSheet) key(a Action) tea.Cmd {
 	case actRevealHidden:
 		k.c.revealHidden = !k.c.revealHidden
 		k.refresh()
+		k.c.setStatus("%s", revealStatus(k.c.revealHidden))
 	case actDates:
 		if card := k.current(); card != nil {
 			k.openDates(card)
@@ -144,6 +146,14 @@ func (k *kanbanSheet) tagDone() tea.Cmd {
 		k.c.setStatus("%s", tagStatus(added, k.c.cfg.DoneTag))
 	}
 	return nil
+}
+
+// revealStatus is the status line after A: the reveal is a session switch, so it says which way it went.
+func revealStatus(on bool) string {
+	if on {
+		return i18n.T("Mostrando todo lo oculto", "Showing everything that was hidden")
+	}
+	return i18n.T("Lo oculto vuelve a estar oculto", "Hidden items are hidden again")
 }
 
 // tagStatus is the status line after adding or removing the done tag.

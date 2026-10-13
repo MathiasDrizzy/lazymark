@@ -53,6 +53,7 @@ func (p *tasksPanel) key(a Action, reload func()) tea.Cmd {
 		}
 	case actHideDone:
 		p.c.cfg.HideCompletedTasks = !p.c.cfg.HideCompletedTasks
+		p.c.revealHidden = false // the last explicit choice wins, as in the Kanban
 		p.c.save()
 		p.c.taskFilter = views.TaskFilterAll
 		if p.c.cfg.HideCompletedTasks {
@@ -66,6 +67,7 @@ func (p *tasksPanel) key(a Action, reload func()) tea.Cmd {
 	case actRevealHidden:
 		p.c.revealHidden = !p.c.revealHidden
 		reload()
+		p.c.setStatus("%s", revealStatus(p.c.revealHidden))
 	case actTaskFilter:
 		p.c.taskFilter = (p.c.taskFilter + 1) % 3
 		p.c.collectTasks()

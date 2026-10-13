@@ -1,0 +1,164 @@
+{
+  "name": "lazymark-hide-reveal-combo",
+  "criterio": "regression: after A, o did nothing",
+  "cmd": [
+    "${LAZYMARK_BIN}"
+  ],
+  "cols": 120,
+  "rows": 35,
+  "fixtures": "fixtures/hide",
+  "fixtures_mtime": "2026-09-01T12:00:00Z",
+  "env": {
+    "LANG": "en_US.UTF-8",
+    "EDITOR": "true"
+  },
+  "steps": [
+    {
+      "desc": "starts",
+      "wait": {
+        "regex": "board\\.md",
+        "timeout_ms": 8000
+      }
+    },
+    {
+      "keys": [
+        "W"
+      ],
+      "desc": "open the board"
+    },
+    {
+      "wait": {
+        "regex": "Kanban board",
+        "timeout_ms": 3000
+      }
+    },
+    {
+      "keys": [
+        "a"
+      ],
+      "desc": "tag alpha as done: it hides"
+    },
+    {
+      "wait": {
+        "regex": "1 hidden",
+        "timeout_ms": 3000
+      }
+    },
+    {
+      "assert": {
+        "not_contains": "alpha-open"
+      }
+    },
+    {
+      "keys": [
+        "A"
+      ],
+      "desc": "reveal everything"
+    },
+    {
+      "wait": {
+        "regex": "1 hidden",
+        "timeout_ms": 3000,
+        "absent": true
+      }
+    },
+    {
+      "assert": {
+        "contains": "alpha-open"
+      }
+    },
+    {
+      "keys": [
+        "o"
+      ],
+      "desc": "hide finished cards right after a reveal: the reveal ends and o works"
+    },
+    {
+      "wait": {
+        "regex": "4 hidden",
+        "timeout_ms": 3000
+      }
+    },
+    {
+      "assert": {
+        "not_contains": "gamma-done"
+      }
+    },
+    {
+      "assert": {
+        "not_contains": "alpha-open"
+      }
+    },
+    {
+      "assert": {
+        "contains": "beta-doing"
+      }
+    },
+    {
+      "snapshot": {
+        "name": "hide-after-reveal"
+      }
+    },
+    {
+      "keys": [
+        "o"
+      ],
+      "desc": "show finished cards again; the tagged one stays hidden"
+    },
+    {
+      "wait": {
+        "regex": "1 hidden",
+        "timeout_ms": 3000
+      }
+    },
+    {
+      "assert": {
+        "contains": "gamma-done"
+      }
+    },
+    {
+      "assert": {
+        "not_contains": "alpha-open"
+      }
+    },
+    {
+      "keys": [
+        "A"
+      ]
+    },
+    {
+      "wait": {
+        "regex": "1 hidden",
+        "timeout_ms": 3000,
+        "absent": true
+      }
+    },
+    {
+      "assert": {
+        "contains": "alpha-open"
+      }
+    },
+    {
+      "keys": [
+        "a"
+      ],
+      "desc": "untag alpha"
+    },
+    {
+      "wait": {
+        "regex": "Removed #lm-done",
+        "timeout_ms": 3000
+      }
+    },
+    {
+      "keys": [
+        "q"
+      ]
+    },
+    {
+      "wait_exit": {
+        "timeout_ms": 3000
+      }
+    }
+  ]
+}

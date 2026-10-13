@@ -3,6 +3,7 @@ package app
 import (
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"testing"
 	"time"
@@ -59,7 +60,7 @@ func TestKanbanShowsFinishedCardsByDefault(t *testing.T) {
 			t.Errorf("%q must be visible by default", w)
 		}
 	}
-	if visible(m, "hidden") {
+	if hasCounter(m) {
 		t.Error("nothing is hidden by default, so no counter")
 	}
 }
@@ -81,7 +82,7 @@ func TestKanbanOHidesFinishedCardsAndCountsThem(t *testing.T) {
 		t.Errorf("the screen must say \"3 hidden\":\n%s", plain(m))
 	}
 	press(m, "o")
-	if !visible(m, "gamma") || visible(m, "hidden") {
+	if !visible(m, "gamma") || hasCounter(m) {
 		t.Errorf("o again must show them and drop the counter:\n%s", plain(m))
 	}
 }
@@ -122,7 +123,7 @@ func TestKanbanArchiveKeyTagsAndHidesTheCard(t *testing.T) {
 		t.Fatalf("a tagged card is hidden and counted:\n%s", plain(m))
 	}
 	press(m, "A") // reveal
-	if !visible(m, "alpha") || visible(m, "hidden") {
+	if !visible(m, "alpha") || hasCounter(m) {
 		t.Fatalf("A must reveal everything:\n%s", plain(m))
 	}
 	press(m, "a") // untag the card under the cursor (alpha again)
@@ -140,7 +141,7 @@ func TestKanbanTagScopeNoneAndTasksOnly(t *testing.T) {
 	for _, scope := range []string{"none", "tasks"} {
 		m, _ := hideModel(t, func(m *AppModel) { m.c.cfg.DoneTagHides = scope })
 		press(m, "W", "a")
-		if !visible(m, "alpha") || visible(m, "hidden") {
+		if !visible(m, "alpha") || hasCounter(m) {
 			t.Errorf("done_tag_hides=%q must not hide in the Kanban:\n%s", scope, plain(m))
 		}
 	}
@@ -178,7 +179,12 @@ func TestTasksTagScopeKanbanOnlyKeepsThemVisible(t *testing.T) {
 	press(m, "2")
 	m.tasks.list.set(taskIndex(t, m, "alpha"), len(m.c.tasks))
 	press(m, "a")
-	if !inTasks(m, "alpha") || visible(m, "hidden") {
+	if !inTasks(m, "alpha") || hasCounter(m) {
 		t.Errorf("done_tag_hides=kanban must not hide in the Tasks panel:\n%s", plain(m))
 	}
 }
+
+var counterRe = regexp.MustCompile(`\d+ hidden`)
+
+// hasCounter reports whether the screen shows an "N hidden" counter (the bare word also appears in status messages).
+func hasCounter(m *AppModel) bool { return counterRe.MatchString(plain(m)) }
