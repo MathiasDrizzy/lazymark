@@ -2,6 +2,7 @@ package app
 
 import (
 	"fmt"
+	"os"
 	"regexp"
 	"sort"
 	"strings"
@@ -36,11 +37,17 @@ func TestTextReadsInEveryTheme(t *testing.T) {
 	screens := []struct {
 		name string
 		keys []string
-	}{{"notes", nil}, {"kanban", []string{"W"}}, {"tasks", []string{"2"}}, {"settings", []string{","}}, {"cheatsheet", []string{"?"}}}
+	}{{"notes", nil}, {"kanban", []string{"W"}}, {"tasks", []string{"2"}}, {"settings", []string{","}}, {"cheatsheet", []string{"?"}},
+		{"dates", []string{"2", "d"}}, {"move", []string{"m"}}, {"kanban dates", []string{"W", "d"}}}
 	var failures []string
 	for _, name := range theme.ThemeNames() {
 		for _, v := range screens {
-			m, _ := hideModel(t, nil)
+			m, note := hideModel(t, nil)
+			if err := os.WriteFile(note, []byte(richNote), 0o644); err != nil {
+				t.Fatal(err)
+			}
+			m.c.reload()
+			m.afterChange()
 			theme.ApplyThemeByName(name) // after New, which applies the theme of the config
 			press(m, "down", "down")
 			press(m, v.keys...)
@@ -76,3 +83,7 @@ func TestTextReadsInEveryTheme(t *testing.T) {
 func themeContrast(a, b interface{ RGBA() (r, g, b, a uint32) }) float64 {
 	return theme.Contrast(a, b)
 }
+
+// richNote exercises what the Markdown preview and its code blocks paint: headings, a quote, a rule, a link, a table, code and strikethrough.
+const richNote = "# Title\n\n## Section\n\nText with **bold**, *italic*, ~~gone~~ and [a link](https://example.com).\n\n> a quote\n\n---\n\n" +
+	"| a | b |\n|---|---|\n| 1 | 2 |\n\n```go\n// comment\nfunc main() { println(\"hi\", 42) }\n```\n\n- [ ] alpha\n- [x] gamma\n"

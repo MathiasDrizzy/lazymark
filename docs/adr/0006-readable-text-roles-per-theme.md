@@ -34,4 +34,4 @@ theme's color without a reason.
 ## Consequences
 
 Where a palette reads fine nothing changes. Measured: 7 of the 14 themes change, only in the roles that failed (latte: muted, active, accent; frappe, tokyo-night, nord, one-dark: muted; solarized-dark: selection, accent; solarized-light: muted, soft, active). Borders keep the theme's color (existing tests and the tuiqa theme scenario pin it); only text moves. Dates
-keep their own policy (`views/datecolors.go`). Markdown rendering and code-block colors use the dim role but are not swept.
+keep their own policy (`views/datecolors.go`). The Markdown preview and the code-block colors use `readable` (the theme's color where it reads on its background, else Text) and a level-1 heading takes the first accent on which Base or Text reads (latte). The sweep covers a note with every Markdown element, the dates and move popups and the Kanban dates popup.

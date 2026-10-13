@@ -11,7 +11,7 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - Text that could not be read in some themes now takes another color of the same palette where the usual one falls under
   3:1: the selected row in solarized-dark (text 1.7:1, accent 1.2:1), the dim text in nord and solarized-dark (1.2:1 to
   1.7:1), and the panel titles, counters, popup titles and footer keys in catppuccin-latte and solarized-light (2.1:1 to
-  3.0:1). Themes that were fine look the same. A test checks the main screens in all 14 built-in themes (ADR 0006).
+  3.0:1). Themes that were fine look the same. The Markdown preview and its code blocks (headings, links, quotes, comments, strings) do the same in catppuccin-latte and solarized-light. A test checks the main screens, popups and a Markdown note in all 14 built-in themes (ADR 0006).
 - The Kanban bar buttons (`Hide done`, `Tag done`, the hidden counter and the back button) were grey and almost unreadable
   (1.1:1 to 2.8:1 against the bar, in every theme). They now take their colors from the theme's palette, the pressed
   state of `Hide done` looks different from the idle one, and a test checks the contrast in all 14 built-in themes.

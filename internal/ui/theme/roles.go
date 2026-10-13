@@ -50,3 +50,22 @@ func applyRoles(p Palette) {
 	ColorActive = legible([]color.Color{p.Green, p.Teal, p.Blue, p.Mauve, p.Peach, p.Yellow, p.Text}, p.Base)
 	ColorAccent = legible([]color.Color{p.Peach, p.Yellow, p.Mauve, p.Teal, p.Blue, p.Green, p.Text}, p.Base, ColorSelection)
 }
+
+// readable is c where it reads on the backgrounds, or else the text color: the fallback of the Markdown and code colors, which are many and
+// carry no theme identity beyond their hue.
+func readable(c color.Color, bgs ...color.Color) color.Color {
+	return legible([]color.Color{c, ColorText}, bgs...)
+}
+
+// h1Colors are the text and the background of a level-1 heading: Base over Peach where that reads (every theme but latte), or else the
+// first accent of the palette on which Base or Text does.
+func h1Colors() (fg, bg color.Color) {
+	for _, bg := range []color.Color{ColorPeach, ColorYellow, ColorBlue, ColorMauve, ColorTeal, ColorGreen} {
+		for _, fg := range []color.Color{ColorBase, ColorText} {
+			if Contrast(fg, bg) >= ButtonMinContrast {
+				return fg, bg
+			}
+		}
+	}
+	return ColorBase, ColorPeach
+}

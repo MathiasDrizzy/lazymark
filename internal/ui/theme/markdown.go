@@ -25,32 +25,33 @@ func MarkdownStyle() ansi.StyleConfig {
 	s := styles.DarkStyleConfig // copia por valor; solo se reemplazan punteros, nunca se escribe en los de Glamour
 
 	s.Document.Color = hex(ColorText)
-	s.BlockQuote.Color = hex(ColorSubtext0)
-	s.Heading.Color = hex(ColorBlue)
-	s.H1.Color, s.H1.BackgroundColor = hex(ColorBase), hex(ColorPeach)
-	s.H2.Color = hex(ColorBlue)
-	s.H3.Color = hex(ColorMauve)
-	s.H4.Color = hex(ColorTeal)
-	s.H5.Color = hex(ColorGreen)
-	s.H6.Color = hex(ColorSubtext0)
-	s.HorizontalRule.Color = hex(ColorMuted)
-	s.Link.Color = hex(ColorBlue)
-	s.LinkText.Color = hex(ColorTeal)
-	s.Image.Color = hex(ColorMauve)
-	s.ImageText.Color = hex(ColorMuted)
-	s.Code.Color, s.Code.BackgroundColor = hex(ColorPeach), hex(ColorSurface0)
+	s.BlockQuote.Color = hex(readable(ColorSubtext0, ColorBase))
+	s.Heading.Color = hex(readable(ColorBlue, ColorBase))
+	h1fg, h1bg := h1Colors()
+	s.H1.Color, s.H1.BackgroundColor = hex(h1fg), hex(h1bg)
+	s.H2.Color = hex(readable(ColorBlue, ColorBase))
+	s.H3.Color = hex(readable(ColorMauve, ColorBase))
+	s.H4.Color = hex(readable(ColorTeal, ColorBase))
+	s.H5.Color = hex(readable(ColorGreen, ColorBase))
+	s.H6.Color = hex(readable(ColorSubtext0, ColorBase))
+	s.HorizontalRule.Color = hex(readable(ColorMuted, ColorBase))
+	s.Link.Color = hex(readable(ColorBlue, ColorBase))
+	s.LinkText.Color = hex(readable(ColorTeal, ColorBase))
+	s.Image.Color = hex(readable(ColorMauve, ColorBase))
+	s.ImageText.Color = hex(readable(ColorMuted, ColorBase))
+	s.Code.Color, s.Code.BackgroundColor = hex(readable(ColorPeach, ColorSurface0)), hex(ColorSurface0)
 	s.Strong.Color = hex(ColorText)
 	s.Emph.Color = hex(ColorText)
-	s.Strikethrough.Color = hex(ColorMuted)
-	s.Task.Color = hex(ColorGreen)
-	s.Item.Color = hex(ColorPeach)
-	s.Enumeration.Color = hex(ColorPeach)
-	s.DefinitionTerm.Color = hex(ColorBlue)
+	s.Strikethrough.Color = hex(readable(ColorMuted, ColorBase))
+	s.Task.Color = hex(readable(ColorGreen, ColorBase))
+	s.Item.Color = hex(readable(ColorPeach, ColorBase))
+	s.Enumeration.Color = hex(readable(ColorPeach, ColorBase))
+	s.DefinitionTerm.Color = hex(readable(ColorBlue, ColorBase))
 
 	// Los bloques de código usan un estilo de Chroma propio por tema. Con Chroma
 	// dentro del estilo de Glamour, este lo registra una sola vez con el nombre "charm" y
 	// ya no lo actualiza: el código se quedaría con los colores del primer tema.
-	s.CodeBlock.Color = hex(ColorSubtext0)
+	s.CodeBlock.Color = hex(readable(ColorSubtext0, ColorSurface0))
 	s.CodeBlock.Chroma = nil
 	s.CodeBlock.Theme = registerChromaStyle()
 	return s
@@ -69,36 +70,36 @@ func registerChromaStyle() string {
 	}
 	fg := func(c color.Color) string { return *hex(c) }
 	chromastyles.Register(chroma.MustNewStyle(name, chroma.StyleEntries{
-		chroma.Text:                fg(ColorText),
+		chroma.Text:                fg(readable(ColorText, ColorSurface0)),
 		chroma.Error:               fg(ColorBase) + " bg:" + fg(ColorRed),
-		chroma.Comment:             fg(ColorMuted),
-		chroma.CommentPreproc:      fg(ColorPeach),
-		chroma.Keyword:             fg(ColorBlue),
-		chroma.KeywordReserved:     fg(ColorMauve),
-		chroma.KeywordNamespace:    fg(ColorRed),
-		chroma.KeywordType:         fg(ColorTeal),
-		chroma.Operator:            fg(ColorRed),
-		chroma.Punctuation:         fg(ColorSubtext0),
-		chroma.Name:                fg(ColorText),
-		chroma.NameBuiltin:         fg(ColorMauve),
-		chroma.NameTag:             fg(ColorMauve),
-		chroma.NameAttribute:       fg(ColorBlue),
-		chroma.NameClass:           fg(ColorYellow) + " bold underline",
-		chroma.NameConstant:        fg(ColorPeach),
-		chroma.NameDecorator:       fg(ColorYellow),
-		chroma.NameException:       fg(ColorRed),
-		chroma.NameFunction:        fg(ColorGreen),
-		chroma.NameOther:           fg(ColorText),
-		chroma.Literal:             fg(ColorPeach),
-		chroma.LiteralNumber:       fg(ColorTeal),
-		chroma.LiteralDate:         fg(ColorTeal),
-		chroma.LiteralString:       fg(ColorGreen),
-		chroma.LiteralStringEscape: fg(ColorTeal),
-		chroma.GenericDeleted:      fg(ColorRed),
+		chroma.Comment:             fg(readable(ColorMuted, ColorSurface0)),
+		chroma.CommentPreproc:      fg(readable(ColorPeach, ColorSurface0)),
+		chroma.Keyword:             fg(readable(ColorBlue, ColorSurface0)),
+		chroma.KeywordReserved:     fg(readable(ColorMauve, ColorSurface0)),
+		chroma.KeywordNamespace:    fg(readable(ColorRed, ColorSurface0)),
+		chroma.KeywordType:         fg(readable(ColorTeal, ColorSurface0)),
+		chroma.Operator:            fg(readable(ColorRed, ColorSurface0)),
+		chroma.Punctuation:         fg(readable(ColorSubtext0, ColorSurface0)),
+		chroma.Name:                fg(readable(ColorText, ColorSurface0)),
+		chroma.NameBuiltin:         fg(readable(ColorMauve, ColorSurface0)),
+		chroma.NameTag:             fg(readable(ColorMauve, ColorSurface0)),
+		chroma.NameAttribute:       fg(readable(ColorBlue, ColorSurface0)),
+		chroma.NameClass:           fg(readable(ColorYellow, ColorSurface0)) + " bold underline",
+		chroma.NameConstant:        fg(readable(ColorPeach, ColorSurface0)),
+		chroma.NameDecorator:       fg(readable(ColorYellow, ColorSurface0)),
+		chroma.NameException:       fg(readable(ColorRed, ColorSurface0)),
+		chroma.NameFunction:        fg(readable(ColorGreen, ColorSurface0)),
+		chroma.NameOther:           fg(readable(ColorText, ColorSurface0)),
+		chroma.Literal:             fg(readable(ColorPeach, ColorSurface0)),
+		chroma.LiteralNumber:       fg(readable(ColorTeal, ColorSurface0)),
+		chroma.LiteralDate:         fg(readable(ColorTeal, ColorSurface0)),
+		chroma.LiteralString:       fg(readable(ColorGreen, ColorSurface0)),
+		chroma.LiteralStringEscape: fg(readable(ColorTeal, ColorSurface0)),
+		chroma.GenericDeleted:      fg(readable(ColorRed, ColorSurface0)),
 		chroma.GenericEmph:         "italic",
-		chroma.GenericInserted:     fg(ColorGreen),
+		chroma.GenericInserted:     fg(readable(ColorGreen, ColorSurface0)),
 		chroma.GenericStrong:       "bold",
-		chroma.GenericSubheading:   fg(ColorMuted),
+		chroma.GenericSubheading:   fg(readable(ColorMuted, ColorSurface0)),
 		chroma.Background:          "bg:" + fg(ColorSurface0),
 	}))
 	return name
