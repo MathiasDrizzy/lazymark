@@ -112,5 +112,12 @@ jobs:
         env:
           # not a secret: the cask template reads the variable, but nothing is published
           HOMEBREW_TAP_GITHUB_TOKEN: dry-run
+      - name: The generated cask keeps no deprecated hook after the rewrite
+        run: |
+          cask=dist/homebrew/Casks/lazymark.rb
+          grep -q 'postflight do' "$cask" || grep -q 'postflight_steps do' "$cask" || { echo "cask has no quarantine hook at all" >&2; exit 1; }
+          scripts/cask-postflight-steps.sh "$cask"
+          ! grep -q 'postflight do' "$cask"
+          grep -q 'postflight_steps do' "$cask"
       - name: List the artifacts
         run: ls -1 dist | grep -E '\.(tar\.gz|zip)$|sbom\.json$|checksums' | sort

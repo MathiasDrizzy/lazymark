@@ -38,6 +38,29 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           HOMEBREW_TAP_GITHUB_TOKEN: ${{ secrets.HOMEBREW_TAP_GITHUB_TOKEN }}
+      - name: Rewrite the cask hook to postflight_steps
+        # GoReleaser v2.18 writes the deprecated `postflight do` into the tap cask (Homebrew 7 warns on every
+        # upgrade). Remove this step once a GoReleaser >= v2.19 is pinned with hooks.post.install_steps.
+        env:
+          TAP_TOKEN: ${{ secrets.HOMEBREW_TAP_GITHUB_TOKEN }}
+        run: |
+          auth="$(printf 'x-access-token:%s' "$TAP_TOKEN" | base64 -w0)"
+          echo "::add-mask::$auth"
+          git_tap() { git -c "http.https://github.com/.extraheader=AUTHORIZATION: basic $auth" "$@"; }
+          git_tap clone --depth 1 https://github.com/MathiasDrizzy/homebrew-tap.git "$RUNNER_TEMP/tap"
+          scripts/cask-postflight-steps.sh "$RUNNER_TEMP/tap/Casks/lazymark.rb"
+          if grep -q 'postflight do' "$RUNNER_TEMP/tap/Casks/lazymark.rb"; then
+            echo "the cask still has postflight do" >&2
+            exit 1
+          fi
+          cd "$RUNNER_TEMP/tap"
+          if git diff --quiet; then
+            echo "cask already uses postflight_steps"
+          else
+            git -c user.name="github-actions[bot]" -c user.email="41898282+github-actions[bot]@users.noreply.github.com" \
+              commit -am "fix(cask): use postflight_steps for lazymark ${GITHUB_REF_NAME}"
+            git_tap push origin HEAD:main
+          fi
       - name: Build provenance for the archives and the SBOMs
         # checksums.txt lists every archive and SBOM that GoReleaser published, so one attestation covers them all
         uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2

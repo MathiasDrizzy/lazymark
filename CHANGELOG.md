@@ -7,6 +7,10 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Fixed
+- The Homebrew cask no longer brings the deprecated `postflight` hook: the release rewrites it to `postflight_steps`,
+  so `brew upgrade`, `brew cleanup` and `brew doctor` stop warning about it.
+
 ## [1.2.2] - 2026-10-13
 
 ### Added
