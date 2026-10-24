@@ -27,3 +27,6 @@ CLAUDE.local.md
 .claude/
 ESTADO.md
 __pycache__/
+
+# gentle-ai generated skill registry (machine-specific)
+.atl/
